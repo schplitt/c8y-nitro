@@ -1,0 +1,65 @@
+{
+  "name": "c8y-nitro",
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "pnpm@10.27.0",
+  "description": "Lightning fast Cumulocity IoT microservice development powered by Nitro",
+  "keywords": [
+    "cumulocity",
+    "c8y",
+    "microservice",
+    "nitro",
+    "typescript",
+    "iot",
+    "docker"
+  ],
+  "license": "MIT",
+  "author": "schplitt",
+  "homepage": "https://github.com/schplitt/c8y-nitro#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/schplitt/c8y-nitro.git"
+  },
+  "bugs": {
+    "url": "https://github.com/schplitt/c8y-nitro/issues"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    }
+  },
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "files": [
+    "LICENSE",
+    "README.md",
+    "dist"
+  ],
+  "scripts": {
+    "dev": "tsdown --watch",
+    "build": "tsdown",
+    "lint": "eslint",
+    "lint:fix": "eslint --fix",
+    "typecheck": "tsc --noEmit",
+    "prerelease": "eslint && tsc --noEmit && tsdown",
+    "release": "bumpp",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "nitro": "catalog:",
+    "tinyexec": "catalog:"
+  },
+  "devDependencies": {
+    "@schplitt/eslint-config": "catalog:",
+    "bumpp": "catalog:",
+    "eslint": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

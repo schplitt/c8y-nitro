@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    // Core checks
+    "strict": true,
+    "useUnknownInCatchVariables": true,
+
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "allowSyntheticDefaultImports": true,
+
+    // Additional safety
+    "forceConsistentCasingInFileNames": true,
+
+    // JSX
+    "jsx": "preserve",
+    "jsxFactory": "h",
+    "jsxFragmentFactory": "Fragment",
+    // Module resolution
+    "target": "ESNext",
+    "skipLibCheck": true
+  }
+}

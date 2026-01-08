@@ -1,0 +1,16 @@
+{
+  "name": "playground",
+  "private": true,
+  "scripts": {
+    "build": "nitro build",
+    "dev": "nitro dev",
+    "preview": "npx srvx --prod .output/",
+    "typecheck": "tsc --noEmit",
+    "prepare": "nitro prepare",
+    "test": "vitest"
+  },
+  "devDependencies": {
+    "c8y-nitro": "workspace:*",
+    "nitro": "catalog:"
+  }
+}
