@@ -67,6 +67,7 @@ export async function createC8yZip(nitro: Nitro, options: C8YZipOptions = {}) {
 
   const duration = Date.now() - startTime
   spinnies.remove(spinnerName)
+  spinnies.stopAll()
   nitro.logger.success(`Cumulocity zip built in ${duration}ms`)
 
   // Final outputs
