@@ -1,14 +1,21 @@
+catalogMode: prefer
+
+shellEmulator: true
+
+trustPolicy: no-downgrade
+
+trustPolicyExclude:
+  - cached-factory@0.1.0
+  - ts-api-utils@2.2.0
 packages:
   - ./
   - playground
-
 catalog:
   '@schplitt/eslint-config': ^1.2.0
   '@types/spinnies': ^0.5.3
   bumpp: ^10.3.2
   consola: ^3.4.2
   eslint: ^9.39.2
-  fflate: ^0.8.2
   jszip: ^3.10.1
   nitro: 3.0.1-alpha.1
   pathe: ^2.0.3
@@ -18,19 +25,11 @@ catalog:
   tsdown: ^0.18.4
   typescript: ^5.9.3
   vitest: ^4.0.16
-
-catalogMode: prefer
-
 onlyBuiltDependencies:
   - cpu-features
   - esbuild
   - protobufjs
   - ssh2
 
-shellEmulator: true
 
-trustPolicy: no-downgrade
 
-trustPolicyExclude:
-  - cached-factory@0.1.0
-  - ts-api-utils@2.2.0
