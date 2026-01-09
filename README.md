@@ -6,11 +6,9 @@ Lightning fast Cumulocity IoT microservice development powered by [Nitro](https:
 
 - ⚡️ **Lightning Fast** - Built on Nitro's high performance engine
 - 🔧 **Fully Configurable** - Everything configured via module options
-- 🐳 **Auto Docker Build** - Automatically generates Docker images and microservice zip files
-- 📋 **Auto cumulocity.json** - Generates Cumulocity manifest automatically
+- 🐳 **Auto Zip Creation** - Automatically generates the deployable microservice zip
 - 🎯 **API Client Generation** - Creates Cumulocity-compatible Angular API clients
 - 🚀 **Hot Module Reload** - Instant feedback during development
-- 📦 **Universal Deployment** - Deploy anywhere Nitro runs (Workers, Node.js, Docker)
 - 🔥 **File-based Routing** - Auto-discovered routes from your file structure
 - 🛠️ **TypeScript First** - Full type safety with excellent DX
 
