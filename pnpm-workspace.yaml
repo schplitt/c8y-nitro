@@ -1,9 +1,6 @@
 catalogMode: prefer
-
 shellEmulator: true
-
 trustPolicy: no-downgrade
-
 trustPolicyExclude:
   - cached-factory@0.1.0
   - ts-api-utils@2.2.0
@@ -19,9 +16,11 @@ catalog:
   tsdown: ^0.18.4
   typescript: ^5.9.3
   vitest: ^4.0.16
-
 onlyBuiltDependencies:
+  - cpu-features
   - esbuild
+  - protobufjs
+  - ssh2
 
 
 

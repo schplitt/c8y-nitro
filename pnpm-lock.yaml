@@ -37,7 +37,7 @@ importers:
     dependencies:
       nitro:
         specifier: 'catalog:'
-        version: 3.0.1-alpha.1(lru-cache@11.2.4)(rolldown@1.0.0-beta.57)(rollup@4.54.0)(vite@7.3.0(@types/node@24.10.4)(jiti@2.6.1)(yaml@2.8.2))
+        version: 3.0.1-alpha.1(chokidar@5.0.0)(lru-cache@11.2.4)(rolldown@1.0.0-beta.57)(rollup@4.54.0)(vite@7.3.0(@types/node@24.10.4)(jiti@2.6.1)(yaml@2.8.2))
       tinyexec:
         specifier: 'catalog:'
         version: 1.0.2
@@ -6059,55 +6059,6 @@ snapshots:
       - sqlite3
       - uploadthing
 
-  nitro@3.0.1-alpha.1(lru-cache@11.2.4)(rolldown@1.0.0-beta.57)(rollup@4.54.0)(vite@7.3.0(@types/node@24.10.4)(jiti@2.6.1)(yaml@2.8.2)):
-    dependencies:
-      consola: 3.4.2
-      crossws: 0.4.1(srvx@0.9.8)
-      db0: 0.3.4
-      h3: 2.0.1-rc.5(crossws@0.4.1(srvx@0.9.8))
-      jiti: 2.6.1
-      nf3: 0.1.12
-      ofetch: 2.0.0-alpha.3
-      ohash: 2.0.11
-      oxc-minify: 0.96.0
-      oxc-transform: 0.96.0
-      srvx: 0.9.8
-      undici: 7.18.2
-      unenv: 2.0.0-rc.24
-      unstorage: 2.0.0-alpha.5(db0@0.3.4)(lru-cache@11.2.4)(ofetch@2.0.0-alpha.3)
-    optionalDependencies:
-      rolldown: 1.0.0-beta.57
-      rollup: 4.54.0
-      vite: 7.3.0(@types/node@24.10.4)(jiti@2.6.1)(yaml@2.8.2)
-    transitivePeerDependencies:
-      - '@azure/app-configuration'
-      - '@azure/cosmos'
-      - '@azure/data-tables'
-      - '@azure/identity'
-      - '@azure/keyvault-secrets'
-      - '@azure/storage-blob'
-      - '@capacitor/preferences'
-      - '@deno/kv'
-      - '@electric-sql/pglite'
-      - '@libsql/client'
-      - '@netlify/blobs'
-      - '@planetscale/database'
-      - '@upstash/redis'
-      - '@vercel/blob'
-      - '@vercel/functions'
-      - '@vercel/kv'
-      - aws4fetch
-      - better-sqlite3
-      - chokidar
-      - drizzle-orm
-      - idb-keyval
-      - ioredis
-      - lru-cache
-      - mongodb
-      - mysql2
-      - sqlite3
-      - uploadthing
-
   node-fetch-native@1.6.7: {}
 
   node-gyp@12.1.0:
@@ -6846,12 +6797,6 @@ snapshots:
   unstorage@2.0.0-alpha.5(chokidar@5.0.0)(db0@0.3.4)(lru-cache@11.2.4)(ofetch@2.0.0-alpha.3):
     optionalDependencies:
       chokidar: 5.0.0
-      db0: 0.3.4
-      lru-cache: 11.2.4
-      ofetch: 2.0.0-alpha.3
-
-  unstorage@2.0.0-alpha.5(db0@0.3.4)(lru-cache@11.2.4)(ofetch@2.0.0-alpha.3):
-    optionalDependencies:
       db0: 0.3.4
       lru-cache: 11.2.4
       ofetch: 2.0.0-alpha.3
