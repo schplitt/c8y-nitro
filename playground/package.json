@@ -1,6 +1,15 @@
 {
   "name": "playground",
+  "version": "1.0.0",
   "private": true,
+  "description": "Playground microservice for testing c8y-nitro",
+  "author": {
+    "name": "schplitt"
+  },
+  "homepage": "https://github.com/schplitt/c8y-nitro/tree/main/playground",
+  "bugs": {
+    "url": "https://github.com/schplitt/c8y-nitro/issues"
+  },
   "scripts": {
     "build": "nitro build",
     "dev": "nitro dev",

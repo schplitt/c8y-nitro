@@ -48,7 +48,13 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@types/spinnies": "catalog:",
+    "consola": "catalog:",
+    "jszip": "catalog:",
     "nitro": "catalog:",
+    "pathe": "catalog:",
+    "pkg-types": "catalog:",
+    "spinnies": "catalog:",
     "tinyexec": "catalog:"
   },
   "devDependencies": {
