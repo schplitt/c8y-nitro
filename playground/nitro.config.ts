@@ -9,15 +9,8 @@ export default defineNitroConfig({
     openAPI: true,
   },
 
-  imports: {},
-
   modules: [
     c8y({
-      apiClient: {
-        dir: './src/generated',
-        name: 'c8y-api-client',
-        msBase: 'playground-service',
-      },
     }),
   ],
 })

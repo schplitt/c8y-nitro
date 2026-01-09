@@ -53,7 +53,7 @@ async function generateDockerfile(nitro: Nitro): Promise<string> {
   // Write Dockerfile
   await writeFile(dockerfilePath, dockerfileContent, 'utf-8')
 
-  nitro.logger.success(`Generated Dockerfile at ${dockerfilePath}`)
+  nitro.logger.debug(`Generated Dockerfile at ${dockerfilePath}`)
   nitro.logger.debug(`Using output directory: ${outputDirName}`)
   return c8yDir
 }
@@ -63,7 +63,7 @@ async function buildDockerImage(nitro: Nitro, c8yDir: string): Promise<string> {
   const imageName = `${projectName}:latest`
   const buildContext = join(c8yDir, '..')
 
-  nitro.logger.info(`Building Docker image: ${imageName}`)
+  nitro.logger.debug(`Building Docker image: ${imageName}`)
   nitro.logger.debug(`Build context: ${buildContext}`)
 
   try {
@@ -80,18 +80,17 @@ async function buildDockerImage(nitro: Nitro, c8yDir: string): Promise<string> {
       nitro.logger.debug(result.stdout)
     }
 
-    nitro.logger.success(`Docker image built successfully: ${imageName}`)
+    nitro.logger.debug(`Docker image built successfully: ${imageName}`)
     return imageName
   } catch (error) {
-    nitro.logger.error('Failed to build Docker image:', error)
-    throw error
+    throw new Error('Failed to build Docker image', { cause: error })
   }
 }
 
 async function saveDockerImageToTar(nitro: Nitro, c8yDir: string, imageName: string): Promise<string> {
   const imageTarPath = join(c8yDir, 'image.tar')
 
-  nitro.logger.info(`Saving Docker image to ${imageTarPath}`)
+  nitro.logger.debug(`Saving Docker image to ${imageTarPath}`)
 
   try {
     await x('docker', [
@@ -101,40 +100,38 @@ async function saveDockerImageToTar(nitro: Nitro, c8yDir: string, imageName: str
       imageName,
     ])
 
-    nitro.logger.success(`Docker image saved to ${imageTarPath}`)
+    nitro.logger.debug(`Docker image saved to ${imageTarPath}`)
     return imageTarPath
   } catch (error) {
-    nitro.logger.error('Failed to save Docker image:', error)
-    throw error
+    throw new Error('Failed to save Docker image to tar file', { cause: error })
   }
 }
 
-export async function createDockerImage(nitro: Nitro): Promise<string | null> {
+/**
+ * Create a Docker image from the Nitro build output
+ * @param nitro Nitro instance
+ * @returns Path to the saved Docker image tar file
+ */
+export async function createDockerImage(nitro: Nitro): Promise<string> {
   // Check if Docker is installed
   const isDockerInstalled = await checkDockerInstalled()
 
   if (!isDockerInstalled) {
-    nitro.logger.error('Docker is not installed or not available in PATH. Please install Docker to build images.')
-    await nitro.close()
-    return null
+    throw new Error('Docker is not installed or not available in PATH. Please install Docker to build images.')
   }
 
-  nitro.logger.info('🐳 Creating Docker image...')
+  nitro.logger.debug('Creating Docker image...')
 
-  try {
-    // Generate Dockerfile
-    const c8yDir = await generateDockerfile(nitro)
+  // Generate Dockerfile
+  const c8yDir = await generateDockerfile(nitro)
 
-    // Build Docker image
-    const imageName = await buildDockerImage(nitro, c8yDir)
+  // Build Docker image
+  const imageName = await buildDockerImage(nitro, c8yDir)
 
-    // Save Docker image to tar file
-    const imageTarPath = await saveDockerImageToTar(nitro, c8yDir, imageName)
+  // Save Docker image to tar file
+  const imageTarPath = await saveDockerImageToTar(nitro, c8yDir, imageName)
 
-    return imageTarPath
-  } catch (error) {
-    nitro.logger.error('Docker image creation failed:', error)
-    await nitro.close()
-    return null
-  }
+  nitro.logger.debug('Docker image creation complete.')
+
+  return imageTarPath
 }

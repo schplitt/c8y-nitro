@@ -6,6 +6,7 @@ export interface C8YAPIClientOptions {
 
   /**
    * The prefix of the microservice endpoints.
+   * @default "contextPath" from manifest (package.json name)
    * @example 'my-microservice' will result in the endpoints calling "https:<tenant>.com/service/my-microservice/..."
    */
   msBase: string

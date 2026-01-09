@@ -1,35 +1,28 @@
-export type C8YManifestOptions = Omit<C8YManifest, 'name' | 'version' | 'apiVersion'>
+export type C8YManifestOptions = Partial<Omit<C8YManifest, 'name' | 'version' | 'apiVersion'>>
 
-/**
- * Complete Cumulocity microservice manifest (cumulocity.json).
- * Full structure uploaded to the platform.
- */
-interface C8YManifest {
+export interface C8YManifest {
   /**
    * API version (e.g., "v2", "2"). Version 2 required for enhanced container security.
-   * Automatically set by the module.
-   * @example "v2"
+   * Automatically set by the module to "v2".
    */
   apiVersion: string
 
   /**
    * Microservice name (lowercase a-z, digits, hyphens, max 23 chars).
    * Automatically populated from package.json name.
-   * @example "my-microservice"
    */
   name: string
 
   /**
    * SemVer version (no "+" allowed). Use "-SNAPSHOT" suffix for dev builds.
    * Automatically populated from package.json version.
-   * @example "1.0.0" | "1.1.0-SNAPSHOT"
    */
   version: string
 
   /**
    * URL path prefix for your microservice endpoints.
    * Letters, digits, hyphens, dots, underscores, tildes allowed.
-   * @default microservice name
+   * Defaults to package.json name.
    * @example "my-service"
    */
   contextPath?: string
@@ -132,19 +125,19 @@ interface C8YManifest {
 export interface Provider {
   /**
    * Company name ("c8y" for Cumulocity).
-   * @example "New Company Ltd."
+   * Defaults to package.json author ?? author.name
    */
   name: string
 
   /**
    * Company website.
-   * @example "https://new-company.com"
+   * Defaults to package.json author.url ?? homepage.
    */
   domain?: string
 
   /**
-   * Support email.
-   * @example "support@new-company.com"
+   * Support link or email.
+   * Defaults to package.json bugs.url ?? bugs.email ?? author.email.
    */
   support?: string
 }
@@ -309,7 +302,7 @@ export interface HTTPGetAction {
   /**
    * Hostname to connect to.
    */
-  host: string
+  host?: string
 
   /**
    * URL path to request.

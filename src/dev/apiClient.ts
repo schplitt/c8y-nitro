@@ -305,6 +305,7 @@ export async function writeAPIClient(nitro: Nitro, options: C8YAPIClientOptions,
     return
   }
 
+  // TODO: automatically use contextPath from manifest (which is either set or from package.json)
   // Generate API client code with microservice base path
   const code = generateAPIClient(routes, options.msBase)
 
