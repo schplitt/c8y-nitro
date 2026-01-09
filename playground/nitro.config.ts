@@ -11,6 +11,9 @@ export default defineNitroConfig({
 
   modules: [
     c8y({
+      apiClient: {
+        dir: './src/generated',
+      },
     }),
   ],
 })

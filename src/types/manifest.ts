@@ -22,7 +22,7 @@ export interface C8YManifest {
   /**
    * URL path prefix for your microservice endpoints.
    * Letters, digits, hyphens, dots, underscores, tildes allowed.
-   * Defaults to package.json name.
+   * Defaults to package.json name. "my-service" results in endpoints like "/service/my-service/..."
    * @example "my-service"
    */
   contextPath?: string

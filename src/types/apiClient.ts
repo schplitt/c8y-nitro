@@ -5,16 +5,10 @@ export interface C8YAPIClientOptions {
   dir: string
 
   /**
-   * The prefix of the microservice endpoints.
-   * @default "contextPath" from manifest (package.json name)
-   * @example 'my-microservice' will result in the endpoints calling "https:<tenant>.com/service/my-microservice/..."
+   * Service context path for microservice endpoints.\
+   * Defaults to contextPath from manifest (package.json name, with scope stripped).\
+   * Override this if deploying with a different context path.
+   * @example "my-microservice" results in "https://<tenant>.com/service/my-microservice/..."
    */
-  msBase: string
-
-  /**
-   * Name of the generated API client file (without extension).
-   * @default 'c8y-api-client'
-   */
-  name?: string
-
+  contextPath?: string
 }

@@ -3,10 +3,11 @@ import {
   generateFunctionName,
   extractParams,
   capitalize,
+  toValidClassName,
   generateMethod,
   generateAPIClient,
   parseRoutes,
-} from '../src/utils/apiClient'
+} from '../src/dev/apiClient'
 
 describe('apiClient generation', () => {
   describe('generateFunctionName', () => {
@@ -88,6 +89,54 @@ describe('apiClient generation', () => {
 
     it('should handle empty string', () => {
       expect(capitalize('')).toBe('')
+    })
+  })
+
+  describe('toValidClassName', () => {
+    it('should convert kebab-case to PascalCase with Generated prefix', () => {
+      expect(toValidClassName('my-service-api')).toBe('GeneratedMyServiceApi')
+    })
+
+    it('should convert snake_case to PascalCase with Generated prefix', () => {
+      expect(toValidClassName('my_service_api')).toBe('GeneratedMyServiceApi')
+    })
+
+    it('should handle dots as separators with Generated prefix', () => {
+      expect(toValidClassName('my.service.api')).toBe('GeneratedMyServiceApi')
+    })
+
+    it('should remove invalid characters', () => {
+      expect(toValidClassName('special@chars!#%')).toBe('GeneratedSpecialchars')
+    })
+
+    it('should handle the JSDoc example case', () => {
+      expect(toValidClassName('special@chars!APIClient')).toBe('GeneratedSpecialcharsAPIClient')
+    })
+
+    it('should handle names starting with numbers', () => {
+      expect(toValidClassName('123-invalid')).toBe('Generated123Invalid')
+    })
+
+    it('should handle already PascalCase', () => {
+      expect(toValidClassName('MyServiceAPI')).toBe('GeneratedMyServiceAPI')
+    })
+
+    it('should handle mixed separators', () => {
+      expect(toValidClassName('my-service_api.client')).toBe('GeneratedMyServiceApiClient')
+    })
+
+    it('should preserve $ in names', () => {
+      expect(toValidClassName('my$service')).toBe('GeneratedMy$service')
+    })
+
+    it('should handle empty or invalid input', () => {
+      expect(toValidClassName('!!!')).toBe('Generated')
+      expect(toValidClassName('')).toBe('Generated')
+    })
+
+    it('should remove file extensions', () => {
+      expect(toValidClassName('myService.ts')).toBe('GeneratedMyService')
+      expect(toValidClassName('api-client.service.ts')).toBe('GeneratedApiClientService')
     })
   })
 
@@ -206,7 +255,7 @@ describe('apiClient generation', () => {
           returnType: 'string',
         },
       ]
-      const result = generateAPIClient(routes, 'my-service')
+      const result = generateAPIClient(routes, 'my-service', 'GeneratedMyService')
 
       expect(result).toMatchInlineSnapshot(`
         "/**
@@ -234,7 +283,7 @@ describe('apiClient generation', () => {
 
 
         @Injectable({ providedIn: 'root' })
-        export class C8yApiClient {
+        export class GeneratedMyService {
           private readonly BASE_PATH = '/service/my-service';
           private readonly fetchClient: FetchClient = inject(FetchClient)
 
@@ -269,7 +318,7 @@ describe('apiClient generation', () => {
           returnType: 'string',
         },
       ]
-      const result = generateAPIClient(routes, 'custom-ms')
+      const result = generateAPIClient(routes, 'custom-ms', 'GeneratedCustomMs')
       expect(result).toMatchInlineSnapshot(`
         "/**
          * Auto-generated Cumulocity API Client
@@ -296,7 +345,7 @@ describe('apiClient generation', () => {
 
 
         @Injectable({ providedIn: 'root' })
-        export class C8yApiClient {
+        export class GeneratedCustomMs {
           private readonly BASE_PATH = '/service/custom-ms';
           private readonly fetchClient: FetchClient = inject(FetchClient)
 
@@ -348,7 +397,7 @@ describe('apiClient generation', () => {
     const outputDir = '/home/someuser/projects/otherProject/app/api-client'
 
     const parsedRoutes = parseRoutes(nitroTypes as any, outputDir, typesDir)
-    const result = generateAPIClient(parsedRoutes, 'my-microservice')
+    const result = generateAPIClient(parsedRoutes, 'my-microservice', 'GeneratedMyMicroservice')
 
     expect(result).toMatchInlineSnapshot(`
       "/**
@@ -376,7 +425,7 @@ describe('apiClient generation', () => {
 
 
       @Injectable({ providedIn: 'root' })
-      export class C8yApiClient {
+      export class GeneratedMyMicroservice {
         private readonly BASE_PATH = '/service/my-microservice';
         private readonly fetchClient: FetchClient = inject(FetchClient)
 

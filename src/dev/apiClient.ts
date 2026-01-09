@@ -101,6 +101,37 @@ export function capitalize(str: string): string {
 }
 
 /**
+ * Converts a file name to a valid JavaScript class name.
+ * Only allows letters, numbers (not at start), $ and _.
+ * Removes or replaces invalid characters and ensures PascalCase.
+ * Always prefixed with "Generated" for clarity.
+ * @param fileName - The file name to convert
+ * @example "my-service-api" -> "GeneratedMyServiceApi"
+ * @example "playgroundAPIClient" -> "GeneratedPlaygroundAPIClient"
+ * @example "special@chars!" -> "GeneratedSpecialchars"
+ */
+export function toValidClassName(fileName: string): string {
+  // Remove common file extensions (only actual file extensions, not .api or .client)
+  const nameWithoutExt = fileName.replace(/\.(ts|js|mjs|cjs|tsx|jsx)$/, '')
+
+  // Replace hyphens, underscores, and dots with spaces for word separation
+  let cleaned = nameWithoutExt.replace(/[-_.]/g, ' ')
+
+  // Remove any characters that are not letters, numbers, spaces, $
+  cleaned = cleaned.replace(/[^a-zA-Z0-9\s$]/g, '')
+
+  // Split into words and capitalize each, then join
+  const pascalCase = cleaned
+    .split(/\s+/)
+    .filter((word) => word.length > 0)
+    .map((word) => capitalize(word))
+    .join('')
+
+  // Always prefix with Generated
+  return `Generated${pascalCase}`
+}
+
+/**
  * Adjusts import paths in return type strings to be relative to output directory.
  * Import paths in types are relative to the types directory (e.g., node_modules/.nitro/types/).
  * We need to resolve them and create new paths relative to the output directory.
@@ -231,9 +262,10 @@ type Awaited<T> = T extends PromiseLike<infer U> ? Awaited<U> : T;
 /**
  * Generates complete Angular API client service.
  * @param routes - Array of parsed routes to generate methods for
- * @param msBase - The microservice base name (e.g., "my-service")
+ * @param contextPath - The microservice context path (e.g., "my-service")
+ * @param className - The class name for the generated service (e.g., "PlaygroundAPIClient")
  */
-export function generateAPIClient(routes: ParsedRoute[], msBase: string): string {
+export function generateAPIClient(routes: ParsedRoute[], contextPath: string, className: string): string {
   const methods = routes.map((route) => generateMethod(route)).join('\n\n')
 
   return `/**
@@ -250,8 +282,8 @@ import { FetchClient } from '@c8y/ngx-components'
 ${serializationTypes}
 
 @Injectable({ providedIn: 'root' })
-export class C8yApiClient {
-  private readonly BASE_PATH = '/service/${msBase}';
+export class ${className} {
+  private readonly BASE_PATH = '/service/${contextPath}';
   private readonly fetchClient: FetchClient = inject(FetchClient)
 
   constructor() {}
@@ -283,9 +315,17 @@ export function getRelativeImportPath(outputPath: string, importsPath: string): 
  * Writes the generated API client to disk.
  * @param nitro - Nitro instance
  * @param options - API client generation options
+ * @param contextPath - Service context path for endpoint URLs (e.g., "my-service" in "/service/my-service/...")
+ * @param name - The API client file name (without extension), e.g., "playgroundAPIClient"
  * @param types - Nitro types object containing route definitions
  */
-export async function writeAPIClient(nitro: Nitro, options: C8YAPIClientOptions, types: NitroTypes) {
+export async function writeAPIClient(
+  nitro: Nitro,
+  options: C8YAPIClientOptions,
+  contextPath: string,
+  name: string,
+  types: NitroTypes,
+) {
   const rootDir = nitro.options.rootDir
 
   // Determine paths - types are generated in this directory
@@ -294,8 +334,7 @@ export async function writeAPIClient(nitro: Nitro, options: C8YAPIClientOptions,
     : join(rootDir, 'node_modules/.nitro/types')
 
   const outputDir = join(rootDir, options.dir)
-  const fileName = options.name ?? 'c8y-api-client'
-  const outputFile = join(outputDir, `${fileName}.ts`)
+  const outputFile = join(outputDir, `${name}.ts`)
 
   // Parse routes from Nitro type system (pass typesDir for import path adjustment)
   const routes = parseRoutes(types, outputDir, typesDir)
@@ -305,9 +344,10 @@ export async function writeAPIClient(nitro: Nitro, options: C8YAPIClientOptions,
     return
   }
 
-  // TODO: automatically use contextPath from manifest (which is either set or from package.json)
-  // Generate API client code with microservice base path
-  const code = generateAPIClient(routes, options.msBase)
+  // Generate API client code with microservice context path
+  // Convert filename to valid JavaScript class name (letters, numbers, $, _ only)
+  const className = toValidClassName(name)
+  const code = generateAPIClient(routes, contextPath, className)
 
   // Ensure output directory exists
   await mkdir(outputDir, { recursive: true })

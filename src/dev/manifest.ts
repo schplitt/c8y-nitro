@@ -7,7 +7,8 @@ async function readPackageJsonFieldsForManifest(nitro: Nitro): Promise<C8YManife
 
   const pkg = await readPackage(nitro.options.rootDir)
 
-  const name = pkg.name
+  // Strip scope from package name (e.g., @org/package -> package)
+  const name = pkg.name?.replace(/^@[^/]+\//, '')
   const version = pkg.version
 
   // Extract provider information with fallbacks
@@ -34,6 +35,36 @@ async function readPackageJsonFieldsForManifest(nitro: Nitro): Promise<C8YManife
     version,
     provider,
     contextPath: name,
+  }
+}
+
+/**
+ * Gets service name and context path without building full manifest.
+ * Used by API client generation to avoid duplicate manifest creation.
+ * @param nitro - Nitro instance
+ * @param manifestOptions - Optional manifest configuration for contextPath override
+ */
+export async function getServiceInfo(
+  nitro: Nitro,
+  manifestOptions?: C8YManifestOptions,
+): Promise<{ serviceName: string, contextPath: string } | undefined> {
+  try {
+    const pkg = await readPackage(nitro.options.rootDir)
+    const pkgName = pkg.name
+
+    if (!pkgName) {
+      return undefined
+    }
+
+    // Strip scope from package name (e.g., @org/package -> package)
+    const serviceName = pkgName.replace(/^@[^/]+\//, '')
+
+    // contextPath: use manifest override or fallback to stripped package name
+    const contextPath = manifestOptions?.contextPath ?? serviceName
+
+    return { serviceName, contextPath }
+  } catch {
+    return undefined
   }
 }
 
