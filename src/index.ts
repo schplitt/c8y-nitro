@@ -1,7 +1,8 @@
 import type { NitroModule } from 'nitro/types'
 import type { C8YAPIClientOptions, C8YManifestOptions } from './types'
-import { setupRuntimeConfig } from './utils/env'
-import { writeAPIClient } from './utils/apiClient'
+import { setupRuntimeConfig } from './dev/env'
+import { writeAPIClient } from './dev/apiClient'
+import { createDockerImage } from './dev/docker'
 
 export interface C8yNitroModuleOptions {
   manifest?: C8YManifestOptions
@@ -26,11 +27,13 @@ export function c8y(options: C8yNitroModuleOptions = {}): NitroModule {
         } else {
           nitro.logger.debug('No API client options provided, skipping API client generation.')
         }
+
+        // TODO: extend types with manifest options (roles for auth etc.)
       })
 
-      nitro.hooks.hook('compiled', (nitro) => {
-        nitro.logger.info('🔵 Hook: compiled')
-        nitro.logger.info(`output server dir is: ${nitro.options.output.serverDir}`)
+      nitro.hooks.hook('close', async () => {
+        // Build the Docker image
+        await createDockerImage(nitro)
       })
     },
   }

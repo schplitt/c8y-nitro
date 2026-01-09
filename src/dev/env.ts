@@ -5,6 +5,8 @@ import type { Nitro } from 'nitro/types'
  * @param nitro Nitro instance
  */
 export function setupRuntimeConfig(nitro: Nitro) {
+  // TODO: setup dev check for environment envs
+
   // Set env prefix to empty string to allow all C8Y_ env vars
   nitro.options.runtimeConfig.nitro.envPrefix = ''
 
