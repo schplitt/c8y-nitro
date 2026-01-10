@@ -4,6 +4,8 @@ import type { Nitro, NitroTypes } from 'nitro/types'
 import type { C8YAPIClientOptions } from '../types'
 import { colors } from 'consola/utils'
 
+type Method = keyof NitroTypes['routes'][string]
+
 /**
  * Parsed route information from Nitro types.
  */
@@ -15,7 +17,7 @@ interface ParsedRoute {
   /**
    * HTTP method (get, post, put, delete, etc.)
    */
-  method: string
+  method: Method
   /**
    * Generated function name (e.g., "GetApiById")
    */
@@ -194,7 +196,7 @@ export function parseRoutes(types: NitroTypes, outputDir: string, typesDir: stri
 
       routes.push({
         path: normalizedPath,
-        method,
+        method: method as Method,
         functionName,
         params,
         returnType: typeString,
@@ -362,7 +364,7 @@ export async function writeAPIClient(
   routes.forEach((route, index) => {
     const isLast = index === routes.length - 1
     const treeChar = isLast ? '└─' : '├─'
-    const method = route.method.toUpperCase().padEnd(6)
-    nitro.logger.log(colors.gray(`  ${treeChar} ${method} ${route.path}`))
+    const method = (route.method === 'default' ? 'GET' : route.method).toUpperCase().padEnd(4)
+    nitro.logger.log(colors.gray(`  ${treeChar} ${method === '' ? 'GET' : method} ${route.path}`))
   })
 }
