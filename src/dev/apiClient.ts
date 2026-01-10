@@ -2,6 +2,7 @@ import { relative, join, dirname } from 'node:path'
 import { writeFile, mkdir } from 'node:fs/promises'
 import type { Nitro, NitroTypes } from 'nitro/types'
 import type { C8YAPIClientOptions } from '../types'
+import { colors } from 'consola/utils'
 
 /**
  * Parsed route information from Nitro types.
@@ -356,4 +357,12 @@ export async function writeAPIClient(
   await writeFile(outputFile, code, 'utf-8')
 
   nitro.logger.success(`Generated API client with ${routes.length} routes at: ${relative(rootDir, outputFile)}`)
+
+  // Log each route in tree format
+  routes.forEach((route, index) => {
+    const isLast = index === routes.length - 1
+    const treeChar = isLast ? '└─' : '├─'
+    const method = route.method.toUpperCase().padEnd(6)
+    nitro.logger.log(colors.gray(`  ${treeChar} ${method} ${route.path}`))
+  })
 }
