@@ -2,7 +2,6 @@ import { relative, join, dirname } from 'node:path'
 import { writeFile, mkdir } from 'node:fs/promises'
 import type { Nitro, NitroTypes } from 'nitro/types'
 import type { C8YAPIClientOptions } from '../types'
-import { colors } from 'consola/utils'
 
 type Method = keyof NitroTypes['routes'][string]
 
@@ -176,6 +175,11 @@ export function parseRoutes(types: NitroTypes, outputDir: string, typesDir: stri
   }
 
   for (const [path, methods] of Object.entries(types.routes)) {
+    // Skip internal c8y-nitro routes
+    if (path.startsWith('/_c8y_nitro')) {
+      continue
+    }
+
     if (typeof methods !== 'object' || methods === null)
       continue
 
@@ -359,12 +363,4 @@ export async function writeAPIClient(
   await writeFile(outputFile, code, 'utf-8')
 
   nitro.logger.success(`Generated API client with ${routes.length} routes at: ${relative(rootDir, outputFile)}`)
-
-  // Log each route in tree format
-  routes.forEach((route, index) => {
-    const isLast = index === routes.length - 1
-    const treeChar = isLast ? '└─' : '├─'
-    const method = (route.method === 'default' ? 'GET' : route.method).toUpperCase().padEnd(4)
-    nitro.logger.log(colors.gray(`  ${treeChar} ${method === '' ? 'GET' : method} ${route.path}`))
-  })
 }

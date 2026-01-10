@@ -6,8 +6,9 @@ Lightning fast Cumulocity IoT microservice development powered by [Nitro](https:
 
 - ⚡️ **Lightning Fast** - Built on Nitro's high performance engine
 - 🔧 **Fully Configurable** - Everything configured via module options
-- 🐳 **Auto Zip Creation** - Automatically generates the deployable microservice zip
+- 📁 **Auto Zip Creation** - Automatically generates the deployable microservice zip
 - 🎯 **API Client Generation** - Creates Cumulocity-compatible Angular API clients
+- 📦 **Built-in Probes** - Automatic setup for liveliness and readiness probes
 - 🚀 **Hot Module Reload** - Instant feedback during development
 - 🔥 **File-based Routing** - Auto-discovered routes from your file structure
 - 🛠️ **TypeScript First** - Full type safety with excellent DX

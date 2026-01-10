@@ -5,6 +5,7 @@ import { writeAPIClient } from './dev/apiClient'
 import { createC8yZip } from './dev/c8yzip'
 import type { C8YZipOptions } from './types/zip'
 import { getServiceInfo } from './dev/manifest'
+import { checkProbes, setupProbes } from './runtime/probes'
 
 export interface C8yNitroModuleOptions {
   manifest?: C8YManifestOptions
@@ -21,7 +22,14 @@ export function c8y(options: C8yNitroModuleOptions = {}): NitroModule {
       // setup preset
       nitro.options.preset = 'node-server'
 
-      // TODO: automatically inject "health" endpoint into server and manifest unless overwritten
+      nitro.hooks.hook('build:before', async () => {
+        // Setup probes first, then check user-defined ones
+        await setupProbes(nitro, options.manifest)
+
+        if (options.manifest) {
+          checkProbes(nitro, options.manifest)
+        }
+      })
 
       nitro.hooks.hook('types:extend', async (types) => {
         if (options.apiClient) {
@@ -41,8 +49,6 @@ export function c8y(options: C8yNitroModuleOptions = {}): NitroModule {
 
           nitro.logger.debug(`Generating C8Y API client types (contextPath: ${serviceContextPath}, name: ${name})`)
           await writeAPIClient(nitro, options.apiClient, serviceContextPath, name, types)
-        } else {
-          nitro.logger.debug('No API client options provided, skipping API client generation.')
         }
 
         // TODO: extend types with manifest options (roles for auth etc.)

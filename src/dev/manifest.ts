@@ -1,6 +1,7 @@
 import type { Nitro } from 'nitro/types'
 import type { C8YManifest, C8YManifestOptions, Provider } from '../types/manifest'
 import { readPackage } from 'pkg-types'
+import { GENERATED_LIVENESS_ROUTE, GENERATED_READINESS_ROUTE } from '../runtime/probes'
 
 async function readPackageJsonFieldsForManifest(nitro: Nitro): Promise<C8YManifestOptions & { name: string, version: string, provider: Provider }> {
   nitro.logger.debug(`Reading package file from ${nitro.options.rootDir}`)
@@ -68,7 +69,10 @@ export async function getServiceInfo(
   }
 }
 
-export async function createC8yManifest(nitro: Nitro, options: C8YManifestOptions = {}): Promise<C8YManifest> {
+export async function createC8yManifest(
+  nitro: Nitro,
+  options: C8YManifestOptions = {},
+): Promise<C8YManifest> {
   const {
     name,
     version,
@@ -76,9 +80,33 @@ export async function createC8yManifest(nitro: Nitro, options: C8YManifestOption
     ...restManifestFields
   } = await readPackageJsonFieldsForManifest(nitro)
 
+  // Build probe configuration - only add httpGet if not defined by user
+  const probeFields: Partial<Pick<C8YManifest, 'livenessProbe' | 'readinessProbe'>> = {}
+
+  // Add liveness probe httpGet if not defined by user (keep other probe settings)
+  if (!options.livenessProbe?.httpGet) {
+    probeFields.livenessProbe = {
+      ...options.livenessProbe,
+      httpGet: {
+        path: GENERATED_LIVENESS_ROUTE,
+      },
+    }
+  }
+
+  // Add readiness probe httpGet if not defined by user (keep other probe settings)
+  if (!options.readinessProbe?.httpGet) {
+    probeFields.readinessProbe = {
+      ...options.readinessProbe,
+      httpGet: {
+        path: GENERATED_READINESS_ROUTE,
+      },
+    }
+  }
+
   const manifest: C8YManifest = {
     ...restManifestFields,
     provider,
+    ...probeFields,
     ...options,
     name,
     version,
