@@ -21,7 +21,7 @@
     "dev": "nitro dev",
     "preview": "npx srvx --prod .output/",
     "typecheck": "tsc --noEmit",
-    "prepare": "nitro prepare",
+    "typegen": "nitro prepare",
     "test": "vitest"
   },
   "devDependencies": {
