@@ -1,9 +1,8 @@
 import { relative, join, dirname } from 'node:path'
 import { writeFile, mkdir } from 'node:fs/promises'
-import type { Nitro, NitroTypes } from 'nitro/types'
-import type { C8YAPIClientOptions } from '../types'
-
-type Method = keyof NitroTypes['routes'][string]
+import type { Nitro, NitroEventHandler } from 'nitro/types'
+import type { C8yNitroModuleOptions } from '../types'
+import type { HTTPMethod } from 'nitro/deps/h3'
 
 /**
  * Parsed route information from Nitro types.
@@ -16,7 +15,7 @@ interface ParsedRoute {
   /**
    * HTTP method (get, post, put, delete, etc.)
    */
-  method: Method
+  method: HTTPMethod
   /**
    * Generated function name (e.g., "GetApiById")
    */
@@ -42,9 +41,9 @@ interface ParsedRoute {
  * @param path - The route path (e.g., "/api/[id]" or "/api/:id")
  * @param method - HTTP method (get, post, put, delete, etc.)
  */
-export function generateFunctionName(path: string, method: string): string {
+export function generateFunctionName(path: string, method: HTTPMethod): string {
   // Remove leading slash and split by /
-  const segments = path.replace(/^\//, '').split('/')
+  const segments = path.replace(/^\//, '').replaceAll('.', '_').replaceAll('*', '').split('/')
 
   // Convert each segment to PascalCase, handling [params] and :params
   const pascalSegments = segments
@@ -64,10 +63,7 @@ export function generateFunctionName(path: string, method: string): string {
     })
     .join('')
 
-  // Prefix with method name (Get for get, nothing for default)
-  const prefix = method === 'default' ? '' : capitalize(method)
-
-  return `${prefix}${pascalSegments || 'Index'}`
+  return `${method}${pascalSegments || 'Index'}`
 }
 
 /**
@@ -134,84 +130,6 @@ export function toValidClassName(fileName: string): string {
 }
 
 /**
- * Adjusts import paths in return type strings to be relative to output directory.
- * Import paths in types are relative to the types directory (e.g., node_modules/.nitro/types/).
- * We need to resolve them and create new paths relative to the output directory.
- * Example: "import('../../../routes/[id].get')" from types dir -> "import('../../routes/[id].get')" from output dir
- * @param returnTypeStr - The return type string containing import paths
- * @param outputDir - The output directory where the API client will be generated
- * @param typesDir - The directory where Nitro types are generated (e.g., node_modules/.nitro/types/)
- */
-function adjustImportPaths(returnTypeStr: string, outputDir: string, typesDir: string): string {
-  // Match import paths in the type string
-  const importRegex = /import\(['"]([^'"]+)['"]\)/g
-
-  return returnTypeStr.replace(importRegex, (_match, importPath) => {
-    // Resolve the absolute path from the types directory
-    const absolutePath = join(typesDir, importPath)
-
-    // Calculate new relative path from output directory
-    const newRelativePath = relative(outputDir, absolutePath).replace(/\\/g, '/')
-
-    // Ensure it starts with ./ or ../
-    const adjustedPath = newRelativePath.startsWith('.') ? newRelativePath : `./${newRelativePath}`
-
-    return `import('${adjustedPath}')`
-  })
-}
-
-/**
- * Parses Nitro routes from the type system.
- * @param types - Nitro types object containing route definitions
- * @param outputDir - The output directory where the API client will be generated
- * @param typesDir - The directory where Nitro types are generated
- */
-export function parseRoutes(types: NitroTypes, outputDir: string, typesDir: string): ParsedRoute[] {
-  const routes: ParsedRoute[] = []
-
-  // Routes are in types.routes object
-  if (!types.routes) {
-    return routes
-  }
-
-  for (const [path, methods] of Object.entries(types.routes)) {
-    // Skip internal c8y-nitro routes
-    if (path.startsWith('/_c8y_nitro')) {
-      continue
-    }
-
-    if (typeof methods !== 'object' || methods === null)
-      continue
-
-    for (const [method, returnType] of Object.entries(methods)) {
-      const params = extractParams(path)
-      const functionName = generateFunctionName(path, method)
-
-      // Extract return type - it's an array where first element contains the type string
-      let typeString = 'unknown'
-      if (Array.isArray(returnType) && returnType.length > 0) {
-        typeString = returnType[0] as string
-        // Adjust import paths to be relative to output directory
-        typeString = adjustImportPaths(typeString, outputDir, typesDir)
-      }
-
-      // Normalize path: convert :param to [param] for consistency in generated code
-      const normalizedPath = path.replace(/:([^/]+)/g, '[$1]')
-
-      routes.push({
-        path: normalizedPath,
-        method: method as Method,
-        functionName,
-        params,
-        returnType: typeString,
-      })
-    }
-  }
-
-  return routes
-}
-
-/**
  * Generates TypeScript method code for a route in an Angular service.
  * @param route - Parsed route information including path, method, params, and return type
  */
@@ -239,8 +157,7 @@ export function generateMethod(route: ParsedRoute): string {
   }
 
   // Generate fetch options
-  const method = route.method === 'default' ? 'GET' : route.method.toUpperCase()
-  const fetchOptions = `{ method: '${method}', headers: { 'Content-Type': 'application/json' } }`
+  const fetchOptions = `{ method: '${route.method}', headers: { 'Content-Type': 'application/json' } }`
 
   return `  async ${route.functionName}(${methodParam}): ${returnTypeAnnotation} {
     const response = await this.fetchClient.fetch(${pathExpression}, ${fetchOptions});
@@ -296,65 +213,98 @@ export class ${className} {
   constructor() {}
 
 ${methods}
-}
-`
+}`
 }
 
 /**
- * Calculates relative import path from output file to Nitro types.
- * @param outputPath - Absolute path to the output API client file
- * @param importsPath - Absolute path to the Nitro types file
+ * Generates the TypeScript return type for a route handler.
+ * @param handlerPath - Absolute path to the route handler file
+ * @param outputFile - Absolute path to the output API client file
+ * @returns TypeScript return type string with proper serialization wrappers
  */
-export function getRelativeImportPath(outputPath: string, importsPath: string): string {
-  const rel = relative(dirname(outputPath), dirname(importsPath))
-  const fileName = 'nitro-routes'
+function getReturnType(handlerPath: string, outputFile: string): string {
+  // Calculate relative path from output file to handler
+  const relativeHandlerPath = relative(dirname(outputFile), handlerPath)
+  const importPath = relativeHandlerPath.startsWith('.') ? relativeHandlerPath : `./${relativeHandlerPath}`
 
-  // Normalize path separators and ensure it starts with ./
-  let relativePath = join(rel, fileName).replace(/\\/g, '/')
-  if (!relativePath.startsWith('.')) {
-    relativePath = `./${relativePath}`
-  }
+  // Remove .ts extension for import
+  const importPathWithoutExt = importPath.replace(/\.ts$/, '')
 
-  return relativePath
+  // Return full type with serialization wrappers
+  return `Simplify<Serialize<Awaited<ReturnType<typeof import('${importPathWithoutExt}').default>>>>`
 }
 
 /**
  * Writes the generated API client to disk.
  * @param nitro - Nitro instance
- * @param options - API client generation options
- * @param contextPath - Service context path for endpoint URLs (e.g., "my-service" in "/service/my-service/...")
- * @param name - The API client file name (without extension), e.g., "playgroundAPIClient"
- * @param types - Nitro types object containing route definitions
+ * @param options - Complete module options including apiClient and manifest
  */
 export async function writeAPIClient(
   nitro: Nitro,
-  options: C8YAPIClientOptions,
-  contextPath: string,
-  name: string,
-  types: NitroTypes,
+  options: C8yNitroModuleOptions,
 ) {
+  const { apiClient: apiClientOptions, manifest: manifestOptions } = options
+
+  if (!apiClientOptions) {
+    nitro.logger.debug('API client generation skipped: no apiClient options provided')
+    return
+  }
+
+  // Get service info from package.json and manifest options
+  const { getServiceInfo } = await import('./manifest')
+  const serviceInfo = await getServiceInfo(nitro, manifestOptions)
+
+  if (!serviceInfo) {
+    nitro.logger.warn('API client generation skipped: no service name found in package.json')
+    return
+  }
+
+  const { serviceName, contextPath } = serviceInfo
+
+  // Determine contextPath with fallback, always use serviceName for file/class name
+  const serviceContextPath = apiClientOptions.contextPath ?? contextPath
+  const name = `${serviceName}APIClient`
+
   const rootDir = nitro.options.rootDir
-
-  // Determine paths - types are generated in this directory
-  const typesDir = nitro.options.typescript.generatedTypesDir
-    ? join(rootDir, nitro.options.typescript.generatedTypesDir)
-    : join(rootDir, 'node_modules/.nitro/types')
-
-  const outputDir = join(rootDir, options.dir)
+  const outputDir = join(rootDir, apiClientOptions.dir)
   const outputFile = join(outputDir, `${name}.ts`)
 
-  // Parse routes from Nitro type system (pass typesDir for import path adjustment)
-  const routes = parseRoutes(types, outputDir, typesDir)
+  // Get routes from nitro.routing.routes._routes
+  const allRoutes: NitroEventHandler[] = nitro.routing.routes._routes ?? [] as any
+
+  // Filter and parse routes
+  const routes: ParsedRoute[] = allRoutes.filter((route) => {
+    // skip if they are nitro internal ones
+
+    return !route.handler.includes('nitro/dist/runtime/internal')
+  })
+    .map((route) => {
+      const path = route.route
+      const method = (!route.method ? 'GET' : route.method).toUpperCase() as HTTPMethod
+      const params = extractParams(path)
+      const functionName = generateFunctionName(path, method)
+      const returnType = getReturnType(route.handler, outputFile)
+
+      // Normalize path: convert :param to [param] for consistency
+      const normalizedPath = path.replace(/:([^/]+)/g, '[$1]')
+
+      return {
+        path: normalizedPath,
+        method,
+        functionName,
+        params,
+        returnType,
+      }
+    })
 
   if (routes.length === 0) {
     nitro.logger.warn('No routes found to generate API client')
     return
   }
 
-  // Generate API client code with microservice context path
-  // Convert filename to valid JavaScript class name (letters, numbers, $, _ only)
+  // Generate API client code
   const className = toValidClassName(name)
-  const code = generateAPIClient(routes, contextPath, className)
+  const code = generateAPIClient(routes, serviceContextPath, className)
 
   // Ensure output directory exists
   await mkdir(outputDir, { recursive: true })
