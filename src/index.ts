@@ -4,12 +4,28 @@ import { setupRuntimeConfig } from './dev/env'
 import { writeAPIClient } from './dev/apiClient'
 import { createC8yZip } from './dev/c8yzip'
 import { checkProbes, setupProbes } from './runtime/probes'
+import { setupRuntime } from './dev/runtime'
 
 export function c8y(options: C8yNitroModuleOptions = {}): NitroModule {
   return {
     name: 'c8y-nitro',
     setup: async (nitro) => {
+      // enable tsconfig generation
+      nitro.options.typescript.generateTsConfig = true
+      // workaround as the generated tsconfig creates an invalid extends entry
+      nitro.options.typescript.tsConfig = {
+        ...nitro.options.typescript.tsConfig,
+      }
+      nitro.options.typescript.tsConfig.include = ['./**/*.d.ts']
+      nitro.options.typescript.tsConfig.exclude = []
+
       setupRuntimeConfig(nitro)
+      setupRuntime(nitro, options.manifest)
+
+      nitro.hooks.hook('dev:reload', () => {
+        setupRuntimeConfig(nitro)
+        setupRuntime(nitro, options.manifest)
+      })
 
       // setup preset
       nitro.options.preset = 'node-server'
@@ -25,6 +41,7 @@ export function c8y(options: C8yNitroModuleOptions = {}): NitroModule {
 
       nitro.hooks.hook('types:extend', async () => {
         if (options.apiClient) {
+          // TODO: maybe move to dev as it needs to be written when routes change/save
           nitro.logger.debug('Generating C8Y API client')
           await writeAPIClient(nitro, options)
         }
@@ -33,6 +50,7 @@ export function c8y(options: C8yNitroModuleOptions = {}): NitroModule {
       })
 
       nitro.hooks.hook('close', async () => {
+        // TODO: currently runs everytime server stops, should only run AFTER build (without default build log output)
         // Build the Docker image
         await createC8yZip(nitro, options.zip)
       })

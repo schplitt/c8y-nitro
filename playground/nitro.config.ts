@@ -11,8 +11,8 @@ export default defineNitroConfig({
 
   modules: [
     c8y({
-      apiClient: {
-        dir: './src/generated',
+      manifest: {
+        roles: ['SOME_CUSTOM_ROLE', 'ANOTHER_ROLE'],
       },
     }),
   ],
