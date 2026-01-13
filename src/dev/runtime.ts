@@ -5,7 +5,7 @@ import { writeFileSync, mkdirSync } from 'fs'
 
 export function setupRuntime(nitro: Nitro, manifestOptions: C8YManifestOptions = {}): void {
   nitro.logger.debug('Setting up C8Y nitro runtime')
-  const roles = manifestOptions.roles || []
+  const roles = manifestOptions.roles ?? []
 
   // write roles types into
   const completeTypesDir = join(nitro.options.rootDir, nitro.options.typescript.generatedTypesDir ?? 'node_modules/.nitro/types')
