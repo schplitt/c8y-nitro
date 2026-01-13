@@ -31,7 +31,13 @@ CMD ["node", "--enable-source-maps", "${outputDirName}/server/index.mjs"]
 
 async function checkDockerInstalled(): Promise<boolean> {
   try {
-    await x('docker', ['--version'])
+    const result = await x('docker', ['--version'])
+    if (result.exitCode !== 0) {
+      return false
+    }
+    if (result.stderr) {
+      return false
+    }
     return true
   } catch {
     return false
@@ -80,6 +86,14 @@ async function buildDockerImage(nitro: Nitro, c8yDir: string): Promise<string> {
       nitro.logger.debug(result.stdout)
     }
 
+    if (result.stderr) {
+      nitro.logger.debug(result.stderr)
+    }
+
+    if (result.exitCode !== 0) {
+      throw new Error(`Docker build failed with exit code ${result.exitCode}`, { cause: result.stderr })
+    }
+
     nitro.logger.debug(`Docker image built successfully: ${imageName}`)
     return imageName
   } catch (error) {
@@ -93,12 +107,20 @@ async function saveDockerImageToTar(nitro: Nitro, c8yDir: string, imageName: str
   nitro.logger.debug(`Saving Docker image to ${imageTarPath}`)
 
   try {
-    await x('docker', [
+    const result = await x('docker', [
       'save',
       '-o',
       imageTarPath,
       imageName,
     ])
+
+    if (result.stderr) {
+      nitro.logger.debug(result.stderr)
+    }
+
+    if (result.exitCode !== 0) {
+      throw new Error(`Docker save failed with exit code ${result.exitCode}`, { cause: result.stderr })
+    }
 
     nitro.logger.debug(`Docker image saved to ${imageTarPath}`)
     return imageTarPath
