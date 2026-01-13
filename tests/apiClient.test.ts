@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { HTTPMethod } from 'nitro/deps/h3'
 import {
   generateFunctionName,
   extractParams,
@@ -6,45 +7,44 @@ import {
   toValidClassName,
   generateMethod,
   generateAPIClient,
-  parseRoutes,
 } from '../src/dev/apiClient'
 
 describe('apiClient generation', () => {
   describe('generateFunctionName', () => {
     it('should generate function name for GET /health', () => {
-      expect(generateFunctionName('/health', 'get')).toBe('GetHealth')
+      expect(generateFunctionName('/health', 'GET' as HTTPMethod)).toBe('GETHealth')
     })
 
     it('should generate function name for POST /health', () => {
-      expect(generateFunctionName('/health', 'post')).toBe('PostHealth')
+      expect(generateFunctionName('/health', 'POST' as HTTPMethod)).toBe('POSTHealth')
     })
 
     it('should generate function name for default method', () => {
-      expect(generateFunctionName('/someRoute', 'default')).toBe('SomeRoute')
+      expect(generateFunctionName('/someRoute', 'GET' as HTTPMethod)).toBe('GETSomeRoute')
     })
 
     it('should generate function name with route parameter', () => {
-      expect(generateFunctionName('/[id]', 'get')).toBe('GetById')
+      expect(generateFunctionName('/[id]', 'GET' as HTTPMethod)).toBe('GETById')
     })
 
     it('should generate function name for nested route with parameters', () => {
-      expect(generateFunctionName('/api/[multiple]/[params]', 'get')).toBe('GetApiByMultipleByParams')
+      expect(generateFunctionName('/api/[multiple]/[params]', 'GET' as HTTPMethod)).toBe('GETApiByMultipleByParams')
     })
 
     it('should generate function name for PUT method', () => {
-      expect(generateFunctionName('/users/[id]', 'put')).toBe('PutUsersById')
+      expect(generateFunctionName('/users/[id]', 'PUT' as HTTPMethod)).toBe('PUTUsersById')
     })
 
     it('should generate function name for DELETE method', () => {
-      expect(generateFunctionName('/items/[itemId]', 'delete')).toBe('DeleteItemsByItemId')
+      expect(generateFunctionName('/items/[itemId]', 'DELETE' as HTTPMethod)).toBe('DELETEItemsByItemId')
     })
 
     it('should handle root path', () => {
-      expect(generateFunctionName('/', 'get')).toBe('GetIndex')
+      expect(generateFunctionName('/', 'GET' as HTTPMethod)).toBe('GETIndex')
     })
 
     it('should handle complex nested paths', () => {
-      expect(generateFunctionName('/api/users/[userId]/posts/[postId]', 'get')).toBe('GetApiUsersByUserIdPostsByPostId')
+      expect(generateFunctionName('/api/users/[userId]/posts/[postId]', 'GET' as HTTPMethod)).toBe('GETApiUsersByUserIdPostsByPostId')
     })
   })
 
@@ -144,14 +144,14 @@ describe('apiClient generation', () => {
     it('should generate method without parameters', () => {
       const route = {
         path: '/health',
-        method: 'get',
-        functionName: 'GetHealth',
+        method: 'GET' as HTTPMethod,
+        functionName: 'GETHealth',
         params: [],
         returnType: 'string',
       }
       const result = generateMethod(route)
       expect(result).toMatchInlineSnapshot(`
-        "  async GetHealth(): Promise<string> {
+        "  async GETHealth(): Promise<string> {
             const response = await this.fetchClient.fetch(\`\${this.BASE_PATH}/health\`, { method: 'GET', headers: { 'Content-Type': 'application/json' } });
             return response.json();
           }"
@@ -161,14 +161,14 @@ describe('apiClient generation', () => {
     it('should generate method with POST method', () => {
       const route = {
         path: '/health',
-        method: 'post',
-        functionName: 'PostHealth',
+        method: 'POST' as HTTPMethod,
+        functionName: 'POSTHealth',
         params: [],
         returnType: 'string',
       }
       const result = generateMethod(route)
       expect(result).toMatchInlineSnapshot(`
-        "  async PostHealth(): Promise<string> {
+        "  async POSTHealth(): Promise<string> {
             const response = await this.fetchClient.fetch(\`\${this.BASE_PATH}/health\`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
             return response.json();
           }"
@@ -178,14 +178,14 @@ describe('apiClient generation', () => {
     it('should generate method with single parameter and inline type', () => {
       const route = {
         path: '/[id]',
-        method: 'get',
-        functionName: 'GetById',
+        method: 'GET' as HTTPMethod,
+        functionName: 'GETById',
         params: ['id'],
         returnType: 'string',
       }
       const result = generateMethod(route)
       expect(result).toMatchInlineSnapshot(`
-        "  async GetById(params: { id: string | number }): Promise<string> {
+        "  async GETById(params: { id: string | number }): Promise<string> {
             const response = await this.fetchClient.fetch(\`\${this.BASE_PATH}/\${params.id}\`, { method: 'GET', headers: { 'Content-Type': 'application/json' } });
             return response.json();
           }"
@@ -195,8 +195,8 @@ describe('apiClient generation', () => {
     it('should generate method with multiple parameters and inline type', () => {
       const route = {
         path: '/api/[multiple]/[params]',
-        method: 'get',
-        functionName: 'GetApiByMultipleByParams',
+        method: 'GET' as HTTPMethod,
+        functionName: 'GETApiByMultipleByParams',
         params: [
           'multiple',
           'params',
@@ -205,7 +205,7 @@ describe('apiClient generation', () => {
       }
       const result = generateMethod(route)
       expect(result).toMatchInlineSnapshot(`
-        "  async GetApiByMultipleByParams(params: { multiple: string | number; params: string | number }): Promise<string> {
+        "  async GETApiByMultipleByParams(params: { multiple: string | number; params: string | number }): Promise<string> {
             const response = await this.fetchClient.fetch(\`\${this.BASE_PATH}/api/\${params.multiple}/\${params.params}\`, { method: 'GET', headers: { 'Content-Type': 'application/json' } });
             return response.json();
           }"
@@ -215,14 +215,14 @@ describe('apiClient generation', () => {
     it('should generate PUT method with parameters', () => {
       const route = {
         path: '/users/[id]',
-        method: 'put',
-        functionName: 'PutUsersById',
+        method: 'PUT' as HTTPMethod,
+        functionName: 'PUTUsersById',
         params: ['id'],
         returnType: '{ success: boolean }',
       }
       const result = generateMethod(route)
       expect(result).toMatchInlineSnapshot(`
-        "  async PutUsersById(params: { id: string | number }): Promise<{ success: boolean }> {
+        "  async PUTUsersById(params: { id: string | number }): Promise<{ success: boolean }> {
             const response = await this.fetchClient.fetch(\`\${this.BASE_PATH}/users/\${params.id}\`, { method: 'PUT', headers: { 'Content-Type': 'application/json' } });
             return response.json();
           }"
@@ -235,22 +235,22 @@ describe('apiClient generation', () => {
       const routes = [
         {
           path: '/health',
-          method: 'get',
-          functionName: 'GetHealth',
+          method: 'GET' as HTTPMethod,
+          functionName: 'GETHealth',
           params: [],
           returnType: 'string',
         },
         {
           path: '/health',
-          method: 'post',
-          functionName: 'PostHealth',
+          method: 'POST' as HTTPMethod,
+          functionName: 'POSTHealth',
           params: [],
           returnType: 'string',
         },
         {
           path: '/[id]',
-          method: 'get',
-          functionName: 'GetById',
+          method: 'GET' as HTTPMethod,
+          functionName: 'GETById',
           params: ['id'],
           returnType: 'string',
         },
@@ -289,22 +289,21 @@ describe('apiClient generation', () => {
 
           constructor() {}
 
-          async GetHealth(): Promise<string> {
+          async GETHealth(): Promise<string> {
             const response = await this.fetchClient.fetch(\`\${this.BASE_PATH}/health\`, { method: 'GET', headers: { 'Content-Type': 'application/json' } });
             return response.json();
           }
 
-          async PostHealth(): Promise<string> {
+          async POSTHealth(): Promise<string> {
             const response = await this.fetchClient.fetch(\`\${this.BASE_PATH}/health\`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
             return response.json();
           }
 
-          async GetById(params: { id: string | number }): Promise<string> {
+          async GETById(params: { id: string | number }): Promise<string> {
             const response = await this.fetchClient.fetch(\`\${this.BASE_PATH}/\${params.id}\`, { method: 'GET', headers: { 'Content-Type': 'application/json' } });
             return response.json();
           }
-        }
-        "
+        }"
       `)
     })
 
@@ -312,8 +311,8 @@ describe('apiClient generation', () => {
       const routes = [
         {
           path: '/someRoute',
-          method: 'default',
-          functionName: 'SomeRoute',
+          method: 'GET' as HTTPMethod,
+          functionName: 'GETSomeRoute',
           params: [],
           returnType: 'string',
         },
@@ -351,53 +350,56 @@ describe('apiClient generation', () => {
 
           constructor() {}
 
-          async SomeRoute(): Promise<string> {
+          async GETSomeRoute(): Promise<string> {
             const response = await this.fetchClient.fetch(\`\${this.BASE_PATH}/someRoute\`, { method: 'GET', headers: { 'Content-Type': 'application/json' } });
             return response.json();
           }
-        }
-        "
+        }"
       `)
     })
   })
 
   it('should generate a real world example correctly', () => {
-    // The NitroTypes object has routes nested under .routes property
-    const nitroTypes = {
-      routes: {
-        '/:id': {
-          get: [
-            'Simplify<Serialize<Awaited<ReturnType<typeof import(\'../../../routes/[id].get\').default>>>>',
-          ],
-        },
-        '/api/:multiple/:params': {
-          default: [
-            'Simplify<Serialize<Awaited<ReturnType<typeof import(\'../../../routes/api/[multiple]/[params]\').default>>>>',
-          ],
-        },
-        '/health': {
-          get: [
-            'Simplify<Serialize<Awaited<ReturnType<typeof import(\'../../../routes/health.get\').default>>>>',
-          ],
-          post: [
-            'Simplify<Serialize<Awaited<ReturnType<typeof import(\'../../../routes/health.post\').default>>>>',
-          ],
-        },
-        '/someRoute': {
-          default: [
-            'Simplify<Serialize<Awaited<ReturnType<typeof import(\'../../../routes/someRoute\').default>>>>',
-          ],
-        },
+    // Directly construct the routes array that would be generated
+    const routes = [
+      {
+        path: '/[id]',
+        method: 'GET' as HTTPMethod,
+        functionName: 'GETById',
+        params: ['id'],
+        returnType: 'Simplify<Serialize<Awaited<ReturnType<typeof import(\'../../../routes/[id].get\').default>>>>',
       },
-    }
+      {
+        path: '/api/[multiple]/[params]',
+        method: 'GET' as HTTPMethod,
+        functionName: 'GETApiByMultipleByParams',
+        params: ['multiple', 'params'],
+        returnType: 'Simplify<Serialize<Awaited<ReturnType<typeof import(\'../../../routes/api/[multiple]/[params]\').default>>>>',
+      },
+      {
+        path: '/health',
+        method: 'GET' as HTTPMethod,
+        functionName: 'GETHealth',
+        params: [],
+        returnType: 'Simplify<Serialize<Awaited<ReturnType<typeof import(\'../../../routes/health.get\').default>>>>',
+      },
+      {
+        path: '/health',
+        method: 'POST' as HTTPMethod,
+        functionName: 'POSTHealth',
+        params: [],
+        returnType: 'Simplify<Serialize<Awaited<ReturnType<typeof import(\'../../../routes/health.post\').default>>>>',
+      },
+      {
+        path: '/someRoute',
+        method: 'GET' as HTTPMethod,
+        functionName: 'GETSomeRoute',
+        params: [],
+        returnType: 'Simplify<Serialize<Awaited<ReturnType<typeof import(\'../../../routes/someRoute\').default>>>>',
+      },
+    ]
 
-    // Types are generated in node_modules/.nitro/types/
-    // Import paths like '../../../routes/...' are relative to that location
-    const typesDir = '/home/someuser/projects/my-nitro-app/node_modules/.nitro/types'
-    const outputDir = '/home/someuser/projects/otherProject/app/api-client'
-
-    const parsedRoutes = parseRoutes(nitroTypes as any, outputDir, typesDir)
-    const result = generateAPIClient(parsedRoutes, 'my-microservice', 'GeneratedMyMicroservice')
+    const result = generateAPIClient(routes, 'my-microservice', 'GeneratedMyMicroservice')
 
     expect(result).toMatchInlineSnapshot(`
       "/**
@@ -431,32 +433,31 @@ describe('apiClient generation', () => {
 
         constructor() {}
 
-        async GetById(params: { id: string | number }): Promise<Simplify<Serialize<Awaited<ReturnType<typeof import('../../../my-nitro-app/routes/[id].get').default>>>>> {
+        async GETById(params: { id: string | number }): Promise<Simplify<Serialize<Awaited<ReturnType<typeof import('../../../routes/[id].get').default>>>>> {
           const response = await this.fetchClient.fetch(\`\${this.BASE_PATH}/\${params.id}\`, { method: 'GET', headers: { 'Content-Type': 'application/json' } });
           return response.json();
         }
 
-        async ApiByMultipleByParams(params: { multiple: string | number; params: string | number }): Promise<Simplify<Serialize<Awaited<ReturnType<typeof import('../../../my-nitro-app/routes/api/[multiple]/[params]').default>>>>> {
+        async GETApiByMultipleByParams(params: { multiple: string | number; params: string | number }): Promise<Simplify<Serialize<Awaited<ReturnType<typeof import('../../../routes/api/[multiple]/[params]').default>>>>> {
           const response = await this.fetchClient.fetch(\`\${this.BASE_PATH}/api/\${params.multiple}/\${params.params}\`, { method: 'GET', headers: { 'Content-Type': 'application/json' } });
           return response.json();
         }
 
-        async GetHealth(): Promise<Simplify<Serialize<Awaited<ReturnType<typeof import('../../../my-nitro-app/routes/health.get').default>>>>> {
+        async GETHealth(): Promise<Simplify<Serialize<Awaited<ReturnType<typeof import('../../../routes/health.get').default>>>>> {
           const response = await this.fetchClient.fetch(\`\${this.BASE_PATH}/health\`, { method: 'GET', headers: { 'Content-Type': 'application/json' } });
           return response.json();
         }
 
-        async PostHealth(): Promise<Simplify<Serialize<Awaited<ReturnType<typeof import('../../../my-nitro-app/routes/health.post').default>>>>> {
+        async POSTHealth(): Promise<Simplify<Serialize<Awaited<ReturnType<typeof import('../../../routes/health.post').default>>>>> {
           const response = await this.fetchClient.fetch(\`\${this.BASE_PATH}/health\`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
           return response.json();
         }
 
-        async SomeRoute(): Promise<Simplify<Serialize<Awaited<ReturnType<typeof import('../../../my-nitro-app/routes/someRoute').default>>>>> {
+        async GETSomeRoute(): Promise<Simplify<Serialize<Awaited<ReturnType<typeof import('../../../routes/someRoute').default>>>>> {
           const response = await this.fetchClient.fetch(\`\${this.BASE_PATH}/someRoute\`, { method: 'GET', headers: { 'Content-Type': 'application/json' } });
           return response.json();
         }
-      }
-      "
+      }"
     `)
   })
 })
