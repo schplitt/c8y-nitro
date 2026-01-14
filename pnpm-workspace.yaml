@@ -1,5 +1,6 @@
 catalogMode: prefer
 
+
 shellEmulator: true
 
 trustPolicy: no-downgrade
@@ -7,6 +8,7 @@ trustPolicy: no-downgrade
 trustPolicyExclude:
   - cached-factory@0.1.0
   - ts-api-utils@2.2.0
+  - undici-types@6.21.0
 packages:
   - ./
   - playground

@@ -5,6 +5,7 @@ import { writeAPIClient } from './dev/apiClient'
 import { createC8yZip } from './dev/c8yzip'
 import { checkProbes, setupProbes } from './runtime/probes'
 import { setupRuntime } from './dev/runtime'
+import { registerRuntime } from './dev/register'
 
 export function c8y(options: C8yNitroModuleOptions = {}): NitroModule {
   return {
@@ -19,8 +20,12 @@ export function c8y(options: C8yNitroModuleOptions = {}): NitroModule {
       nitro.options.typescript.tsConfig.include = ['./**/*.d.ts']
       nitro.options.typescript.tsConfig.exclude = []
 
+      // allow async context
+      nitro.options.experimental.asyncContext = true
+
       setupRuntimeConfig(nitro)
       setupRuntime(nitro, options.manifest)
+      await registerRuntime(nitro)
 
       nitro.hooks.hook('dev:reload', () => {
         setupRuntimeConfig(nitro)
