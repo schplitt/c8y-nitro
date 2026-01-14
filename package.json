@@ -69,6 +69,10 @@
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
+  "peerDependencies": {
+    "@c8y/client": ">=1021.0.0",
+    "nitro": ">=3.0.0"
+  },
   "engines": {
     "node": ">=20.0.0"
   }
