@@ -3,9 +3,9 @@ import type { C8yNitroModuleOptions } from './types'
 import { setupRuntimeConfig } from './dev/env'
 import { writeAPIClient } from './dev/apiClient'
 import { createC8yZip } from './dev/c8yzip'
-import { checkProbes, setupProbes } from './runtime/probes'
 import { setupRuntime } from './dev/runtime'
 import { registerRuntime } from './dev/register'
+import { checkProbes } from './dev/probeCheck'
 
 export function c8y(options: C8yNitroModuleOptions = {}): NitroModule {
   return {
@@ -25,7 +25,7 @@ export function c8y(options: C8yNitroModuleOptions = {}): NitroModule {
 
       setupRuntimeConfig(nitro)
       setupRuntime(nitro, options.manifest)
-      await registerRuntime(nitro)
+      await registerRuntime(nitro, options)
 
       nitro.hooks.hook('dev:reload', () => {
         setupRuntimeConfig(nitro)
@@ -36,9 +36,7 @@ export function c8y(options: C8yNitroModuleOptions = {}): NitroModule {
       nitro.options.preset = 'node-server'
 
       nitro.hooks.hook('build:before', async () => {
-        // Setup probes first, then check user-defined ones
-        await setupProbes(nitro, options.manifest)
-
+        // Check probes when all things are registered
         if (options.manifest) {
           checkProbes(nitro, options.manifest)
         }
