@@ -19,6 +19,13 @@ export default definePlugin(() => {
   }
 })`
 
+/**
+ * Links runtime middleware, handlers, and plugins to the nitro instance.
+ * Works by having the handlers in a relative path to this file.
+ * Needs to be the same when built.
+ * @param nitro - Nitro instance
+ * @param options - C8yNitroModuleOptions
+ */
 export async function registerRuntime(nitro: Nitro, options: C8yNitroModuleOptions = {}) {
   // Generate directory for runtime files
   const runtimeDir = join(nitro.options.rootDir, 'node_modules', '.c8y_nitro')
