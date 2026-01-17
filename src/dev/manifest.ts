@@ -1,7 +1,7 @@
 import type { Nitro } from 'nitro/types'
 import type { C8YManifest, C8YManifestOptions, Provider } from '../types/manifest'
 import { readPackage } from 'pkg-types'
-import { GENERATED_LIVENESS_ROUTE, GENERATED_READINESS_ROUTE } from '../runtime/probes'
+import { GENERATED_LIVENESS_ROUTE, GENERATED_READINESS_ROUTE } from './constants'
 
 async function readPackageJsonFieldsForManifest(nitro: Nitro): Promise<C8YManifestOptions & { name: string, version: string, provider: Provider }> {
   nitro.logger.debug(`Reading package file from ${nitro.options.rootDir}`)
