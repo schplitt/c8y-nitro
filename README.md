@@ -91,8 +91,6 @@ C8Y_BOOTSTRAP_PASSWORD=<generated-password>
 
 These credentials are used by the microservice at runtime to authenticate with Cumulocity.
 
-##
-
 ## License
 
 MIT
