@@ -17,6 +17,9 @@ import { HTTPError } from 'nitro/deps/h3'
  */
 export function getUserClient(): Client {
   const creds = extractUserCredentialsFromHeaders(useRequest())
+
+  // TODO: ensure base url has not trailing slash
+
   // C8Y_BASE_URL is enforced to be set
   return new Client(new BasicAuth(creds), useRuntimeConfig().C8Y_BASE_URL)
 }

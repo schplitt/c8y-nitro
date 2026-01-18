@@ -27,6 +27,8 @@ export default definePlugin(() => {
  * @param options - C8yNitroModuleOptions
  */
 export async function registerRuntime(nitro: Nitro, options: C8yNitroModuleOptions = {}) {
+  // TODO: process.env is augmented with .env files so no need to write plugin dynamically
+
   // Generate directory for runtime files
   const runtimeDir = join(nitro.options.rootDir, 'node_modules', '.c8y_nitro')
   await mkdir(runtimeDir, { recursive: true })
@@ -53,7 +55,7 @@ export async function registerRuntime(nitro: Nitro, options: C8yNitroModuleOptio
   const thisFilePath = fileURLToPath(new URL('.', import.meta.url))
   const probeHandlerPath = join(thisFilePath, './runtime/handlers/liveness-readiness')
 
-  // TODO: nitro currently only shows the last registered handler in swagger/scalar
+  // TODO: investigate nitro currently only shows the last registered handler in swagger/scalar
 
   // Generate liveness probe if user hasn't defined httpGet
   if (!options.manifest?.livenessProbe?.httpGet) {

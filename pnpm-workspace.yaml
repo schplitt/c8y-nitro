@@ -1,6 +1,5 @@
 catalogMode: prefer
 
-
 shellEmulator: true
 
 trustPolicy: no-downgrade
@@ -16,6 +15,8 @@ catalog:
   '@schplitt/eslint-config': ^1.2.0
   '@types/spinnies': ^0.5.3
   bumpp: ^10.3.2
+  c12: ^3.3.3
+  citty: ^0.1.6
   consola: ^3.4.2
   eslint: ^9.39.2
   jszip: ^3.10.1

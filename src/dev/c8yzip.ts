@@ -1,6 +1,6 @@
 import type { Nitro } from 'nitro/types'
 import { createDockerImage } from './docker'
-import { createC8yManifest } from './manifest'
+import { createC8yManifestFromNitro } from './manifest'
 import type { C8YZipOptions } from '../types/zip'
 import { join } from 'pathe'
 import { mkdir, readFile, stat, writeFile } from 'fs/promises'
@@ -30,7 +30,7 @@ export async function createC8yZip(nitro: Nitro, options: C8YZipOptions = {}) {
   const imageTarPath = await createDockerImage(nitro)
 
   spinnies.update(spinnerName, { text: 'Creating manifest...' })
-  const manifest = await createC8yManifest(nitro, options.manifest)
+  const manifest = await createC8yManifestFromNitro(nitro)
 
   spinnies.update(spinnerName, { text: 'Reading image.tar...' })
   const imageTarBuffer = await readFile(imageTarPath)
