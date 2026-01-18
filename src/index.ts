@@ -7,10 +7,17 @@ import { setupRuntime } from './dev/runtime'
 import { registerRuntime } from './dev/register'
 import { checkProbes } from './dev/probeCheck'
 
-export function c8y(options: C8yNitroModuleOptions = {}): NitroModule {
+declare module 'nitro/types' {
+  interface NitroOptions {
+    c8y?: C8yNitroModuleOptions
+  }
+}
+export function c8y(): NitroModule {
   return {
     name: 'c8y-nitro',
     setup: async (nitro) => {
+      const options = nitro.options.c8y ?? {}
+
       // enable tsconfig generation
       nitro.options.typescript.generateTsConfig = true
       // workaround as the generated tsconfig creates an invalid extends entry
