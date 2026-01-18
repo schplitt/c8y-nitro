@@ -1,7 +1,16 @@
+catalogMode: prefer
+
+shellEmulator: true
+
+trustPolicy: no-downgrade
+
+trustPolicyExclude:
+  - cached-factory@0.1.0
+  - ts-api-utils@2.2.0
+  - undici-types@6.21.0
 packages:
   - ./
   - playground
-
 catalog:
   '@schplitt/eslint-config': ^1.2.0
   '@types/spinnies': ^0.5.3
@@ -14,26 +23,16 @@ catalog:
   nitro: 3.0.1-alpha.1
   pathe: ^2.0.3
   pkg-types: ^2.3.0
-  rolldown: 1.0.0-beta.60
   spinnies: ^0.5.1
   tinyexec: ^1.0.2
   tsdown: ^0.18.4
   typescript: ^5.9.3
   vitest: ^4.0.16
-
-catalogMode: prefer
-
 onlyBuiltDependencies:
   - cpu-features
   - esbuild
   - protobufjs
   - ssh2
 
-shellEmulator: true
 
-trustPolicy: no-downgrade
 
-trustPolicyExclude:
-  - cached-factory@0.1.0
-  - ts-api-utils@2.2.0
-  - undici-types@6.21.0
