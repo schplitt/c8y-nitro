@@ -36,6 +36,9 @@
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
+  "bin": {
+    "c8y-nitro": "./dist/cli/index.mjs"
+  },
   "files": [
     "LICENSE",
     "README.md",
@@ -53,6 +56,8 @@
   },
   "dependencies": {
     "@types/spinnies": "catalog:",
+    "c12": "catalog:",
+    "citty": "catalog:",
     "consola": "catalog:",
     "jszip": "catalog:",
     "nitro": "catalog:",

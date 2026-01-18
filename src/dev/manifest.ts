@@ -2,11 +2,22 @@ import type { Nitro } from 'nitro/types'
 import type { C8YManifest, C8YManifestOptions, Provider } from '../types/manifest'
 import { readPackage } from 'pkg-types'
 import { GENERATED_LIVENESS_ROUTE, GENERATED_READINESS_ROUTE } from './constants'
+import type { ConsolaInstance } from 'consola'
 
-async function readPackageJsonFieldsForManifest(nitro: Nitro): Promise<C8YManifestOptions & { name: string, version: string, provider: Provider }> {
-  nitro.logger.debug(`Reading package file from ${nitro.options.rootDir}`)
+interface PackageJsonFields {
+  name: string
+  version: string
+  provider: Provider
+  contextPath: string
+}
 
-  const pkg = await readPackage(nitro.options.rootDir)
+async function readPackageJsonFieldsForManifest(
+  rootDir: string,
+  logger?: ConsolaInstance,
+): Promise<PackageJsonFields> {
+  logger?.debug(`Reading package file from ${rootDir}`)
+
+  const pkg = await readPackage(rootDir)
 
   // Strip scope from package name (e.g., @org/package -> package)
   const name = pkg.name?.replace(/^@[^/]+\//, '')
@@ -30,7 +41,7 @@ async function readPackageJsonFieldsForManifest(nitro: Nitro): Promise<C8YManife
     support: support ?? authorEmail,
   }
 
-  nitro.logger.debug(`Found package.json fields for manifest: name=${name}, version=${version}, provider=${JSON.stringify(provider)}`)
+  logger?.debug(`Found package.json fields for manifest: name=${name}, version=${version}, provider=${JSON.stringify(provider)}`)
   return {
     name,
     version,
@@ -40,45 +51,25 @@ async function readPackageJsonFieldsForManifest(nitro: Nitro): Promise<C8YManife
 }
 
 /**
- * Gets service name and context path without building full manifest.
- * Used by API client generation to avoid duplicate manifest creation.
- * @param nitro - Nitro instance
- * @param manifestOptions - Optional manifest configuration for contextPath override
+ * Creates a Cumulocity manifest from rootDir and options.
+ * Standalone function that can be used by CLI or module.
+ * @param rootDir - Directory containing package.json
+ * @param options - Manifest options
+ * @param logger - Optional logger for debug output
  */
-export async function getServiceInfo(
-  nitro: Nitro,
-  manifestOptions?: C8YManifestOptions,
-): Promise<{ serviceName: string, contextPath: string } | undefined> {
-  try {
-    const pkg = await readPackage(nitro.options.rootDir)
-    const pkgName = pkg.name
-
-    if (!pkgName) {
-      return undefined
-    }
-
-    // Strip scope from package name (e.g., @org/package -> package)
-    const serviceName = pkgName.replace(/^@[^/]+\//, '')
-
-    // contextPath: use manifest override or fallback to stripped package name
-    const contextPath = manifestOptions?.contextPath ?? serviceName
-
-    return { serviceName, contextPath }
-  } catch {
-    return undefined
-  }
-}
-
 export async function createC8yManifest(
-  nitro: Nitro,
+  rootDir: string,
   options: C8YManifestOptions = {},
+  logger?: ConsolaInstance,
 ): Promise<C8YManifest> {
+  // TODO: force type to be microservice and remove from manifest options
+
   const {
     name,
     version,
     provider,
     ...restManifestFields
-  } = await readPackageJsonFieldsForManifest(nitro)
+  } = await readPackageJsonFieldsForManifest(rootDir, logger)
 
   // Build probe configuration - only add httpGet if not defined by user
   const probeFields: Partial<Pick<C8YManifest, 'livenessProbe' | 'readinessProbe'>> = {}
@@ -112,6 +103,17 @@ export async function createC8yManifest(
     version,
     apiVersion: 'v2',
   }
-  nitro.logger.debug(`Created Cumulocity manifest: ${JSON.stringify(manifest, null, 2)}`)
+  logger?.debug(`Created Cumulocity manifest: ${JSON.stringify(manifest, null, 2)}`)
   return manifest
+}
+
+/**
+ * Creates a Cumulocity manifest from a Nitro instance.
+ * Convenience wrapper for use in the Nitro module.
+ * @param nitro - The Nitro instance
+ */
+export async function createC8yManifestFromNitro(
+  nitro: Nitro,
+): Promise<C8YManifest> {
+  return createC8yManifest(nitro.options.rootDir, nitro.options.c8y?.manifest, nitro.logger)
 }

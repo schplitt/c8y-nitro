@@ -15,6 +15,12 @@ catalogs:
     bumpp:
       specifier: ^10.3.2
       version: 10.3.2
+    c12:
+      specifier: ^3.3.3
+      version: 3.3.3
+    citty:
+      specifier: ^0.1.6
+      version: 0.1.6
     consola:
       specifier: ^3.4.2
       version: 3.4.2
@@ -59,6 +65,12 @@ importers:
       '@types/spinnies':
         specifier: 'catalog:'
         version: 0.5.3
+      c12:
+        specifier: 'catalog:'
+        version: 3.3.3
+      citty:
+        specifier: 'catalog:'
+        version: 0.1.6
       consola:
         specifier: 'catalog:'
         version: 3.4.2

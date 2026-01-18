@@ -34,6 +34,9 @@ export function c8y(): NitroModule {
       setupRuntime(nitro, options.manifest)
       await registerRuntime(nitro, options)
 
+      // TODO: maybe auto bootstrap on startup
+      // when certain env vars are present but others are not
+
       nitro.hooks.hook('dev:reload', () => {
         setupRuntimeConfig(nitro)
         setupRuntime(nitro, options.manifest)

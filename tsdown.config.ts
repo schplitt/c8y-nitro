@@ -7,6 +7,7 @@ export default defineConfig({
     'utils': './src/utils/index.ts',
     // TODO: avoid type generation for these files in the output
     'runtime/*': './src/dev/runtime/**/*.ts',
+    'cli/index': './src/cli/index.ts',
   },
   target: ['es2023'],
   format: 'esm',

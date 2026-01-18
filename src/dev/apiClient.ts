@@ -3,6 +3,7 @@ import { writeFile, mkdir } from 'node:fs/promises'
 import type { Nitro, NitroEventHandler } from 'nitro/types'
 import type { C8yNitroModuleOptions } from '../types'
 import type { HTTPMethod } from 'nitro/deps/h3'
+import { createC8yManifestFromNitro } from './manifest'
 
 /**
  * Parsed route information from Nitro types.
@@ -243,26 +244,19 @@ export async function writeAPIClient(
   nitro: Nitro,
   options: C8yNitroModuleOptions,
 ) {
-  const { apiClient: apiClientOptions, manifest: manifestOptions } = options
+  const { apiClient: apiClientOptions } = options
 
   if (!apiClientOptions) {
     nitro.logger.debug('API client generation skipped: no apiClient options provided')
     return
   }
 
-  // Get service info from package.json and manifest options
-  const { getServiceInfo } = await import('./manifest')
-  const serviceInfo = await getServiceInfo(nitro, manifestOptions)
+  // Get manifest to extract service name and context path
+  const manifest = await createC8yManifestFromNitro(nitro)
 
-  if (!serviceInfo) {
-    nitro.logger.warn('API client generation skipped: no service name found in package.json')
-    return
-  }
-
-  const { serviceName, contextPath } = serviceInfo
-
-  // Determine contextPath with fallback, always use serviceName for file/class name
-  const serviceContextPath = apiClientOptions.contextPath ?? contextPath
+  const serviceName = manifest.name
+  // Use apiClient contextPath override, fall back to manifest contextPath, then service name
+  const serviceContextPath = apiClientOptions.contextPath ?? manifest.contextPath ?? serviceName
   const name = `${serviceName}APIClient`
 
   const rootDir = nitro.options.rootDir
