@@ -9,11 +9,13 @@ export default defineNitroConfig({
     openAPI: true,
   },
 
+  c8y: {
+    manifest: {
+      roles: ['SOME_CUSTOM_ROLE', 'ANOTHER_ROLE'],
+    },
+  },
+
   modules: [
-    c8y({
-      manifest: {
-        roles: ['SOME_CUSTOM_ROLE', 'ANOTHER_ROLE'],
-      },
-    }),
+    c8y(),
   ],
 })
