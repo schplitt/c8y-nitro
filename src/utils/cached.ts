@@ -27,6 +27,8 @@ export const getUser = Object.assign(
   defineCachedFunction(async () => {
     const creds = extractUserCredentialsFromHeaders(useRequest())
 
+    // TODO: ensure base url has not trailing slash
+
     // C8Y_BASE_URL is enforced to be set
     const client = new Client(new BasicAuth(creds), useRuntimeConfig().C8Y_BASE_URL)
     const {

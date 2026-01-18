@@ -92,8 +92,13 @@ export function validateBootstrapEnv(env: Record<string, string | undefined>): B
     )
   }
 
+  const endsWithSlash = env.C8Y_BASE_URL!.endsWith('/')
+  const baseUrl = endsWithSlash
+    ? env.C8Y_BASE_URL!.slice(0, -1)
+    : env.C8Y_BASE_URL!
+
   return {
-    C8Y_BASE_URL: env.C8Y_BASE_URL!,
+    C8Y_BASE_URL: baseUrl,
     C8Y_DEVELOPMENT_TENANT: env.C8Y_DEVELOPMENT_TENANT!,
     C8Y_DEVELOPMENT_USER: env.C8Y_DEVELOPMENT_USER!,
     C8Y_DEVELOPMENT_PASSWORD: env.C8Y_DEVELOPMENT_PASSWORD!,
