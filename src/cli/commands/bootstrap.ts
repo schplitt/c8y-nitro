@@ -50,11 +50,11 @@ export default defineCommand({
 
     if (existingApp) {
       // Microservice exists - prompt for update
-      consola.warn(`Microservice "${manifest.name}" already exists (ID: ${existingApp.id})`)
+      consola.warn(`Microservice "${manifest.name}" already exists on development tenant (ID: ${existingApp.id})`)
 
       const shouldUpdate = await consola.prompt(
         'Do you want to update the existing microservice?',
-        { type: 'confirm' },
+        { type: 'confirm', cancel: 'reject' },
       )
 
       if (!shouldUpdate) {
