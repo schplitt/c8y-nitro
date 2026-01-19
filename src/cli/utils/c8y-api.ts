@@ -54,7 +54,9 @@ export async function findMicroserviceByName(
   })
 
   if (!response.ok) {
-    throw new Error(`Failed to query microservices: ${response.status} ${response.statusText}`)
+    throw new Error(`Failed to query microservices: ${response.status} ${response.statusText}`, {
+      cause: response,
+    })
   }
 
   const data = (await response.json()) as C8yApplicationsResponse
@@ -92,7 +94,9 @@ export async function createMicroservice(
 
   if (!response.ok) {
     const errorText = await response.text()
-    throw new Error(`Failed to create microservice: ${response.status} ${response.statusText}\n${errorText}`)
+    throw new Error(`Failed to create microservice: ${response.status} ${response.statusText}\n${errorText}`, {
+      cause: response,
+    })
   }
 
   return (await response.json()) as C8yApplication
@@ -129,10 +133,52 @@ export async function updateMicroservice(
 
   if (!response.ok) {
     const errorText = await response.text()
-    throw new Error(`Failed to update microservice: ${response.status} ${response.statusText}\n${errorText}`)
+    throw new Error(`Failed to update microservice: ${response.status} ${response.statusText}\n${errorText}`, {
+      cause: response,
+    })
   }
 
   return (await response.json()) as C8yApplication
+}
+
+/**
+ * Subscribes a tenant to an application.
+ * @param baseUrl - The Cumulocity base URL
+ * @param tenantId - The tenant ID to subscribe
+ * @param appId - The application ID
+ * @param authHeader - The Basic Auth header
+ */
+export async function subscribeToApplication(
+  baseUrl: string,
+  tenantId: string,
+  appId: string,
+  authHeader: string,
+): Promise<void> {
+  const url = `${baseUrl}/tenant/tenants/${tenantId}/applications`
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: authHeader,
+    },
+    body: JSON.stringify({
+      application: {
+        self: `${baseUrl}/application/applications/${appId}`,
+      },
+    }),
+  })
+
+  // 409 means already subscribed, which is fine
+  if (response.status === 409) {
+    return
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Failed to subscribe tenant to application: ${response.status} ${response.statusText}\n${errorText}`, {
+      cause: response,
+    })
+  }
 }
 
 /**
@@ -157,7 +203,9 @@ export async function getBootstrapCredentials(
   })
 
   if (!response.ok) {
-    throw new Error(`Failed to get bootstrap credentials: ${response.status} ${response.statusText}`)
+    throw new Error(`Failed to get bootstrap credentials: ${response.status} ${response.statusText}`, {
+      cause: response,
+    })
   }
 
   return (await response.json()) as C8yBootstrapCredentials
