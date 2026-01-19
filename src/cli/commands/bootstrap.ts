@@ -6,6 +6,7 @@ import {
   createMicroservice,
   findMicroserviceByName,
   getBootstrapCredentials,
+  subscribeToApplication,
   updateMicroservice,
 } from '../utils/c8y-api'
 import { writeBootstrapCredentials } from '../utils/env-file'
@@ -84,7 +85,17 @@ export default defineCommand({
       consola.success(`Microservice created successfully (ID: ${appId})`)
     }
 
-    // Step 7: Get bootstrap credentials
+    // Step 7: Subscribe tenant to application
+    consola.info('Subscribing tenant to application...')
+    await subscribeToApplication(
+      envVars.C8Y_BASE_URL,
+      envVars.C8Y_DEVELOPMENT_TENANT,
+      appId,
+      authHeader,
+    )
+    consola.success('Tenant subscribed to application')
+
+    // Step 8: Get bootstrap credentials
     consola.info('Fetching bootstrap credentials...')
     const credentials = await getBootstrapCredentials(
       envVars.C8Y_BASE_URL,
@@ -92,7 +103,7 @@ export default defineCommand({
       authHeader,
     )
 
-    // Step 8: Write credentials to .env file
+    // Step 9: Write credentials to .env file
     consola.info('Writing bootstrap credentials...')
     const envFileName = await writeBootstrapCredentials(configDir, {
       C8Y_BOOTSTRAP_TENANT: credentials.tenant,
