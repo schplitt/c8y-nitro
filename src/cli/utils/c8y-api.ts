@@ -159,7 +159,9 @@ export async function subscribeToApplication(
   const response = await fetch(url, {
     method: 'POST',
     headers: {
-      Authorization: authHeader,
+      'Authorization': authHeader,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
     },
     body: JSON.stringify({
       application: {
