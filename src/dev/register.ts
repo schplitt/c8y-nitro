@@ -18,8 +18,8 @@ export async function registerRuntime(nitro: Nitro, options: C8yNitroModuleOptio
    * Plugins
    */
   const plugins: string[] = []
-  const developmentEnvironmentPluginPath = join(thisFilePath, './runtime/plugins/c8y-variables')
-  plugins.push(developmentEnvironmentPluginPath)
+  const c8yVariablesPluginPath = join(thisFilePath, './runtime/plugins/c8y-variables')
+  plugins.push(c8yVariablesPluginPath)
   nitro.options.plugins.push(...plugins)
 
   /**
