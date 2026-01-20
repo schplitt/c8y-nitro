@@ -1,6 +1,5 @@
 import type { NitroModule } from 'nitro/types'
 import type { C8yNitroModuleOptions } from './types'
-import { setupRuntimeConfig } from './dev/env'
 import { writeAPIClient } from './dev/apiClient'
 import { createC8yZip } from './dev/c8yzip'
 import { setupRuntime } from './dev/runtime'
@@ -30,7 +29,6 @@ export function c8y(): NitroModule {
       // allow async context
       nitro.options.experimental.asyncContext = true
 
-      setupRuntimeConfig(nitro)
       setupRuntime(nitro, options.manifest)
       await registerRuntime(nitro, options)
 
@@ -38,7 +36,6 @@ export function c8y(): NitroModule {
       // when certain env vars are present but others are not
 
       nitro.hooks.hook('dev:reload', () => {
-        setupRuntimeConfig(nitro)
         setupRuntime(nitro, options.manifest)
       })
 

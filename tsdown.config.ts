@@ -5,8 +5,6 @@ export default defineConfig({
     'index': './src/index.ts',
     'types': './src/types/index.ts',
     'utils': './src/utils/index.ts',
-    // TODO: avoid type generation for these files in the output
-    'runtime/*': './src/dev/runtime/**/*.ts',
     'cli/index': './src/cli/index.ts',
   },
   target: ['es2023'],
@@ -14,4 +12,11 @@ export default defineConfig({
   clean: true,
   dts: true,
   outDir: './dist',
+  unbundle: true,
+  copy: [
+    {
+      from: './src/dev/runtime/**/*.ts',
+      flatten: false,
+    },
+  ],
 })
