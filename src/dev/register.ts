@@ -23,6 +23,21 @@ export async function registerRuntime(nitro: Nitro, options: C8yNitroModuleOptio
   nitro.options.plugins.push(...plugins)
 
   /**
+   * Middlewares (global)
+   */
+  const middlewares: string[] = []
+  const devUserMiddlewarePath = join(thisFilePath, './runtime/middlewares/dev-user')
+  middlewares.push(
+    devUserMiddlewarePath,
+  )
+
+  nitro.options.handlers.push(...middlewares.map((handler) => ({
+    route: '/**',
+    handler,
+    middleware: true,
+  })))
+
+  /**
    * Handlers
    */
   // TODO: investigate nitro currently only shows the last registered handler in swagger/scalar
@@ -35,6 +50,7 @@ export async function registerRuntime(nitro: Nitro, options: C8yNitroModuleOptio
       route: GENERATED_LIVENESS_ROUTE,
       handler: probeHandlerPath,
       method: 'GET',
+
     })
 
     nitro.logger.debug(`Generated liveness probe at ${GENERATED_LIVENESS_ROUTE}`)
