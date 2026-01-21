@@ -3,12 +3,13 @@ import process from 'node:process'
 import { Buffer } from 'node:buffer'
 import consola from 'consola'
 
+// Middleware to inject a development c8y user into the request during development mode
 export default defineHandler((event) => {
   if (import.meta.dev) {
     // in development mode, we check for a development user to inject into the request
     // this is necessary to correctly use auth middlewares during development
-    const devVariables = ['C8Y_DEVELOPMENT_TENANT', 'C8Y_DEVELOPMENT_USER', 'C8Y_DEVELOPMENT_PASSWORD']
-    const missingDevVars = devVariables.filter((varName) => !process.env[varName])
+    const requiredDevEnvVars = ['C8Y_DEVELOPMENT_TENANT', 'C8Y_DEVELOPMENT_USER', 'C8Y_DEVELOPMENT_PASSWORD']
+    const missingDevVars = requiredDevEnvVars.filter((varName) => !process.env[varName])
     if (missingDevVars.length > 0) {
       consola.warn(`Missing development environment variables: ${missingDevVars.join(', ')}. Dev user injection will be skipped. Routes requiring authentication or roles will fail.`)
     } else {

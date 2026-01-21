@@ -50,7 +50,6 @@ export async function registerRuntime(nitro: Nitro, options: C8yNitroModuleOptio
       route: GENERATED_LIVENESS_ROUTE,
       handler: probeHandlerPath,
       method: 'GET',
-
     })
 
     nitro.logger.debug(`Generated liveness probe at ${GENERATED_LIVENESS_ROUTE}`)
