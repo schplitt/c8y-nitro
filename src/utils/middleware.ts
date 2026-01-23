@@ -1,7 +1,7 @@
 import { defineHandler, HTTPError } from 'nitro/h3'
 import type { EventHandler } from 'nitro/h3'
 import type { C8YRoles } from '../types'
-import { getUserRoles } from './cached'
+import { getUserRoles } from './resources'
 
 // allow any string as role for extensibility
 type UserRole = keyof C8YRoles | (string & {})

@@ -2,7 +2,7 @@ import { BasicAuth, Client } from '@c8y/client'
 import { useRequest } from 'nitro/context'
 import { useRuntimeConfig } from 'nitro/runtime-config'
 import { extractUserCredentialsFromHeaders } from './common'
-import { getSubscribedTenantCredentials } from './cached'
+import { getSubscribedTenantCredentials } from './internal/cached'
 import { HTTPError } from 'nitro/deps/h3'
 
 /**
