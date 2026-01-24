@@ -16,10 +16,22 @@ import process from 'node:process'
  * const { data } = await client.inventory.list()
  */
 export function getUserClient(): Client {
-  const creds = extractUserCredentialsFromHeaders(useRequest())
+  const request = useRequest()
+
+  if (request.context?.['c8y_user_client']) {
+    return request.context['c8y_user_client'] as Client
+  }
+
+  const creds = extractUserCredentialsFromHeaders(request)
 
   // C8Y_BASE_URL is enforced to be set
-  return new Client(new BasicAuth(creds), process.env.C8Y_BASE_URL!)
+  const client = new Client(new BasicAuth(creds), process.env.C8Y_BASE_URL!)
+
+  // cache client in request context for subsequent calls
+  request.context ??= {}
+  request.context['c8y_user_client'] = client
+
+  return client
 }
 
 /**
