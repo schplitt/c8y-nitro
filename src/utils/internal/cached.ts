@@ -1,8 +1,8 @@
 import { Client } from '@c8y/client'
 import type { ICredentials } from '@c8y/client'
-import { useRuntimeConfig } from 'nitro/runtime-config'
 import { defineCachedFunction } from 'nitro/cache'
 import { useStorage } from 'nitro/storage'
+import process from 'node:process'
 
 /**
  * Fetches credentials for all tenants subscribed to this microservice.\
@@ -27,10 +27,10 @@ export const getSubscribedTenantCredentials = Object.assign(
   defineCachedFunction(async () => {
     // all env vars are enforced to be set
     const subscriptions = await Client.getMicroserviceSubscriptions({
-      tenant: useRuntimeConfig().C8Y_BOOTSTRAP_TENANT,
-      user: useRuntimeConfig().C8Y_BOOTSTRAP_USER,
-      password: useRuntimeConfig().C8Y_BOOTSTRAP_PASSWORD,
-    }, useRuntimeConfig().C8Y_BASE_URL)
+      tenant: process.env.C8Y_BOOTSTRAP_TENANT!,
+      user: process.env.C8Y_BOOTSTRAP_USER!,
+      password: process.env.C8Y_BOOTSTRAP_PASSWORD!,
+    }, process.env.C8Y_BASE_URL!)
 
     // we map them as an object with tenant as key for easier access
     return subscriptions.reduce(

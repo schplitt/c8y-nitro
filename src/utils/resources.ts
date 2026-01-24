@@ -1,9 +1,9 @@
 import { useRequest } from 'nitro/context'
 import { BasicAuth, Client } from '@c8y/client'
 import type { IUser } from '@c8y/client'
-import { useRuntimeConfig } from 'nitro/runtime-config'
 import { HTTPError } from 'nitro/h3'
 import { extractUserCredentialsFromHeaders } from './common'
+import process from 'node:process'
 
 /**
  * Fetches the current user from Cumulocity using credentials extracted from the current request's headers.
@@ -30,7 +30,7 @@ export async function getUser() {
 
   // TODO: cache the client in the request context as well
   // C8Y_BASE_URL is enforced to be set
-  const client = new Client(new BasicAuth(creds), useRuntimeConfig().C8Y_BASE_URL)
+  const client = new Client(new BasicAuth(creds), process.env.C8Y_BASE_URL!)
   const {
     res,
     data: user,

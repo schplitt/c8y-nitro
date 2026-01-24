@@ -1,9 +1,9 @@
 import { BasicAuth, Client } from '@c8y/client'
 import { useRequest } from 'nitro/context'
-import { useRuntimeConfig } from 'nitro/runtime-config'
 import { extractUserCredentialsFromHeaders } from './common'
 import { getSubscribedTenantCredentials } from './internal/cached'
-import { HTTPError } from 'nitro/deps/h3'
+import { HTTPError } from 'nitro/h3'
+import process from 'node:process'
 
 /**
  * Creates a Cumulocity client authenticated with the current user's credentials.\
@@ -18,10 +18,8 @@ import { HTTPError } from 'nitro/deps/h3'
 export function getUserClient(): Client {
   const creds = extractUserCredentialsFromHeaders(useRequest())
 
-  // TODO: ensure base url has not trailing slash
-
   // C8Y_BASE_URL is enforced to be set
-  return new Client(new BasicAuth(creds), useRuntimeConfig().C8Y_BASE_URL)
+  return new Client(new BasicAuth(creds), process.env.C8Y_BASE_URL!)
 }
 
 /**
@@ -40,7 +38,7 @@ export async function getSubscribedTenantClients(): Promise<Record<string, Clien
   const creds = await getSubscribedTenantCredentials()
   const clients: Record<string, Client> = {}
   for (const [tenant, tenantCreds] of Object.entries(creds)) {
-    clients[tenant] = new Client(new BasicAuth(tenantCreds), useRuntimeConfig().C8Y_BASE_URL)
+    clients[tenant] = new Client(new BasicAuth(tenantCreds), process.env.C8Y_BASE_URL!)
   }
   return clients
 }
@@ -57,7 +55,7 @@ export async function getSubscribedTenantClients(): Promise<Record<string, Clien
 export async function getDeployedTenantClient(): Promise<Client> {
   const creds = await getSubscribedTenantCredentials()
   // C8Y_BOOTSTRAP_TENANT is enforced to be set
-  const tenant = useRuntimeConfig().C8Y_BOOTSTRAP_TENANT
+  const tenant = process.env.C8Y_BOOTSTRAP_TENANT!
   if (!creds[tenant]) {
     throw new HTTPError({
       message: `No subscribed tenant credentials found for tenant '${tenant}'`,
@@ -65,5 +63,5 @@ export async function getDeployedTenantClient(): Promise<Client> {
       statusText: 'Internal Server Error',
     })
   }
-  return new Client(new BasicAuth(creds[tenant]), useRuntimeConfig().C8Y_BASE_URL)
+  return new Client(new BasicAuth(creds[tenant]), process.env.C8Y_BASE_URL)
 }
