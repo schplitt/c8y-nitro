@@ -42,7 +42,7 @@ export default defineCommand({
     // Step 5: Check if microservice already exists
     consola.info(`Checking if microservice "${manifest.name}" exists...`)
     const existingApp = await findMicroserviceByName(
-      envVars.C8Y_BASE_URL,
+      envVars.C8Y_BASEURL,
       manifest.name,
       authHeader,
     )
@@ -66,7 +66,7 @@ export default defineCommand({
       // Step 6a: Update existing microservice
       consola.info('Updating microservice...')
       const updatedApp = await updateMicroservice(
-        envVars.C8Y_BASE_URL,
+        envVars.C8Y_BASEURL,
         existingApp.id,
         manifest,
         authHeader,
@@ -77,7 +77,7 @@ export default defineCommand({
       // Step 6b: Create new microservice
       consola.info('Creating microservice...')
       const createdApp = await createMicroservice(
-        envVars.C8Y_BASE_URL,
+        envVars.C8Y_BASEURL,
         manifest,
         authHeader,
       )
@@ -88,7 +88,7 @@ export default defineCommand({
     // Step 7: Subscribe tenant to application
     consola.info('Subscribing tenant to application...')
     await subscribeToApplication(
-      envVars.C8Y_BASE_URL,
+      envVars.C8Y_BASEURL,
       envVars.C8Y_DEVELOPMENT_TENANT,
       appId,
       authHeader,
@@ -98,7 +98,7 @@ export default defineCommand({
     // Step 8: Get bootstrap credentials
     consola.info('Fetching bootstrap credentials...')
     const credentials = await getBootstrapCredentials(
-      envVars.C8Y_BASE_URL,
+      envVars.C8Y_BASEURL,
       appId,
       authHeader,
     )

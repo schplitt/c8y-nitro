@@ -13,20 +13,11 @@ COPY ${outputDirName}/ ${outputDirName}/
 
 ENV NODE_ENV=production
 ENV PORT=80
-ENV HOST=0.0.0.0
 
-# Run as non-root user for security
-RUN addgroup --system --gid 1001 app && \\
-    adduser --system --uid 1001 --ingroup app app
-
-USER app
-
-# Expose port 80 externally (maps to internal 3000)
 EXPOSE 80
 
 # Run the Nitro server entrypoint. Use source maps to aid debugging if present.
-CMD ["node", "--enable-source-maps", "${outputDirName}/server/index.mjs"]
-`
+CMD ["node", "--enable-source-maps", "${outputDirName}/server/index.mjs"]`
 }
 
 async function checkDockerInstalled(): Promise<boolean> {

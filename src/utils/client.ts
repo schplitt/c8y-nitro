@@ -25,8 +25,8 @@ export function useUserClient(): Client {
   const headers = convertRequestHeadersToC8yFormat(request)
   const auth = new MicroserviceClientRequestAuth(headers)
 
-  // C8Y_BASE_URL is enforced to be set
-  const client = new Client(auth, process.env.C8Y_BASE_URL!)
+  // C8Y_BASEURL is enforced to be set
+  const client = new Client(auth, process.env.C8Y_BASEURL)
 
   // cache client in request context for subsequent calls
   request.context ??= {}
@@ -63,7 +63,7 @@ export async function useUserTenantClient(): Promise<Client> {
       statusText: 'Internal Server Error',
     })
   }
-  const tenantClient = new Client(new BasicAuth(creds[tenantId]), process.env.C8Y_BASE_URL!)
+  const tenantClient = new Client(new BasicAuth(creds[tenantId]), process.env.C8Y_BASEURL)
 
   // cache client in request context for subsequent calls
   request.context ??= {}
@@ -88,7 +88,7 @@ export async function useSubscribedTenantClients(): Promise<Record<string, Clien
   const creds = await useSubscribedTenantCredentials()
   const clients: Record<string, Client> = {}
   for (const [tenant, tenantCreds] of Object.entries(creds)) {
-    clients[tenant] = new Client(new BasicAuth(tenantCreds), process.env.C8Y_BASE_URL!)
+    clients[tenant] = new Client(new BasicAuth(tenantCreds), process.env.C8Y_BASEURL)
   }
   return clients
 }
@@ -113,5 +113,5 @@ export async function useDeployedTenantClient(): Promise<Client> {
       statusText: 'Internal Server Error',
     })
   }
-  return new Client(new BasicAuth(creds[tenant]), process.env.C8Y_BASE_URL)
+  return new Client(new BasicAuth(creds[tenant]), process.env.C8Y_BASEURL!)
 }
