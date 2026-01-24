@@ -14,9 +14,9 @@ packages:
 catalog:
   '@schplitt/eslint-config': ^1.2.0
   '@types/spinnies': ^0.5.3
-  bumpp: ^10.3.2
+  bumpp: ^10.4.0
   c12: ^3.3.3
-  citty: ^0.1.6
+  citty: ^0.2.0
   consola: ^3.4.2
   eslint: ^9.39.2
   jszip: ^3.10.1
@@ -25,14 +25,11 @@ catalog:
   pkg-types: ^2.3.0
   spinnies: ^0.5.1
   tinyexec: ^1.0.2
-  tsdown: ^0.18.4
+  tsdown: ^0.20.1
   typescript: ^5.9.3
-  vitest: ^4.0.16
+  vitest: ^4.0.18
 onlyBuiltDependencies:
   - cpu-features
   - esbuild
   - protobufjs
   - ssh2
-
-
-
