@@ -2,6 +2,8 @@ import { defineHandler, HTTPError } from 'nitro/h3'
 import type { EventHandler } from 'nitro/h3'
 import type { C8YRoles } from '../types'
 import { useUserRoles } from './resources'
+import { useUserClient } from './client'
+import process from 'node:process'
 
 // allow any string as role for extensibility
 type UserRole = keyof C8YRoles | (string & {})
@@ -51,6 +53,96 @@ export function userHasRequiredRole(roleOrRoles: UserRole | UserRole[]): EventHa
         status: 403,
         statusText: 'Forbidden',
         message: `User does not have required role(s) to access this resource: ${requiredRoles.join(', ')}`,
+      })
+    }
+  })
+}
+
+/**
+ * Middleware to check if the current user belongs to a specific allowed tenant.\
+ * If the user's tenant doesn't match, throws a 403 Forbidden error.\
+ * Must be used within a request handler context.\
+ * @param tenantId - Single tenant ID to allow
+ * @returns Event handler that validates user tenant
+ * @example
+ * // Single tenant:
+ * export default defineHandler({
+ *  middleware: [userFromAllowedTenant('t123456')],
+ *  handler: async () => {
+ *   return { message: 'You have access' }
+ *  }
+ * })
+ *
+ */
+export function userFromAllowedTenant(tenantId: string): EventHandler
+/**
+ * Middleware to check if the current user belongs to one of the allowed tenants.\
+ * If the user's tenant doesn't match any of the allowed tenants, throws a 403 Forbidden error.\
+ * Must be used within a request handler context.\
+ * @param tenantIds - Array of tenant IDs to allow
+ * @returns Event handler that validates user tenant
+ * @example
+ * // Multiple tenants:
+ * export default defineHandler({
+ *  middleware: [userFromAllowedTenant(['t123456', 't789012'])],
+ *  handler: async () => {
+ *   return { message: 'You have access' }
+ *  }
+ * })
+ */
+export function userFromAllowedTenant(tenantIds: string[]): EventHandler
+export function userFromAllowedTenant(tenantIdOrIds: string | string[]): EventHandler {
+  return defineHandler(async () => {
+    const allowedTenants = Array.isArray(tenantIdOrIds) ? tenantIdOrIds : [tenantIdOrIds]
+    const userClient = useUserClient()
+    const userTenantId = userClient.core.tenant
+
+    const isAllowed = allowedTenants.includes(userTenantId)
+
+    if (!isAllowed) {
+      throw new HTTPError({
+        status: 403,
+        statusText: 'Forbidden',
+        message: `User's tenant '${userTenantId}' is not allowed to access this resource. Allowed tenants: ${allowedTenants.join(', ')}`,
+      })
+    }
+  })
+}
+
+/**
+ * Middleware to check if the current user belongs to the deployed tenant.\
+ * The deployed tenant is where this microservice is hosted (C8Y_BOOTSTRAP_TENANT).\
+ * If the user's tenant doesn't match the deployed tenant, throws a 403 Forbidden error.\
+ * Must be used within a request handler context.\
+ * @returns Event handler that validates user is from deployed tenant
+ * @example
+ * // Only allow users from the deployed tenant:
+ * export default defineHandler({
+ *  middleware: [userFromDeployedTenant()],
+ *  handler: async () => {
+ *   return { message: 'You have access' }
+ *  }
+ * })
+ */
+export function userFromDeployedTenant(): EventHandler {
+  return defineHandler(async () => {
+    const userClient = useUserClient()
+    const userTenantId = userClient.core.tenant
+    const deployedTenantId = process.env.C8Y_BOOTSTRAP_TENANT
+
+    if (!deployedTenantId) {
+      throw new HTTPError({
+        status: 500,
+        statusText: 'Internal Server Error',
+        message: 'C8Y_BOOTSTRAP_TENANT environment variable is not set',
+      })
+    }
+
+    if (userTenantId !== deployedTenantId) {
+      throw new HTTPError({
+        status: 403,
+        statusText: 'Forbidden',
+        message: `Only users from tenant '${deployedTenantId}' can access this resource.`,
       })
     }
   })
