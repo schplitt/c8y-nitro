@@ -105,6 +105,7 @@ export async function createC8yManifest(
     version,
     apiVersion: 'v2',
     key,
+    type: 'MICROSERVICE',
   }
   logger?.debug(`Created Cumulocity manifest: ${JSON.stringify(manifest, null, 2)}`)
   return manifest

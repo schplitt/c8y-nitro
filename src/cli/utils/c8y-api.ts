@@ -86,10 +86,7 @@ export async function createMicroservice(
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     },
-    body: JSON.stringify({
-      ...manifest,
-      type: 'MICROSERVICE',
-    }),
+    body: JSON.stringify(manifest),
   })
 
   if (!response.ok) {
@@ -118,6 +115,12 @@ export async function updateMicroservice(
 ): Promise<C8yApplication> {
   const url = `${baseUrl}/application/applications/${appId}`
 
+  // type cannot be updated, so exclude it from the payload
+  const {
+    type,
+    ...manifestWithoutType
+  } = manifest
+
   const response = await fetch(url, {
     method: 'PUT',
     headers: {
@@ -125,10 +128,7 @@ export async function updateMicroservice(
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     },
-    body: JSON.stringify({
-      ...manifest,
-      type: 'MICROSERVICE',
-    }),
+    body: JSON.stringify(manifestWithoutType),
   })
 
   if (!response.ok) {

@@ -13,6 +13,12 @@ export interface C8YManifest {
   key: string
 
   /**
+   * Type of Cumulocity application. For microservices, always "MICROSERVICE".
+   * Technically can be "HOSTED" or "EXTERNAL" as well, but those are not supported here.
+   */
+  type: 'MICROSERVICE'
+
+  /**
    * Microservice name (lowercase a-z, digits, hyphens, max 23 chars).
    * Automatically populated from package.json name.
    */
