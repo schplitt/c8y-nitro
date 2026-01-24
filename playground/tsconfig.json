@@ -1,5 +1,5 @@
 {
-  "extends": ".nitro/types/tsconfig.json",
+  "extends": "./node_modules/.nitro/types/tsconfig.json",
   "compilerOptions": {
     "noFallthroughCasesInSwitch": true,
     "noImplicitReturns": true,
