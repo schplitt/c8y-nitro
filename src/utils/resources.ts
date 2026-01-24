@@ -1,6 +1,6 @@
 import { useRequest } from 'nitro/context'
 import { BasicAuth, Client } from '@c8y/client'
-import type { IUser } from '@c8y/client'
+import type { ICurrentUser } from '@c8y/client'
 import { HTTPError } from 'nitro/h3'
 import { extractUserCredentialsFromHeaders } from './common'
 import process from 'node:process'
@@ -20,7 +20,7 @@ export async function getUser() {
 
   // check if we have cached user in request context
   if (request.context?.['c8y_user']) {
-    return request.context['c8y_user'] as IUser
+    return request.context['c8y_user'] as ICurrentUser
   }
 
   // TODO: cache the user credentials in the request context as well
@@ -34,7 +34,7 @@ export async function getUser() {
   const {
     res,
     data: user,
-  } = await client.user.current()
+  } = await client.user.currentWithEffectiveRoles()
 
   if (!res.ok) {
     throw new HTTPError({
@@ -73,7 +73,7 @@ export async function getUserRoles() {
   // fetch current user
   const user = await getUser()
   // extract roles from user
-  const userRoles = (user.roles?.references.map((roleRef) => roleRef.id?.toString() ?? null).filter((id) => !!id) ?? []) as string[]
+  const userRoles = user.effectiveRoles?.map((role) => role.name) ?? []
 
   // cache roles in request context for subsequent calls
   request.context ??= {}
