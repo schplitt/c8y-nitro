@@ -94,6 +94,8 @@ export async function createC8yManifest(
     }
   }
 
+  const key = `${name}-key`
+
   const manifest: C8YManifest = {
     ...restManifestFields,
     provider,
@@ -102,6 +104,7 @@ export async function createC8yManifest(
     name,
     version,
     apiVersion: 'v2',
+    key,
   }
   logger?.debug(`Created Cumulocity manifest: ${JSON.stringify(manifest, null, 2)}`)
   return manifest

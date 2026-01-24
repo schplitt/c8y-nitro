@@ -1,4 +1,4 @@
-export type C8YManifestOptions = Partial<Omit<C8YManifest, 'name' | 'version' | 'apiVersion'>>
+export type C8YManifestOptions = Partial<Omit<C8YManifest, 'name' | 'version' | 'apiVersion' | 'key'>>
 
 export interface C8YManifest {
   /**
@@ -6,6 +6,11 @@ export interface C8YManifest {
    * Automatically set by the module to "v2".
    */
   apiVersion: string
+
+  /**
+   * Unique microservice key
+   */
+  key: string
 
   /**
    * Microservice name (lowercase a-z, digits, hyphens, max 23 chars).
