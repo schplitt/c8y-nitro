@@ -1,6 +1,6 @@
-import { BasicAuth, Client } from '@c8y/client'
+import { BasicAuth, Client, MicroserviceClientRequestAuth } from '@c8y/client'
 import { useRequest } from 'nitro/context'
-import { extractUserCredentialsFromHeaders } from './common'
+import { convertRequestHeadersToC8yFormat } from './internal/common'
 import { getSubscribedTenantCredentials } from './internal/cached'
 import { HTTPError } from 'nitro/h3'
 import process from 'node:process'
@@ -22,10 +22,11 @@ export function getUserClient(): Client {
     return request.context['c8y_user_client'] as Client
   }
 
-  const creds = extractUserCredentialsFromHeaders(request)
+  const headers = convertRequestHeadersToC8yFormat(request)
+  const auth = new MicroserviceClientRequestAuth(headers)
 
   // C8Y_BASE_URL is enforced to be set
-  const client = new Client(new BasicAuth(creds), process.env.C8Y_BASE_URL!)
+  const client = new Client(auth, process.env.C8Y_BASE_URL!)
 
   // cache client in request context for subsequent calls
   request.context ??= {}
