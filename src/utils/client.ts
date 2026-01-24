@@ -36,6 +36,43 @@ export function getUserClient(): Client {
 }
 
 /**
+ * Creates a Cumulocity client for the tenant of the current user.\
+ * Uses the tenant's service user credentials rather than the user's own credentials.\
+ * Must be called within a request handler context.\
+ * @returns A configured Cumulocity Client instance for the user's tenant
+ * @example
+ * // In a request handler:
+ * const tenantClient = await getUserTenantClient()
+ * const { data } = await tenantClient.inventory.list()
+ */
+export async function getUserTenantClient(): Promise<Client> {
+  const request = useRequest()
+
+  if (request.context?.['c8y_user_tenant_client']) {
+    return request.context['c8y_user_tenant_client'] as Client
+  }
+
+  const userClient = getUserClient()
+  const tenantId = userClient.core.tenant
+
+  const creds = await getSubscribedTenantCredentials()
+  if (!creds[tenantId]) {
+    throw new HTTPError({
+      message: `No subscribed tenant credentials found for user tenant '${tenantId}'`,
+      status: 500,
+      statusText: 'Internal Server Error',
+    })
+  }
+  const tenantClient = new Client(new BasicAuth(creds[tenantId]), process.env.C8Y_BASE_URL!)
+
+  // cache client in request context for subsequent calls
+  request.context ??= {}
+  request.context['c8y_user_tenant_client'] = tenantClient
+
+  return tenantClient
+}
+
+/**
  * Creates Cumulocity clients for all tenants subscribed to this microservice.\
  * Each client is authenticated with that tenant's service user credentials.\
  * @returns Object mapping tenant IDs to their respective Client instances
