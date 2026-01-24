@@ -1,7 +1,7 @@
 import { useRequest } from 'nitro/context'
 import type { ICurrentUser } from '@c8y/client'
 import { HTTPError } from 'nitro/h3'
-import { getUserClient } from './client'
+import { useUserClient } from './client'
 
 /**
  * Fetches the current user from Cumulocity using credentials extracted from the current request's headers.
@@ -10,10 +10,10 @@ import { getUserClient } from './client'
  * @returns The current user object from Cumulocity
  * @example
  * // In a request handler:
- * const user = await getUser()
+ * const user = await useUser()
  * console.log(user.userName, user.email)
  */
-export async function getUser() {
+export async function useUser() {
   const request = useRequest()
 
   // check if we have cached user in request context
@@ -24,7 +24,7 @@ export async function getUser() {
   // TODO: ensure base url has not trailing slash
 
   // C8Y_BASE_URL is enforced to be set
-  const client = getUserClient()
+  const client = useUserClient()
 
   const {
     res,
@@ -48,16 +48,16 @@ export async function getUser() {
 
 /**
  * Fetches the roles of the current user from Cumulocity.
- * Internally calls `getUser()` and extracts role IDs from the user object.
+ * Internally calls `useUser()` and extracts role IDs from the user object.
  * This is a non-cached version - fetches fresh data on every call.
  * Must be called within a request handler context.
  * @returns Array of role ID strings assigned to the current user
  * @example
  * // In a request handler:
- * const roles = await getUserRoles()
+ * const roles = await useUserRoles()
  * console.log(roles) // ['ROLE_INVENTORY_READ', 'ROLE_INVENTORY_ADMIN']
  */
-export async function getUserRoles() {
+export async function useUserRoles() {
   const request = useRequest()
 
   // check if we have cached roles in request context
@@ -66,7 +66,7 @@ export async function getUserRoles() {
   }
 
   // fetch current user
-  const user = await getUser()
+  const user = await useUser()
   // extract roles from user
   const userRoles = user.effectiveRoles?.map((role) => role.name) ?? []
 

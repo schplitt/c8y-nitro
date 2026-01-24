@@ -1,7 +1,7 @@
 import { defineHandler, HTTPError } from 'nitro/h3'
 import type { EventHandler } from 'nitro/h3'
 import type { C8YRoles } from '../types'
-import { getUserRoles } from './resources'
+import { useUserRoles } from './resources'
 
 // allow any string as role for extensibility
 type UserRole = keyof C8YRoles | (string & {})
@@ -42,7 +42,7 @@ export function userHasRequiredRole(roles: UserRole[]): EventHandler
 export function userHasRequiredRole(roleOrRoles: UserRole | UserRole[]): EventHandler {
   return defineHandler(async () => {
     const requiredRoles = Array.isArray(roleOrRoles) ? roleOrRoles : [roleOrRoles]
-    const userRoles = await getUserRoles()
+    const userRoles = await useUserRoles()
 
     const hasRole = requiredRoles.some((role) => userRoles.includes(role))
 

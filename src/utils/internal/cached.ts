@@ -11,19 +11,19 @@ import process from 'node:process'
  * @returns Object mapping tenant IDs to their respective credentials
  * @example
  * // Get all subscribed tenant credentials:
- * const credentials = await getSubscribedTenantCredentials()
+ * const credentials = await useSubscribedTenantCredentials()
  * console.log(Object.keys(credentials)) // ['t12345', 't67890']
  *
  * // Access specific tenant:
  * const tenant1Creds = credentials['t12345']
  *
  * // Invalidate cache:
- * await getSubscribedTenantCredentials.invalidate()
+ * await useSubscribedTenantCredentials.invalidate()
  *
  * // Force refresh:
- * const freshCreds = await getSubscribedTenantCredentials.refresh()
+ * const freshCreds = await useSubscribedTenantCredentials.refresh()
  */
-export const getSubscribedTenantCredentials = Object.assign(
+export const useSubscribedTenantCredentials = Object.assign(
   defineCachedFunction(async () => {
     // all env vars are enforced to be set
     const subscriptions = await Client.getMicroserviceSubscriptions({
@@ -55,9 +55,9 @@ export const getSubscribedTenantCredentials = Object.assign(
     },
     refresh: async () => {
       // call the invalidate part
-      await getSubscribedTenantCredentials.invalidate()
+      await useSubscribedTenantCredentials.invalidate()
       // then call the function to refresh
-      return await getSubscribedTenantCredentials()
+      return await useSubscribedTenantCredentials()
     },
   },
 )

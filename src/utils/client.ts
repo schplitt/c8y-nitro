@@ -1,7 +1,7 @@
 import { BasicAuth, Client, MicroserviceClientRequestAuth } from '@c8y/client'
 import { useRequest } from 'nitro/context'
 import { convertRequestHeadersToC8yFormat } from './internal/common'
-import { getSubscribedTenantCredentials } from './internal/cached'
+import { useSubscribedTenantCredentials } from './internal/cached'
 import { HTTPError } from 'nitro/h3'
 import process from 'node:process'
 
@@ -12,10 +12,10 @@ import process from 'node:process'
  * @returns A configured Cumulocity Client instance
  * @example
  * // In a request handler:
- * const client = getUserClient()
+ * const client = useUserClient()
  * const { data } = await client.inventory.list()
  */
-export function getUserClient(): Client {
+export function useUserClient(): Client {
   const request = useRequest()
 
   if (request.context?.['c8y_user_client']) {
@@ -42,20 +42,20 @@ export function getUserClient(): Client {
  * @returns A configured Cumulocity Client instance for the user's tenant
  * @example
  * // In a request handler:
- * const tenantClient = await getUserTenantClient()
+ * const tenantClient = await useUserTenantClient()
  * const { data } = await tenantClient.inventory.list()
  */
-export async function getUserTenantClient(): Promise<Client> {
+export async function useUserTenantClient(): Promise<Client> {
   const request = useRequest()
 
   if (request.context?.['c8y_user_tenant_client']) {
     return request.context['c8y_user_tenant_client'] as Client
   }
 
-  const userClient = getUserClient()
+  const userClient = useUserClient()
   const tenantId = userClient.core.tenant
 
-  const creds = await getSubscribedTenantCredentials()
+  const creds = await useSubscribedTenantCredentials()
   if (!creds[tenantId]) {
     throw new HTTPError({
       message: `No subscribed tenant credentials found for user tenant '${tenantId}'`,
@@ -78,14 +78,14 @@ export async function getUserTenantClient(): Promise<Client> {
  * @returns Object mapping tenant IDs to their respective Client instances
  * @example
  * // Get clients for all subscribed tenants:
- * const clients = await getSubscribedTenantClients()
+ * const clients = await useSubscribedTenantClients()
  * for (const [tenant, client] of Object.entries(clients)) {
  *   const { data } = await client.inventory.list()
  *   console.log(`Tenant ${tenant} has ${data.length} inventory items`)
  * }
  */
-export async function getSubscribedTenantClients(): Promise<Record<string, Client>> {
-  const creds = await getSubscribedTenantCredentials()
+export async function useSubscribedTenantClients(): Promise<Record<string, Client>> {
+  const creds = await useSubscribedTenantCredentials()
   const clients: Record<string, Client> = {}
   for (const [tenant, tenantCreds] of Object.entries(creds)) {
     clients[tenant] = new Client(new BasicAuth(tenantCreds), process.env.C8Y_BASE_URL!)
@@ -99,11 +99,11 @@ export async function getSubscribedTenantClients(): Promise<Record<string, Clien
  * @returns A configured Cumulocity Client instance for the deployed tenant
  * @example
  * // Get client for the tenant hosting this microservice:
- * const client = await getDeployedTenantClient()
+ * const client = await useDeployedTenantClient()
  * const { data } = await client.application.list()
  */
-export async function getDeployedTenantClient(): Promise<Client> {
-  const creds = await getSubscribedTenantCredentials()
+export async function useDeployedTenantClient(): Promise<Client> {
+  const creds = await useSubscribedTenantCredentials()
   // C8Y_BOOTSTRAP_TENANT is enforced to be set
   const tenant = process.env.C8Y_BOOTSTRAP_TENANT!
   if (!creds[tenant]) {
