@@ -31,6 +31,21 @@ export interface C8yBootstrapCredentials {
   password: string
 }
 
+export interface C8yUserRole {
+  id: string
+  name: string
+  self: string
+}
+
+export interface C8yUserRoleReference {
+  self: string
+  role: C8yUserRole
+}
+
+export interface C8yUserRolesResponse {
+  roles: C8yUserRoleReference[]
+}
+
 /**
  * Checks if a microservice with the given name already exists.
  * @param baseUrl - The Cumulocity base URL
@@ -211,4 +226,114 @@ export async function getBootstrapCredentials(
   }
 
   return (await response.json()) as C8yBootstrapCredentials
+}
+
+/**
+ * Gets all roles assigned to a user in a tenant.
+ * @param baseUrl - The Cumulocity base URL
+ * @param tenantId - The tenant ID
+ * @param userId - The user ID
+ * @param authHeader - The Basic Auth header
+ * @returns Array of role IDs assigned to the user
+ */
+export async function getUserRoles(
+  baseUrl: string,
+  tenantId: string,
+  userId: string,
+  authHeader: string,
+): Promise<string[]> {
+  const url = `${baseUrl}/user/${tenantId}/users/${userId}/roles`
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Authorization: authHeader,
+      Accept: 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error(`Failed to get user roles: ${response.status} ${response.statusText}`, {
+      cause: response,
+    })
+  }
+
+  const data = (await response.json()) as C8yUserRolesResponse
+  return data.roles.map((r) => r.role.id)
+}
+
+/**
+ * Assigns a role to a user in a tenant.
+ * @param baseUrl - The Cumulocity base URL
+ * @param tenantId - The tenant ID
+ * @param userId - The user ID
+ * @param roleId - The role ID to assign
+ * @param authHeader - The Basic Auth header
+ */
+export async function assignUserRole(
+  baseUrl: string,
+  tenantId: string,
+  userId: string,
+  roleId: string,
+  authHeader: string,
+): Promise<void> {
+  const url = `${baseUrl}/user/${tenantId}/users/${userId}/roles`
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': authHeader,
+      'Content-Type': 'application/vnd.com.nsn.cumulocity.rolereference+json',
+      'Accept': 'application/json',
+    },
+    body: JSON.stringify({
+      role: {
+        self: `${baseUrl}/user/roles/${roleId}`,
+      },
+    }),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Failed to assign role ${roleId}: ${response.status} ${response.statusText}\n${errorText}`, {
+      cause: response,
+    })
+  }
+}
+
+/**
+ * Unassigns a role from a user in a tenant.
+ * @param baseUrl - The Cumulocity base URL
+ * @param tenantId - The tenant ID
+ * @param userId - The user ID
+ * @param roleId - The role ID to unassign
+ * @param authHeader - The Basic Auth header
+ */
+export async function unassignUserRole(
+  baseUrl: string,
+  tenantId: string,
+  userId: string,
+  roleId: string,
+  authHeader: string,
+): Promise<void> {
+  const url = `${baseUrl}/user/${tenantId}/users/${userId}/roles/${roleId}`
+
+  const response = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      Authorization: authHeader,
+    },
+  })
+
+  // if its 404, the user didn't have the role assigned, so we can ignore
+  if (response.status === 404) {
+    return
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Failed to unassign role ${roleId}: ${response.status} ${response.statusText}\n${errorText}`, {
+      cause: response,
+    })
+  }
 }

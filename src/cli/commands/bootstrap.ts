@@ -2,11 +2,13 @@ import { defineCommand } from 'citty'
 import { consola } from 'consola'
 import { loadC8yConfig, validateBootstrapEnv } from '../utils/config'
 import {
+  assignUserRole,
   createBasicAuthHeader,
   createMicroservice,
   findMicroserviceByName,
   getBootstrapCredentials,
   subscribeToApplication,
+  unassignUserRole,
   updateMicroservice,
 } from '../utils/c8y-api'
 import { writeBootstrapCredentials } from '../utils/env-file'
@@ -19,6 +21,8 @@ export default defineCommand({
   },
   args: {},
   async run() {
+    // TODO: cache the last bootstrap somewhere to be able to be able to unasign and asign roles after bootstrap
+
     // Step 1: Load config and env
     consola.info('Loading configuration...')
     const { env, c8yOptions, configDir } = await loadC8yConfig()
@@ -111,6 +115,54 @@ export default defineCommand({
       C8Y_BOOTSTRAP_PASSWORD: credentials.password,
     })
     consola.success(`Bootstrap credentials written to ${envFileName}`)
+
+    // Step 10: Handle role assignment if roles are defined
+    if (manifest.roles && manifest.roles.length > 0) {
+      const shouldManageRoles = await consola.prompt(
+        'Do you want to manage microservice roles for your development user?',
+        { type: 'confirm' },
+      )
+
+      if (shouldManageRoles) {
+        const rolesToAssign = await consola.prompt(
+          'Select roles to assign to your user (unselected roles will be removed):',
+          {
+            type: 'multiselect',
+            options: manifest.roles,
+            cancel: 'reject',
+            required: false,
+          },
+        )
+
+        consola.info('Managing user roles...')
+
+        const rolePromises = manifest.roles.map(async (role) => {
+          if (rolesToAssign.includes(role)) {
+            // Assign selected roles
+            return await assignUserRole(
+              envVars.C8Y_BASEURL,
+              envVars.C8Y_DEVELOPMENT_TENANT,
+              envVars.C8Y_DEVELOPMENT_USER,
+              role,
+              authHeader,
+            )
+          } else {
+            // Unassign non-selected roles
+            return await unassignUserRole(
+              envVars.C8Y_BASEURL,
+              envVars.C8Y_DEVELOPMENT_TENANT,
+              envVars.C8Y_DEVELOPMENT_USER,
+              role,
+              authHeader,
+            )
+          }
+        })
+
+        await Promise.all(rolePromises)
+
+        consola.success('Role management complete')
+      }
+    }
 
     consola.success('Bootstrap complete!')
   },
