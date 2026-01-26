@@ -5,6 +5,7 @@ import { createC8yZip } from './module/c8yzip'
 import { setupRuntime } from './module/runtime'
 import { registerRuntime } from './module/register'
 import { checkProbes } from './module/probeCheck'
+import { autoBootstrap } from './module/autoBootstrap'
 
 declare module 'nitro/types' {
   interface NitroOptions {
@@ -29,11 +30,11 @@ export function c8y(): NitroModule {
       // allow async context
       nitro.options.experimental.asyncContext = true
 
+      // Auto-bootstrap if needed (silent if already bootstrapped)
+      await autoBootstrap(nitro)
+
       setupRuntime(nitro, options.manifest)
       registerRuntime(nitro, options)
-
-      // TODO: maybe auto bootstrap on startup
-      // when certain env vars are present but others are not
 
       nitro.hooks.hook('dev:reload', () => {
         setupRuntime(nitro, options.manifest)
