@@ -1,6 +1,7 @@
 import type { Nitro } from 'nitro/types'
 import { createDockerImage } from './docker'
 import { createC8yManifestFromNitro } from './manifest'
+import type { C8YManifest } from '../types/manifest'
 import type { C8YZipOptions } from '../types/zip'
 import { join } from 'pathe'
 import { mkdir, readFile, stat, writeFile } from 'fs/promises'
@@ -17,6 +18,25 @@ function formatBytes(bytes: number): string {
   const sizes = ['B', 'kB', 'MB', 'GB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return `${(bytes / k ** i).toFixed(1)} ${sizes[i]}`
+}
+
+/**
+ * Resolve the output path for the zip file based on options and manifest
+ * @param rootDir - Root directory of the project
+ * @param options - Zip options with optional name and outputDir
+ * @param manifest - Cumulocity manifest containing name and version
+ * @returns Absolute path to the output zip file
+ */
+export function resolveZipOutputPath(
+  rootDir: string,
+  options: C8YZipOptions,
+  manifest: C8YManifest,
+): string {
+  const outputDir = join(rootDir, options.outputDir ?? './')
+  const fileName = typeof options.name === 'function'
+    ? options.name(manifest.name, manifest.version)
+    : options.name ?? `${manifest.name}-${manifest.version}.zip`
+  return join(outputDir, fileName)
 }
 
 export async function createC8yZip(nitro: Nitro, options: C8YZipOptions = {}) {
@@ -48,13 +68,8 @@ export async function createC8yZip(nitro: Nitro, options: C8YZipOptions = {}) {
   })
 
   // Determine output path
-  const outputDir = join(nitro.options.rootDir, options.outputDir ?? './')
-  const outputFile = join(
-    outputDir,
-    typeof options.name === 'function'
-      ? options.name(manifest.name, manifest.version)
-      : options.name ?? `${manifest.name}-${manifest.version}.zip`,
-  )
+  const outputFile = resolveZipOutputPath(nitro.options.rootDir, options, manifest)
+  const outputDir = join(outputFile, '..')
 
   // Write zip file to disk
   spinnies.update(spinnerName, { text: 'Writing zip file...' })
