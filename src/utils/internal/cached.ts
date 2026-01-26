@@ -30,7 +30,7 @@ export const useSubscribedTenantCredentials = Object.assign(
       tenant: process.env.C8Y_BOOTSTRAP_TENANT!,
       user: process.env.C8Y_BOOTSTRAP_USER!,
       password: process.env.C8Y_BOOTSTRAP_PASSWORD!,
-    }, process.env.C8Y_BASE_URL!)
+    }, process.env.C8Y_BASEURL!)
 
     // we map them as an object with tenant as key for easier access
     return subscriptions.reduce(

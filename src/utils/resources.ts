@@ -23,7 +23,7 @@ export async function useUser() {
 
   // TODO: ensure base url has not trailing slash
 
-  // C8Y_BASE_URL is enforced to be set
+  // C8Y_BASEURL is enforced to be set
   const client = useUserClient()
 
   const {

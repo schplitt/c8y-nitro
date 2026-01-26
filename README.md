@@ -12,7 +12,7 @@ Lightning fast Cumulocity IoT microservice development powered by [Nitro](https:
 - 🚀 **Hot Module Reload** - Instant feedback during development
 - 🔥 **File-based Routing** - Auto-discovered routes from your file structure
 - 🛠️ **TypeScript First** - Full type safety with excellent DX
-- 🔑 **Bootstrap CLI** - One command to register your microservice and get credentials
+- 🔄 **Auto-Bootstrap** - Automatically registers and configures your microservice in development
 
 ## Getting Started
 
@@ -20,22 +20,6 @@ Lightning fast Cumulocity IoT microservice development powered by [Nitro](https:
 
 ```sh
 pnpm add c8y-nitro nitro@latest
-```
-
-### Development
-
-```sh
-# Install dependencies
-pnpm install
-
-# Run dev watcher
-pnpm dev
-
-# Build for production
-pnpm build
-
-# Run tests
-pnpm test
 ```
 
 ## Usage
@@ -53,35 +37,25 @@ export default defineNitroConfig({
 })
 ```
 
-## Bootstrapping Your Microservice
-
-The `bootstrap` command registers your microservice with a Cumulocity development tenant and retrieves bootstrap credentials for local development.
-
-### Prerequisites
+## Getting Started
 
 Create a `.env` or `.env.local` file with your development tenant credentials:
 
 ```sh
-C8Y_BASE_URL=https://your-tenant.cumulocity.com
+C8Y_BASEURL=https://your-tenant.cumulocity.com
 C8Y_DEVELOPMENT_TENANT=t12345
 C8Y_DEVELOPMENT_USER=your-username
 C8Y_DEVELOPMENT_PASSWORD=your-password
 ```
 
-### Running Bootstrap
+Then simply run `pnpm dev` - that's it! The module will automatically:
 
-```sh
-npx c8y-nitro bootstrap
-```
+1. Check if the microservice exists on the tenant
+2. Create it if needed (or use existing one without overwriting)
+3. Subscribe your tenant to the microservice
+4. Retrieve and save bootstrap credentials to your env file
 
-This command will:
-
-1. Load your `nitro.config.ts` and build the microservice manifest
-2. Check if the microservice already exists on the tenant
-3. Create or update the microservice registration
-4. Retrieve bootstrap credentials and write them to your `.env` or `.env.local` file
-
-After running, your env file will contain:
+After auto-bootstrap, your env file will contain:
 
 ```sh
 C8Y_BOOTSTRAP_TENANT=t12345
@@ -89,7 +63,36 @@ C8Y_BOOTSTRAP_USER=servicebootstrap_myservice
 C8Y_BOOTSTRAP_PASSWORD=<generated-password>
 ```
 
-These credentials are used by the microservice at runtime to authenticate with Cumulocity.
+> **Manual Bootstrap**: For more control or troubleshooting, you can use the [CLI bootstrap command](#cli-commands) to manually register your microservice.
+
+## CLI Commands
+
+| Command     | Description                                             |
+| ----------- | ------------------------------------------------------- |
+| `bootstrap` | Manually register microservice and retrieve credentials |
+| `roles`     | Manage user roles for development                       |
+
+For more information, run:
+
+```sh
+npx c8y-nitro -h
+```
+
+## Development
+
+```sh
+# Install dependencies
+pnpm install
+
+# Run dev watcher
+pnpm dev
+
+# Build for production
+pnpm build
+
+# Run tests
+pnpm test
+```
 
 ## License
 
