@@ -15,7 +15,7 @@ export default defineConfig({
   unbundle: true,
   copy: [
     {
-      from: './src/dev/runtime/**/*.ts',
+      from: './src/module/runtime/**/*.ts',
       flatten: false,
     },
   ],

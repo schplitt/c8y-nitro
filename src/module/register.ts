@@ -11,7 +11,7 @@ import { GENERATED_LIVENESS_ROUTE, GENERATED_READINESS_ROUTE } from './constants
  * @param nitro - Nitro instance
  * @param options - C8yNitroModuleOptions
  */
-export async function registerRuntime(nitro: Nitro, options: C8yNitroModuleOptions = {}) {
+export function registerRuntime(nitro: Nitro, options: C8yNitroModuleOptions = {}) {
   const thisFilePath = fileURLToPath(new URL('.', import.meta.url))
 
   /**

@@ -7,7 +7,7 @@ import {
   toValidClassName,
   generateMethod,
   generateAPIClient,
-} from '../src/dev/apiClient'
+} from '../src/module/apiClient'
 
 describe('apiClient generation', () => {
   describe('generateFunctionName', () => {

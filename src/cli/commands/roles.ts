@@ -6,7 +6,7 @@ import {
   createBasicAuthHeader,
   unassignUserRole,
 } from '../utils/c8y-api'
-import { createC8yManifest } from '../../dev/manifest'
+import { createC8yManifest } from '../../module/manifest'
 
 export default defineCommand({
   meta: {

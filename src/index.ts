@@ -1,10 +1,10 @@
 import type { NitroModule } from 'nitro/types'
 import type { C8yNitroModuleOptions } from './types'
-import { writeAPIClient } from './dev/apiClient'
-import { createC8yZip } from './dev/c8yzip'
-import { setupRuntime } from './dev/runtime'
-import { registerRuntime } from './dev/register'
-import { checkProbes } from './dev/probeCheck'
+import { writeAPIClient } from './module/apiClient'
+import { createC8yZip } from './module/c8yzip'
+import { setupRuntime } from './module/runtime'
+import { registerRuntime } from './module/register'
+import { checkProbes } from './module/probeCheck'
 
 declare module 'nitro/types' {
   interface NitroOptions {
@@ -30,7 +30,7 @@ export function c8y(): NitroModule {
       nitro.options.experimental.asyncContext = true
 
       setupRuntime(nitro, options.manifest)
-      await registerRuntime(nitro, options)
+      registerRuntime(nitro, options)
 
       // TODO: maybe auto bootstrap on startup
       // when certain env vars are present but others are not
@@ -55,8 +55,6 @@ export function c8y(): NitroModule {
           nitro.logger.debug('Generating C8Y API client')
           await writeAPIClient(nitro, options)
         }
-
-        // TODO: extend types with manifest options (roles for auth etc.)
       })
 
       nitro.hooks.hook('close', async () => {
