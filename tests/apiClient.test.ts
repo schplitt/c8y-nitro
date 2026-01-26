@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { HTTPMethod } from 'nitro/deps/h3'
+import type { HTTPMethod } from 'nitro/h3'
 import {
   generateFunctionName,
   extractParams,

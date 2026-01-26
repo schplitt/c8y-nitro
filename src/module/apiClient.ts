@@ -2,7 +2,7 @@ import { relative, join, dirname } from 'node:path'
 import { writeFile, mkdir } from 'node:fs/promises'
 import type { Nitro, NitroEventHandler } from 'nitro/types'
 import type { C8yNitroModuleOptions } from '../types'
-import type { HTTPMethod } from 'nitro/deps/h3'
+import type { HTTPMethod } from 'nitro/h3'
 import { createC8yManifestFromNitro } from './manifest'
 
 /**
