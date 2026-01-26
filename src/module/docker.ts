@@ -3,7 +3,12 @@ import { writeFile, mkdir } from 'node:fs/promises'
 import { join, basename } from 'node:path'
 import type { Nitro } from 'nitro/types'
 
-function generateDockerfileContent(outputDirName: string): string {
+/**
+ * Generate the Dockerfile content for a Nitro build
+ * @param outputDirName - Name of the output directory (e.g., '.output')
+ * @returns Dockerfile content as a string
+ */
+export function getDockerfileContent(outputDirName: string): string {
   return `FROM node:22-slim AS runtime
 
 WORKDIR /app
@@ -35,8 +40,7 @@ async function checkDockerInstalled(): Promise<boolean> {
   }
 }
 
-async function generateDockerfile(nitro: Nitro): Promise<string> {
-  const outputDir = nitro.options.output.dir
+async function writeDockerfile(outputDir: string): Promise<string> {
   const outputDirName = basename(outputDir)
   const c8yDir = join(outputDir, '../.c8y')
   const dockerfilePath = join(c8yDir, 'Dockerfile')
@@ -45,13 +49,11 @@ async function generateDockerfile(nitro: Nitro): Promise<string> {
   await mkdir(c8yDir, { recursive: true })
 
   // Generate Dockerfile with dynamic output directory name
-  const dockerfileContent = generateDockerfileContent(outputDirName)
+  const dockerfileContent = getDockerfileContent(outputDirName)
 
   // Write Dockerfile
   await writeFile(dockerfilePath, dockerfileContent, 'utf-8')
 
-  nitro.logger.debug(`Generated Dockerfile at ${dockerfilePath}`)
-  nitro.logger.debug(`Using output directory: ${outputDirName}`)
   return c8yDir
 }
 
@@ -135,8 +137,8 @@ export async function createDockerImage(nitro: Nitro): Promise<string> {
 
   nitro.logger.debug('Creating Docker image...')
 
-  // Generate Dockerfile
-  const c8yDir = await generateDockerfile(nitro)
+  // Write Dockerfile
+  const c8yDir = await writeDockerfile(nitro.options.output.dir)
 
   // Build Docker image
   const imageName = await buildDockerImage(nitro, c8yDir)
