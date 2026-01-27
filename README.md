@@ -58,25 +58,158 @@ Then simply run `pnpm dev` - that's it! The module will automatically:
 After auto-bootstrap, your env file will contain:
 
 ```sh
-C8Y_BOOTSTRAP_TENANT=t12345
-C8Y_BOOTSTRAP_USER=servicebootstrap_myservice
+C8Y_BOOTSTRAP_TENANT=<bootstrap-tenant-id>
+C8Y_BOOTSTRAP_USER=<bootstrap-username>
 C8Y_BOOTSTRAP_PASSWORD=<generated-password>
 ```
 
 > **Manual Bootstrap**: For more control or troubleshooting, you can use the [CLI bootstrap command](#cli-commands) to manually register your microservice.
 
-## CLI Commands
+## Automatic Zip Creation
 
-| Command     | Description                                             |
-| ----------- | ------------------------------------------------------- |
-| `bootstrap` | Manually register microservice and retrieve credentials |
-| `roles`     | Manage user roles for development                       |
+`c8y-nitro` automatically generates a ready-to-deploy microservice zip package after each build. The process includes:
 
-For more information, run:
+1. **Dockerfile Generation** - Creates an optimized Dockerfile using Node.js 22-slim
+2. **Docker Image Build** - Builds and saves the Docker image to `image.tar`
+3. **Manifest Generation** - Creates `cumulocity.json` from your package.json and configuration
+4. **Zip Package** - Combines `image.tar` and `cumulocity.json` into a deployable zip file
+
+> **Note**: Docker must be installed and available in your PATH.
+
+The generated zip file (default: `<package-name>-<version>.zip` in root directory) is ready to upload directly to Cumulocity.
+
+### Configuration
+
+```ts
+export default defineNitroConfig({
+  c8y: {
+    zip: {
+      name: 'my-microservice.zip', // Custom zip name
+      outputDir: './dist', // Output directory
+    }
+  },
+  modules: [c8y()],
+})
+```
+
+## Manifest Configuration
+
+The `cumulocity.json` manifest is automatically generated from your `package.json` and can be customized via the `manifest` option.
+
+**Auto-generated from package.json:**
+
+- `name` (scope stripped), `version` - from package fields
+- `provider.name` - from `author` field
+- `provider.domain` - from `author.url` or `homepage`
+- `provider.support` - from `bugs` or `author.email`
+- `contextPath` - defaults to package name
+
+### Basic Configuration
+
+```ts
+export default defineNitroConfig({
+  c8y: {
+    manifest: {
+      // Required API roles for the microservice
+      requiredRoles: ['ROLE_INVENTORY_READ', 'ROLE_ALARM_ADMIN'],
+
+      // Custom roles this microservice provides
+      roles: ['CUSTOM_MICROSERVICE_ROLE'],
+
+      // Resource limits
+      resources: {
+        cpu: '1',
+        memory: '1G'
+      }
+    }
+  },
+  modules: [c8y()],
+})
+```
+
+For all available manifest options, see the [Cumulocity Microservice Manifest documentation](https://cumulocity.com/docs/microservice-sdk/general-aspects/#microservice-manifest).
+
+> **Note**: Custom roles defined in the manifest are automatically available as TypeScript types for use in middleware and runtime code during development.
+
+> **Note**: Health probe endpoints (`/_c8y_nitro/liveness` and `/_c8y_nitro/readiness`) are automatically injected if not manually defined.
+
+## Development User Injection
+
+During development, `c8y-nitro` automatically injects your development user credentials into all requests. This allows you to test authentication and authorization middlewares locally.
+
+The module uses the development credentials from your `.env` file:
 
 ```sh
-npx c8y-nitro -h
+C8Y_DEVELOPMENT_TENANT=t12345
+C8Y_DEVELOPMENT_USER=your-username
+C8Y_DEVELOPMENT_PASSWORD=your-password
 ```
+
+This enables testing of access control middlewares like `hasUserRequiredRole()` and `isUserFromAllowedTenant()` without needing to manually set authorization headers.
+
+### Managing Development User Roles
+
+Use the [CLI roles command](#cli-commands) to assign or remove your microservice's custom roles to your development user:
+
+```sh
+npx c8y-nitro roles
+```
+
+This interactive command lets you select which roles from your manifest to assign to your development user for testing.
+
+## API Client Generation
+
+For monorepo architectures, `c8y-nitro` can generate TypeScript Angular services that provide fully typed access to your microservice routes.
+
+### Configuration
+
+```ts
+export default defineNitroConfig({
+  c8y: {
+    apiClient: {
+      dir: '../ui/src/app/services', // Output directory for generated client
+      contextPath: 'my-service' // Optional: override context path
+    }
+  },
+  modules: [c8y()],
+})
+```
+
+### Generated Client
+
+The generated service creates one method per route with automatic type inference:
+
+```ts
+// Generated: my-serviceAPIClient.ts
+@Injectable({ providedIn: 'root' })
+export class GeneratedMyServiceAPIClient {
+  async GETHealth(): Promise<{ status: string }> { }
+  async GETUsersById(params: { id: string | number }): Promise<User> { }
+  async POSTUsers(body: CreateUserDto): Promise<User> { }
+}
+```
+
+### Usage in Angular
+
+```ts
+import { GeneratedMyServiceAPIClient } from './services/my-serviceAPIClient'
+
+@Component({
+  /**
+   * ...
+   */
+})
+export class MyComponent {
+  private api = inject(GeneratedMyServiceAPIClient)
+
+  async ngOnInit() {
+    const health = await this.api.GETHealth()
+    const user = await this.api.GETUsersById({ id: 123 })
+  }
+}
+```
+
+> **Note**: The client regenerates automatically when routes change during development.
 
 ## Utilities
 
@@ -121,6 +254,19 @@ import { useUser, useUserClient } from 'c8y-nitro/utils'
 | `hasUserRequiredRole(role\|roles)`         | Check if user has required role(s)        |       ✅        |
 | `isUserFromAllowedTenant(tenant\|tenants)` | Check if user is from allowed tenant(s)   |       ✅        |
 | `isUserFromDeployedTenant()`               | Check if user is from the deployed tenant |       ✅        |
+
+## CLI Commands
+
+| Command     | Description                                             |
+| ----------- | ------------------------------------------------------- |
+| `bootstrap` | Manually register microservice and retrieve credentials |
+| `roles`     | Manage development user roles                           |
+
+For more information, run:
+
+```sh
+npx c8y-nitro -h
+```
 
 ## Development
 
