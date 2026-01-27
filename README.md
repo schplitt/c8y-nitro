@@ -78,6 +78,42 @@ For more information, run:
 npx c8y-nitro -h
 ```
 
+## Utilities
+
+### Credentials
+
+| Function                           | Description                                               | Request Context |
+| ---------------------------------- | --------------------------------------------------------- | :-------------: |
+| `useSubscribedTenantCredentials()` | Get credentials for all subscribed tenants (cached 10min) |       ❌        |
+| `useDeployedTenantCredentials()`   | Get credentials for the deployed tenant (cached 10 min)   |       ❌        |
+| `useUserTenantCredentials()`       | Get credentials for the current user's tenant             |       ✅        |
+
+> **Note**: `useDeployedTenantCredentials()` shares its cache with `useSubscribedTenantCredentials()`. Both functions support `.invalidate()` and `.refresh()` methods. Invalidating or refreshing one will affect the other.
+
+### Resources
+
+| Function         | Description                        | Request Context |
+| ---------------- | ---------------------------------- | :-------------: |
+| `useUser()`      | Fetch current user from Cumulocity |       ✅        |
+| `useUserRoles()` | Get roles of the current user      |       ✅        |
+
+### Client
+
+| Function                       | Description                                         | Request Context |
+| ------------------------------ | --------------------------------------------------- | :-------------: |
+| `useUserClient()`              | Create client authenticated with user's credentials |       ✅        |
+| `useUserTenantClient()`        | Create client for user's tenant (microservice user) |       ✅        |
+| `useSubscribedTenantClients()` | Create clients for all subscribed tenants           |       ❌        |
+| `useDeployedTenantClient()`    | Create client for the deployed tenant               |       ❌        |
+
+### Middleware
+
+| Function                                   | Description                               | Request Context |
+| ------------------------------------------ | ----------------------------------------- | :-------------: |
+| `hasUserRequiredRole(role\|roles)`         | Check if user has required role(s)        |       ✅        |
+| `isUserFromAllowedTenant(tenant\|tenants)` | Check if user is from allowed tenant(s)   |       ✅        |
+| `isUserFromDeployedTenant()`               | Check if user is from the deployed tenant |       ✅        |
+
 ## Development
 
 ```sh

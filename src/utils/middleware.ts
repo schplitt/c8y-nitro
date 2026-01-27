@@ -17,14 +17,14 @@ type UserRole = keyof C8YRoles | (string & {})
  * @example
  * // Single role:
  * export default defineHandler({
- *  middleware: [userHasRequiredRole('ROLE_INVENTORY_ADMIN')],
+ *  middleware: [hasUserRequiredRole('ROLE_INVENTORY_ADMIN')],
  *  handler: async () => {
  *   return { message: 'You have access' }
  *  }
  * })
  *
  */
-export function userHasRequiredRole(role: UserRole): EventHandler
+export function hasUserRequiredRole(role: UserRole): EventHandler
 /**
  * Middleware to check if the current user has at least one of the required roles.\
  * If the user doesn't have any of the required roles, throws a 403 Forbidden error.\
@@ -34,14 +34,14 @@ export function userHasRequiredRole(role: UserRole): EventHandler
  * @example
  * // Multiple roles:
  * export default defineHandler({
- *  middleware: [userHasRequiredRole(['ROLE_INVENTORY_ADMIN', 'ROLE_DEVICE_CONTROL'])],
+ *  middleware: [hasUserRequiredRole(['ROLE_INVENTORY_ADMIN', 'ROLE_DEVICE_CONTROL'])],
  *  handler: async () => {
  *   return { message: 'You have access' }
  *  }
  * })
  */
-export function userHasRequiredRole(roles: UserRole[]): EventHandler
-export function userHasRequiredRole(roleOrRoles: UserRole | UserRole[]): EventHandler {
+export function hasUserRequiredRole(roles: UserRole[]): EventHandler
+export function hasUserRequiredRole(roleOrRoles: UserRole | UserRole[]): EventHandler {
   return defineHandler(async () => {
     const requiredRoles = Array.isArray(roleOrRoles) ? roleOrRoles : [roleOrRoles]
     const userRoles = await useUserRoles()
@@ -67,14 +67,14 @@ export function userHasRequiredRole(roleOrRoles: UserRole | UserRole[]): EventHa
  * @example
  * // Single tenant:
  * export default defineHandler({
- *  middleware: [userFromAllowedTenant('t123456')],
+ *  middleware: [isUserFromAllowedTenant('t123456')],
  *  handler: async () => {
  *   return { message: 'You have access' }
  *  }
  * })
  *
  */
-export function userFromAllowedTenant(tenantId: string): EventHandler
+export function isUserFromAllowedTenant(tenantId: string): EventHandler
 /**
  * Middleware to check if the current user belongs to one of the allowed tenants.\
  * If the user's tenant doesn't match any of the allowed tenants, throws a 403 Forbidden error.\
@@ -84,14 +84,14 @@ export function userFromAllowedTenant(tenantId: string): EventHandler
  * @example
  * // Multiple tenants:
  * export default defineHandler({
- *  middleware: [userFromAllowedTenant(['t123456', 't789012'])],
+ *  middleware: [isUserFromAllowedTenant(['t123456', 't789012'])],
  *  handler: async () => {
  *   return { message: 'You have access' }
  *  }
  * })
  */
-export function userFromAllowedTenant(tenantIds: string[]): EventHandler
-export function userFromAllowedTenant(tenantIdOrIds: string | string[]): EventHandler {
+export function isUserFromAllowedTenant(tenantIds: string[]): EventHandler
+export function isUserFromAllowedTenant(tenantIdOrIds: string | string[]): EventHandler {
   return defineHandler(async () => {
     const allowedTenants = Array.isArray(tenantIdOrIds) ? tenantIdOrIds : [tenantIdOrIds]
     const userClient = useUserClient()
@@ -118,13 +118,13 @@ export function userFromAllowedTenant(tenantIdOrIds: string | string[]): EventHa
  * @example
  * // Only allow users from the deployed tenant:
  * export default defineHandler({
- *  middleware: [userFromDeployedTenant()],
+ *  middleware: [isUserFromDeployedTenant()],
  *  handler: async () => {
  *   return { message: 'You have access' }
  *  }
  * })
  */
-export function userFromDeployedTenant(): EventHandler {
+export function isUserFromDeployedTenant(): EventHandler {
   return defineHandler(async () => {
     const userClient = useUserClient()
     const userTenantId = userClient.core.tenant

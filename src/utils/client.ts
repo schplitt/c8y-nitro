@@ -1,7 +1,7 @@
 import { BasicAuth, Client, MicroserviceClientRequestAuth } from '@c8y/client'
 import { useRequest } from 'nitro/context'
 import { convertRequestHeadersToC8yFormat } from './internal/common'
-import { useSubscribedTenantCredentials } from './internal/cached'
+import { useSubscribedTenantCredentials } from './credentials'
 import { HTTPError } from 'nitro/h3'
 import process from 'node:process'
 

@@ -21,9 +21,6 @@ export async function useUser() {
     return request.context['c8y_user'] as ICurrentUser
   }
 
-  // TODO: ensure base url has not trailing slash
-
-  // C8Y_BASEURL is enforced to be set
   const client = useUserClient()
 
   const {
