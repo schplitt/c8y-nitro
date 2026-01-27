@@ -80,6 +80,14 @@ npx c8y-nitro -h
 
 ## Utilities
 
+`c8y-nitro` provides several utility functions to simplify common tasks in Cumulocity microservices.
+
+To use these utilities, simply import them from `c8y-nitro/utils`:
+
+```ts
+import { useUser, useUserClient } from 'c8y-nitro/utils'
+```
+
 ### Credentials
 
 | Function                           | Description                                               | Request Context |
