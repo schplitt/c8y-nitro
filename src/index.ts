@@ -65,9 +65,10 @@ export function c8y(): NitroModule {
       })
 
       nitro.hooks.hook('close', async () => {
-        // TODO: currently runs everytime server stops, should only run AFTER build (without default build log output)
-        // Build the Docker image
-        await createC8yZip(nitro, options.zip)
+        // Build the Docker image when not in dev mode
+        if(nitro.options.preset !== 'nitro-dev') {
+          await createC8yZip(nitro, options.zip)
+        }
       })
     },
   }
