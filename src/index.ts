@@ -36,8 +36,12 @@ export function c8y(): NitroModule {
       setupRuntime(nitro, options.manifest)
       registerRuntime(nitro, options)
 
-      nitro.hooks.hook('dev:reload', () => {
+      nitro.hooks.hook('dev:reload', async () => {
         setupRuntime(nitro, options.manifest)
+        if (options.apiClient) {
+          nitro.logger.debug('Generating C8Y API client')
+          await writeAPIClient(nitro, options)
+        }
       })
 
       // setup preset
@@ -52,7 +56,6 @@ export function c8y(): NitroModule {
 
       nitro.hooks.hook('types:extend', async () => {
         if (options.apiClient) {
-          // TODO: maybe move to dev as it needs to be written when routes change/save
           nitro.logger.debug('Generating C8Y API client')
           await writeAPIClient(nitro, options)
         }
