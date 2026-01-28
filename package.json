@@ -33,8 +33,8 @@
       "import": "./dist/types.mjs"
     },
     "./utils": {
-      "types": "./dist/utils/index.d.mts",
-      "import": "./dist/utils/index.mjs"
+      "types": "./dist/utils.d.mts",
+      "import": "./dist/utils.mjs"
     }
   },
   "main": "./dist/index.mjs",
