@@ -30,6 +30,13 @@ export function c8y(): NitroModule {
       // allow async context
       nitro.options.experimental.asyncContext = true
 
+      // setup preset
+      if (nitro.options.preset !== 'nitro-dev' && !nitro.options.preset.startsWith('node')) {
+        nitro.logger.error(`Unsupported preset "${nitro.options.preset}" for c8y-nitro module, only node presets are supported.`)
+        throw new Error('Unsupported preset for c8y-nitro module')
+      }
+
+
       // Auto-bootstrap if needed (silent if already bootstrapped)
       await autoBootstrap(nitro)
 
@@ -43,9 +50,6 @@ export function c8y(): NitroModule {
           await writeAPIClient(nitro, options)
         }
       })
-
-      // setup preset
-      nitro.options.preset = 'node-server'
 
       nitro.hooks.hook('build:before', async () => {
         // Check probes when all things are registered
