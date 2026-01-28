@@ -62,8 +62,6 @@ export async function createC8yManifest(
   options: C8YManifestOptions = {},
   logger?: ConsolaInstance,
 ): Promise<C8YManifest> {
-  // TODO: force type to be microservice and remove from manifest options
-
   const {
     name,
     version,
