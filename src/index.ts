@@ -21,9 +21,8 @@ export function c8y(): NitroModule {
       // enable tsconfig generation
       nitro.options.typescript.generateTsConfig = true
       // workaround as the generated tsconfig creates an invalid extends entry
-      nitro.options.typescript.tsConfig = {
-        ...nitro.options.typescript.tsConfig,
-      }
+      // https://github.com/nitrojs/nitro/issues/3945
+      nitro.options.typescript.tsConfig = {}
       nitro.options.typescript.tsConfig.include = ['./**/*.d.ts']
       nitro.options.typescript.tsConfig.exclude = []
 
