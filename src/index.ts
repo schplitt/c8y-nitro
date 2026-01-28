@@ -35,7 +35,6 @@ export function c8y(): NitroModule {
         throw new Error('Unsupported preset for c8y-nitro module')
       }
 
-
       // Auto-bootstrap if needed (silent if already bootstrapped)
       await autoBootstrap(nitro)
 
@@ -66,7 +65,7 @@ export function c8y(): NitroModule {
 
       nitro.hooks.hook('close', async () => {
         // Build the Docker image when not in dev mode
-        if(nitro.options.preset !== 'nitro-dev') {
+        if (nitro.options.preset !== 'nitro-dev') {
           await createC8yZip(nitro, options.zip)
         }
       })
