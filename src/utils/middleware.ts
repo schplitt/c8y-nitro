@@ -1,6 +1,6 @@
 import { defineHandler, HTTPError } from 'nitro/h3'
 import type { EventHandler } from 'nitro/h3'
-import type { C8YRoles } from '../types'
+import type { C8YRoles } from 'c8y-nitro/types'
 import { useUserRoles } from './resources'
 import { useUserClient } from './client'
 import process from 'node:process'
