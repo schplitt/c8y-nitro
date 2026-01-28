@@ -59,12 +59,10 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@types/spinnies": "catalog:",
     "c12": "catalog:",
     "citty": "catalog:",
     "consola": "catalog:",
     "jszip": "catalog:",
-    "nitro": "catalog:",
     "pathe": "catalog:",
     "pkg-types": "catalog:",
     "spinnies": "catalog:",
@@ -72,15 +70,17 @@
   },
   "devDependencies": {
     "@schplitt/eslint-config": "catalog:",
+    "@types/spinnies": "catalog:",
     "bumpp": "catalog:",
     "eslint": "catalog:",
+    "memfs": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
   "peerDependencies": {
     "@c8y/client": ">=1021.0.0",
-    "nitro": ">=3.0.0"
+    "nitro": "v3.0.1-alpha.2"
   },
   "engines": {
     "node": ">=20.0.0"
