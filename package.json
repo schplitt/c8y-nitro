@@ -59,6 +59,7 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@c8y/client": "catalog:",
     "c12": "catalog:",
     "citty": "catalog:",
     "consola": "catalog:",
@@ -79,7 +80,6 @@
     "vitest": "catalog:"
   },
   "peerDependencies": {
-    "@c8y/client": ">=1021.0.0",
     "nitro": "v3.0.1-alpha.2"
   },
   "engines": {

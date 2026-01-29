@@ -6,6 +6,9 @@ settings:
 
 catalogs:
   default:
+    '@c8y/client':
+      specifier: ^1023.4.11
+      version: 1023.17.8
     '@schplitt/eslint-config':
       specifier: ^1.2.0
       version: 1.2.0
@@ -63,7 +66,7 @@ importers:
   .:
     dependencies:
       '@c8y/client':
-        specifier: '>=1021.0.0'
+        specifier: 'catalog:'
         version: 1023.17.8(encoding@0.1.13)
       c12:
         specifier: 'catalog:'

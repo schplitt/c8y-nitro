@@ -12,6 +12,7 @@ packages:
   - ./
   - playground
 catalog:
+  "@c8y/client": ^1023.4.11
   '@schplitt/eslint-config': ^1.2.0
   '@types/spinnies': ^0.5.3
   bumpp: ^10.4.0
