@@ -9,7 +9,7 @@ import type { Nitro } from 'nitro/types'
  * @returns Dockerfile content as a string
  */
 export function getDockerfileContent(outputDirName: string): string {
-  return `FROM node:22-slim AS runtime
+  return `FROM node:24-slim AS runtime
 
 WORKDIR /app
 
