@@ -14,9 +14,7 @@ Lightning fast Cumulocity IoT microservice development powered by [Nitro](https:
 - 🛠️ **TypeScript First** - Full type safety with excellent DX
 - 🔄 **Auto-Bootstrap** - Automatically registers and configures your microservice in development
 
-## Getting Started
-
-### Installation
+## Installation
 
 ```sh
 pnpm add c8y-nitro nitro@latest
@@ -30,12 +28,28 @@ Configure your Cumulocity microservice in `nitro.config.ts`:
 import c8y from 'c8y-nitro'
 
 export default defineNitroConfig({
+  preset: 'node-server', // or "node-cluster", Required!
+  experimental: {
+    asyncContext: true // Required!
+  },
+  builder: 'rolldown', // Recommended!
   c8y: {
     // c8y-nitro configuration options go here
   },
   modules: [c8y()],
 })
 ```
+
+### Prerequisites
+
+`c8y-nitro` requires:
+
+- `preset` - must be a node preset (`node-server` or `node-cluster`)
+- `experimental.asyncContext: true` - required for request context handling
+
+**Optional but recommended:**
+
+- `builder: 'rolldown'` - for faster build times
 
 ## Getting Started
 
@@ -78,23 +92,6 @@ C8Y_BOOTSTRAP_PASSWORD=<generated-password>
 
 The generated zip file (default: `<package-name>-<version>.zip` in root directory) is ready to upload directly to Cumulocity.
 
-### Configuration
-
-```ts
-import { defineNitroConfig } from 'nitro/config'
-import c8y from 'c8y-nitro'
-
-export default defineNitroConfig({
-  c8y: {
-    zip: {
-      name: 'my-microservice.zip', // Custom zip name
-      outputDir: './dist', // Output directory
-    }
-  },
-  modules: [c8y()],
-})
-```
-
 ## Manifest Configuration
 
 The `cumulocity.json` manifest is automatically generated from your `package.json` and can be customized via the `manifest` option.
@@ -106,29 +103,6 @@ The `cumulocity.json` manifest is automatically generated from your `package.jso
 - `provider.domain` - from `author.url` or `homepage`
 - `provider.support` - from `bugs` or `author.email`
 - `contextPath` - defaults to package name
-
-### Basic Configuration
-
-```ts
-export default defineNitroConfig({
-  c8y: {
-    manifest: {
-      // Required API roles for the microservice
-      requiredRoles: ['ROLE_INVENTORY_READ', 'ROLE_ALARM_ADMIN'],
-
-      // Custom roles this microservice provides
-      roles: ['CUSTOM_MICROSERVICE_ROLE'],
-
-      // Resource limits
-      resources: {
-        cpu: '1',
-        memory: '1G'
-      }
-    }
-  },
-  modules: [c8y()],
-})
-```
 
 For all available manifest options, see the [Cumulocity Microservice Manifest documentation](https://cumulocity.com/docs/microservice-sdk/general-aspects/#microservice-manifest).
 
