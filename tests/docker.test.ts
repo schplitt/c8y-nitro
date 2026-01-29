@@ -7,7 +7,7 @@ describe('docker', () => {
       const content = getDockerfileContent('.output')
 
       expect(content).toMatchInlineSnapshot(`
-        "FROM node:22-slim AS runtime
+        "FROM node:24-slim AS runtime
 
         WORKDIR /app
 
@@ -28,7 +28,7 @@ describe('docker', () => {
       const content = getDockerfileContent('dist')
 
       expect(content).toMatchInlineSnapshot(`
-        "FROM node:22-slim AS runtime
+        "FROM node:24-slim AS runtime
 
         WORKDIR /app
 

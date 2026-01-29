@@ -58,7 +58,7 @@
     "lint": "eslint",
     "lint:fix": "eslint --fix",
     "typecheck": "tsc --noEmit",
-    "prerelease": "eslint && tsc --noEmit && tsdown",
+    "prerelease": "eslint && tsc --noEmit && tsdown && vitest run",
     "release": "bumpp",
     "test": "vitest"
   },
