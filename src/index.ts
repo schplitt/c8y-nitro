@@ -26,13 +26,16 @@ export function c8y(): NitroModule {
       nitro.options.typescript.tsConfig.include = ['./**/*.d.ts']
       nitro.options.typescript.tsConfig.exclude = []
 
-      // allow async context
-      nitro.options.experimental.asyncContext = true
-
       // setup preset
       if (!nitro.options.preset.startsWith('nitro') && !nitro.options.preset.startsWith('node')) {
         nitro.logger.error(`Unsupported preset "${nitro.options.preset}" for c8y-nitro module, only node presets are supported.`)
         throw new Error('Unsupported preset for c8y-nitro module')
+      }
+
+      // check async context is enabled
+      if (!nitro.options.experimental?.asyncContext) {
+        nitro.logger.error('c8y-nitro requires `experimental.asyncContext` to be enabled in your nitro.config.ts')
+        throw new Error('Missing experimental.asyncContext for c8y-nitro module')
       }
 
       // Auto-bootstrap if needed (silent if already bootstrapped)
