@@ -6,6 +6,7 @@ export default defineConfig({
     'types': './src/types/index.ts',
     'utils': './src/utils/index.ts',
     'cli/index': './src/cli/index.ts',
+    'client': './src/client.ts',
   },
   target: ['es2023'],
   format: 'esm',
