@@ -81,6 +81,9 @@ The generated zip file (default: `<package-name>-<version>.zip` in root director
 ### Configuration
 
 ```ts
+import { defineNitroConfig } from 'nitro/config'
+import c8y from 'c8y-nitro'
+
 export default defineNitroConfig({
   c8y: {
     zip: {
