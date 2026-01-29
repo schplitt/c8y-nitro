@@ -42,7 +42,6 @@ export function c8y(): NitroModule {
       await autoBootstrap(nitro)
 
       setupRuntime(nitro, options.manifest)
-      registerRuntime(nitro, options)
 
       nitro.hooks.hook('dev:reload', async () => {
         setupRuntime(nitro, options.manifest)
@@ -53,6 +52,8 @@ export function c8y(): NitroModule {
       })
 
       nitro.hooks.hook('build:before', async () => {
+        registerRuntime(nitro, options)
+
         // Check probes when all things are registered
         if (options.manifest) {
           checkProbes(nitro, options.manifest)
