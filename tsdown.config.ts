@@ -13,6 +13,8 @@ export default defineConfig({
   dts: true,
   outDir: './dist',
   unbundle: true,
+  // necessary due to invalid esm exports from @c8y/client
+  noExternal: ['@c8y/client'],
   copy: [
     {
       from: './src/module/runtime/**/*.ts',
