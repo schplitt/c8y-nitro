@@ -20,6 +20,7 @@ export default defineConfig({
       flatten: false,
     },
   ],
+  failOnWarn: true,
   inlineOnly: [
     '@c8y/client',
     'asynckit',
