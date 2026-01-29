@@ -20,7 +20,6 @@ export default defineHandler((event) => {
 
       // inject auth header into request
       event.req.headers.set('authorization', authHeader)
-      consola.info('Development user injected into request authorization header.')
     }
   }
 })
