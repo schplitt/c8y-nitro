@@ -5,10 +5,6 @@ export default defineNitroConfig({
   preset: 'node_server',
   serverDir: './',
 
-  experimental: {
-    openAPI: true,
-  },
-
   c8y: {
     manifest: {
       roles: ['SOME_CUSTOM_ROLE', 'ANOTHER_ROLE'],

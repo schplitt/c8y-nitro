@@ -30,7 +30,7 @@ export function c8y(): NitroModule {
       nitro.options.experimental.asyncContext = true
 
       // setup preset
-      if (nitro.options.preset !== 'nitro-dev' && !nitro.options.preset.startsWith('node')) {
+      if (!nitro.options.preset.startsWith('nitro') && !nitro.options.preset.startsWith('node')) {
         nitro.logger.error(`Unsupported preset "${nitro.options.preset}" for c8y-nitro module, only node presets are supported.`)
         throw new Error('Unsupported preset for c8y-nitro module')
       }
