@@ -20,8 +20,6 @@ Lightning fast Cumulocity IoT microservice development powered by [Nitro](https:
 pnpm add c8y-nitro nitro@latest
 ```
 
-> **Note**: `@c8y/client` (`^1023.4.11` / 2026-lts) is bundled with c8y-nitro and cannot be used directly under its own export because it contains invalid ESM exports. If you need to use it, import from `c8y-nitro/client` instead.
-
 ## Usage
 
 Configure your Cumulocity microservice in `nitro.config.ts`:

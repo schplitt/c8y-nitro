@@ -28,8 +28,9 @@ export function c8y(): NitroModule {
       nitro.options.typescript.tsConfig.exclude = []
 
       // set own library (pkgName) as noExternal to bundle it always
-      // and make runtime nitro features available
-      nitro.options.noExternals = nitro.options.noExternals && nitro.options.noExternals === true ? nitro.options.noExternals : [...(nitro.options.noExternals || []), pkgName]
+      // makes runtime nitro features available in c8y-nitro utilities
+      // avoids esm issues with @c8y/client
+      nitro.options.noExternals = nitro.options.noExternals && nitro.options.noExternals === true ? nitro.options.noExternals : [...(nitro.options.noExternals || []), pkgName, '@c8y/client']
 
       // setup preset
       if (!nitro.options.preset.startsWith('nitro') && !nitro.options.preset.startsWith('node')) {
