@@ -35,10 +35,6 @@
     "./utils": {
       "types": "./dist/utils.d.mts",
       "import": "./dist/utils.mjs"
-    },
-    "./client": {
-      "types": "./dist/client.d.mts",
-      "import": "./dist/client.mjs"
     }
   },
   "main": "./dist/index.mjs",
