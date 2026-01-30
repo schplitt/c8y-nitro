@@ -32,12 +32,6 @@ export function c8y(): NitroModule {
         throw new Error('Unsupported preset for c8y-nitro module')
       }
 
-      // check async context is enabled
-      if (!nitro.options.experimental?.asyncContext) {
-        nitro.logger.error('c8y-nitro requires `experimental.asyncContext` to be enabled in your nitro.config.ts')
-        throw new Error('Missing experimental.asyncContext for c8y-nitro module')
-      }
-
       // Auto-bootstrap if needed (silent if already bootstrapped)
       await autoBootstrap(nitro)
 
