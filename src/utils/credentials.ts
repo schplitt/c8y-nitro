@@ -1,9 +1,9 @@
 import { Client } from '@c8y/client'
 import type { ICredentials } from '@c8y/client'
 import { defineCachedFunction } from 'nitro/cache'
-import { useRequest } from 'nitro/context'
+import type { H3Event } from 'nitro/h3'
 import { HTTPError } from 'nitro/h3'
-import { useStorage } from 'nitro/storage'
+import type { ServerRequest } from 'nitro/types'
 import process from 'node:process'
 import { useUserClient } from './client'
 
@@ -54,6 +54,8 @@ export const useSubscribedTenantCredentials = Object.assign(
   {
     invalidate: async () => {
       const completeKey = `c8y_nitro:functions:_c8y_nitro_get_subscribed_tenant_credentials.json`
+      // use runtime import to avoid importing mocked buildtime module
+      const useStorage = await import('nitro/storage').then((m) => m.useStorage)
       await useStorage('cache').removeItem(completeKey)
     },
     refresh: async () => {
@@ -107,27 +109,27 @@ export const useDeployedTenantCredentials = Object.assign(async (): Promise<ICre
 /**
  * Fetches credentials for the tenant of the current user making the request.\
  * Extracts the user's tenant ID from the request headers and returns corresponding credentials.\
- * Results are cached in the request context for subsequent calls within the same request.\
- * Must be called within a request handler context.
+ * Results are cached in the request context for subsequent calls within the same request.
+ * @param requestOrEvent - The H3Event or ServerRequest from the current request
  * @returns Credentials for the user's tenant
  * @throws {HTTPError} If no subscribed tenant credentials found for the user's tenant
  * @example
  * // In a request handler:
- * const userCreds = await useUserTenantCredentials()
+ * const userCreds = await useUserTenantCredentials(event)
  * console.log(userCreds.tenant, userCreds.user)
  *
  * // Credentials are automatically cached for the request duration
- * const sameCreds = await useUserTenantCredentials() // Uses cached value
+ * const sameCreds = await useUserTenantCredentials(event) // Uses cached value
  */
-export async function useUserTenantCredentials(): Promise<ICredentials> {
-  const request = useRequest()
+export async function useUserTenantCredentials(requestOrEvent: ServerRequest | H3Event): Promise<ICredentials> {
+  const request = 'req' in requestOrEvent ? requestOrEvent.req : requestOrEvent
 
   // check if we have cached creds in request context
   if (request.context?.['c8y_user_tenant_credentials']) {
     return request.context['c8y_user_tenant_credentials'] as ICredentials
   }
 
-  const userClient = useUserClient()
+  const userClient = useUserClient(requestOrEvent)
 
   const tenantId = userClient.core.tenant
 

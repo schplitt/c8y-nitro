@@ -42,9 +42,9 @@ export function hasUserRequiredRole(role: UserRole): EventHandler
  */
 export function hasUserRequiredRole(roles: UserRole[]): EventHandler
 export function hasUserRequiredRole(roleOrRoles: UserRole | UserRole[]): EventHandler {
-  return defineHandler(async () => {
+  return defineHandler(async (event) => {
     const requiredRoles = Array.isArray(roleOrRoles) ? roleOrRoles : [roleOrRoles]
-    const userRoles = await useUserRoles()
+    const userRoles = await useUserRoles(event)
 
     const hasRole = requiredRoles.some((role) => userRoles.includes(role))
 
@@ -92,9 +92,9 @@ export function isUserFromAllowedTenant(tenantId: string): EventHandler
  */
 export function isUserFromAllowedTenant(tenantIds: string[]): EventHandler
 export function isUserFromAllowedTenant(tenantIdOrIds: string | string[]): EventHandler {
-  return defineHandler(async () => {
+  return defineHandler(async (event) => {
     const allowedTenants = Array.isArray(tenantIdOrIds) ? tenantIdOrIds : [tenantIdOrIds]
-    const userClient = useUserClient()
+    const userClient = useUserClient(event)
     const userTenantId = userClient.core.tenant
 
     const isAllowed = allowedTenants.includes(userTenantId)
@@ -125,8 +125,8 @@ export function isUserFromAllowedTenant(tenantIdOrIds: string | string[]): Event
  * })
  */
 export function isUserFromDeployedTenant(): EventHandler {
-  return defineHandler(async () => {
-    const userClient = useUserClient()
+  return defineHandler(async (event) => {
+    const userClient = useUserClient(event)
     const userTenantId = userClient.core.tenant
     const deployedTenantId = process.env.C8Y_BOOTSTRAP_TENANT
 

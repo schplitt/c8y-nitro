@@ -6,6 +6,7 @@ import { setupRuntime } from './module/runtime'
 import { registerRuntime } from './module/register'
 import { checkProbes } from './module/probeCheck'
 import { autoBootstrap } from './module/autoBootstrap'
+import { name as pkgName } from '../package.json'
 
 declare module 'nitro/types' {
   interface NitroOptions {
@@ -26,16 +27,14 @@ export function c8y(): NitroModule {
       nitro.options.typescript.tsConfig.include = ['./**/*.d.ts']
       nitro.options.typescript.tsConfig.exclude = []
 
+      // set own library (pkgName) as noExternal to bundle it always
+      // and make runtime nitro features available
+      nitro.options.noExternals = nitro.options.noExternals && nitro.options.noExternals === true ? nitro.options.noExternals : [...(nitro.options.noExternals || []), pkgName]
+
       // setup preset
       if (!nitro.options.preset.startsWith('nitro') && !nitro.options.preset.startsWith('node')) {
         nitro.logger.error(`Unsupported preset "${nitro.options.preset}" for c8y-nitro module, only node presets are supported.`)
         throw new Error('Unsupported preset for c8y-nitro module')
-      }
-
-      // check async context is enabled
-      if (!nitro.options.experimental?.asyncContext) {
-        nitro.logger.error('c8y-nitro requires `experimental.asyncContext` to be enabled in your nitro.config.ts')
-        throw new Error('Missing experimental.asyncContext for c8y-nitro module')
       }
 
       // Auto-bootstrap if needed (silent if already bootstrapped)

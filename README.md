@@ -31,10 +31,6 @@ import c8y from 'c8y-nitro'
 
 export default defineNitroConfig({
   preset: 'node-server', // or "node-cluster", Required!
-  experimental: {
-    asyncContext: true // Required!
-  },
-  builder: 'rolldown', // Recommended!
   c8y: {
     // c8y-nitro configuration options go here
   },
@@ -47,11 +43,14 @@ export default defineNitroConfig({
 `c8y-nitro` requires:
 
 - `preset` - must be a node preset (`node-server` or `node-cluster`)
-- `experimental.asyncContext: true` - required for request context handling
 
-**Optional but recommended:**
+**Recommended:**
 
 - `builder: 'rolldown'` - for faster build times
+
+**Optional:**
+
+- `experimental.asyncContext: true` - enables using utility functions without passing event/request parameters
 
 ## Getting Started
 
@@ -198,6 +197,43 @@ To use these utilities, simply import them from `c8y-nitro/utils`:
 
 ```ts
 import { useUser, useUserClient } from 'c8y-nitro/utils'
+```
+
+### Usage
+
+All utility functions that require request context accept either an `H3Event` or `ServerRequest` parameter:
+
+```ts
+// Pass the event/request parameter
+export default defineHandler(async (event) => {
+  const user = await useUser(event)
+  const client = useUserClient(event)
+  return { user }
+})
+```
+
+**Optional: Using with `asyncContext`**
+
+If you enable `experimental.asyncContext: true` in your Nitro config, you can use Nitro's `useRequest()` to avoid passing the event through deeply nested function calls:
+
+```ts
+import { useRequest } from 'nitro/context'
+
+export default defineHandler(async (event) => {
+  // Deep nested function - no need to pass event down
+  return await someDeepFunction()
+})
+
+async function someDeepFunction() {
+  return await anotherFunction()
+}
+
+async function anotherFunction() {
+  // Use useRequest() to get the request in any nested function
+  const request = useRequest()
+  const user = await useUser(request)
+  return { user }
+}
 ```
 
 ### Credentials

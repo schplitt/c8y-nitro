@@ -1,22 +1,23 @@
 import { BasicAuth, Client, MicroserviceClientRequestAuth } from '@c8y/client'
-import { useRequest } from 'nitro/context'
 import { convertRequestHeadersToC8yFormat } from './internal/common'
 import { useSubscribedTenantCredentials } from './credentials'
+import type { H3Event } from 'nitro/h3'
 import { HTTPError } from 'nitro/h3'
 import process from 'node:process'
+import type { ServerRequest } from 'nitro/types'
 
 /**
  * Creates a Cumulocity client authenticated with the current user's credentials.\
- * Extracts credentials from the Authorization header of the current request.\
- * Must be called within a request handler context.\
+ * Extracts credentials from the Authorization header of the current request.
+ * @param requestOrEvent - The H3Event or ServerRequest from the current request
  * @returns A configured Cumulocity Client instance
  * @example
  * // In a request handler:
- * const client = useUserClient()
+ * const client = useUserClient(event)
  * const { data } = await client.inventory.list()
  */
-export function useUserClient(): Client {
-  const request = useRequest()
+export function useUserClient(requestOrEvent: ServerRequest | H3Event): Client {
+  const request = 'req' in requestOrEvent ? requestOrEvent.req : requestOrEvent
 
   if (request.context?.['c8y_user_client']) {
     return request.context['c8y_user_client'] as Client
@@ -37,22 +38,22 @@ export function useUserClient(): Client {
 
 /**
  * Creates a Cumulocity client for the tenant of the current user.\
- * Uses the tenant's service user credentials rather than the user's own credentials.\
- * Must be called within a request handler context.\
+ * Uses the tenant's service user credentials rather than the user's own credentials.
+ * @param requestOrEvent - The H3Event or ServerRequest from the current request
  * @returns A configured Cumulocity Client instance for the user's tenant
  * @example
  * // In a request handler:
- * const tenantClient = await useUserTenantClient()
+ * const tenantClient = await useUserTenantClient(event)
  * const { data } = await tenantClient.inventory.list()
  */
-export async function useUserTenantClient(): Promise<Client> {
-  const request = useRequest()
+export async function useUserTenantClient(requestOrEvent: ServerRequest | H3Event): Promise<Client> {
+  const request = 'req' in requestOrEvent ? requestOrEvent.req : requestOrEvent
 
   if (request.context?.['c8y_user_tenant_client']) {
     return request.context['c8y_user_tenant_client'] as Client
   }
 
-  const userClient = useUserClient()
+  const userClient = useUserClient(requestOrEvent)
   const tenantId = userClient.core.tenant
 
   const creds = await useSubscribedTenantCredentials()
