@@ -28,6 +28,7 @@ export function c8y(): NitroModule {
       nitro.options.typescript.tsConfig.exclude = []
 
       // set own library (pkgName) as noExternal to bundle it always
+      // and make runtime nitro features available
       nitro.options.noExternals = nitro.options.noExternals && nitro.options.noExternals === true ? nitro.options.noExternals : [...(nitro.options.noExternals || []), pkgName]
 
       // setup preset
