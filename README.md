@@ -14,6 +14,31 @@ Lightning fast Cumulocity IoT microservice development powered by [Nitro](https:
 - 🛠️ **TypeScript First** - Full type safety with excellent DX
 - 🔄 **Auto-Bootstrap** - Automatically registers and configures your microservice in development
 
+## Quick Start
+
+The fastest way to get started is using the [c8y-nitro-starter](https://github.com/schplitt/c8y-nitro-starter) template:
+
+```sh
+pnpm dlx giget@latest gh:schplitt/c8y-nitro-starter my-microservice
+cd my-microservice
+pnpm install
+```
+
+Configure your development tenant in `.env`:
+
+```sh
+C8Y_BASEURL=https://your-tenant.cumulocity.com
+C8Y_DEVELOPMENT_TENANT=t12345
+C8Y_DEVELOPMENT_USER=your-username
+C8Y_DEVELOPMENT_PASSWORD=your-password
+```
+
+Then start developing:
+
+```sh
+pnpm dev
+```
+
 ## Installation
 
 ```sh
@@ -128,7 +153,7 @@ This enables testing of access control middlewares like `hasUserRequiredRole()` 
 Use the [CLI roles command](#cli-commands) to assign or remove your microservice's custom roles to your development user:
 
 ```sh
-npx c8y-nitro roles
+pnpm dlx c8y-nitro roles
 ```
 
 This interactive command lets you select which roles from your manifest to assign to your development user for testing.
@@ -278,7 +303,7 @@ async function anotherFunction() {
 For more information, run:
 
 ```sh
-npx c8y-nitro -h
+pnpm dlx c8y-nitro -h
 ```
 
 ## Development
