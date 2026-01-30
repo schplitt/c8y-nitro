@@ -3,7 +3,6 @@ import type { ICredentials } from '@c8y/client'
 import { defineCachedFunction } from 'nitro/cache'
 import type { H3Event } from 'nitro/h3'
 import { HTTPError } from 'nitro/h3'
-import { useStorage } from 'nitro/storage'
 import type { ServerRequest } from 'nitro/types'
 import process from 'node:process'
 import { useUserClient } from './client'
@@ -55,6 +54,8 @@ export const useSubscribedTenantCredentials = Object.assign(
   {
     invalidate: async () => {
       const completeKey = `c8y_nitro:functions:_c8y_nitro_get_subscribed_tenant_credentials.json`
+      // use runtime import to avoid importing mocked buildtime module
+      const useStorage = await import('nitro/storage').then((m) => m.useStorage)
       await useStorage('cache').removeItem(completeKey)
     },
     refresh: async () => {
