@@ -6,6 +6,7 @@ import { setupRuntime } from './module/runtime'
 import { registerRuntime } from './module/register'
 import { checkProbes } from './module/probeCheck'
 import { autoBootstrap } from './module/autoBootstrap'
+import { name as pkgName } from '../package.json'
 
 declare module 'nitro/types' {
   interface NitroOptions {
@@ -25,6 +26,9 @@ export function c8y(): NitroModule {
       nitro.options.typescript.tsConfig = {}
       nitro.options.typescript.tsConfig.include = ['./**/*.d.ts']
       nitro.options.typescript.tsConfig.exclude = []
+
+      // set own library (pkgName) as noExternal to bundle it always
+      nitro.options.noExternals = nitro.options.noExternals && nitro.options.noExternals === true ? nitro.options.noExternals : [...(nitro.options.noExternals || []), pkgName]
 
       // setup preset
       if (!nitro.options.preset.startsWith('nitro') && !nitro.options.preset.startsWith('node')) {
