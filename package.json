@@ -35,10 +35,6 @@
     "./utils": {
       "types": "./dist/utils.d.mts",
       "import": "./dist/utils.mjs"
-    },
-    "./client": {
-      "types": "./dist/client.d.mts",
-      "import": "./dist/client.mjs"
     }
   },
   "main": "./dist/index.mjs",
@@ -73,7 +69,6 @@
     "tinyexec": "catalog:"
   },
   "devDependencies": {
-    "@c8y/client": "catalog:",
     "@schplitt/eslint-config": "catalog:",
     "@types/spinnies": "catalog:",
     "bumpp": "catalog:",
@@ -84,6 +79,7 @@
     "vitest": "catalog:"
   },
   "peerDependencies": {
+    "@c8y/client": ">=1021",
     "nitro": "v3.0.1-alpha.2"
   },
   "engines": {
