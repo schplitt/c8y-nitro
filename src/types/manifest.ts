@@ -1,4 +1,4 @@
-export type C8YManifestOptions = Partial<Omit<C8YManifest, 'name' | 'version' | 'apiVersion' | 'key'>>
+export type C8YManifestOptions = Omit<C8YManifest, 'name' | 'version' | 'apiVersion' | 'key' | 'type' | 'provider'>
 
 export interface C8YManifest {
   /**
@@ -295,11 +295,6 @@ export interface ExecAction {
  */
 export interface TCPSocketAction {
   /**
-   * Hostname or IP to connect to.
-   */
-  host: string
-
-  /**
    * Port number to connect to.
    * @default 80
    */
@@ -310,11 +305,6 @@ export interface TCPSocketAction {
  * HTTP GET probe.
  */
 export interface HTTPGetAction {
-  /**
-   * Hostname to connect to.
-   */
-  host?: string
-
   /**
    * URL path to request.
    * @example "/health"

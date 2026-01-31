@@ -96,9 +96,9 @@ export async function createC8yManifest(
 
   const manifest: C8YManifest = {
     ...restManifestFields,
-    provider,
     ...probeFields,
     ...options,
+    provider,
     name,
     version,
     apiVersion: 'v2',
