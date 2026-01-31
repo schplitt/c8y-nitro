@@ -1,0 +1,210 @@
+# AGENTS.md
+
+## Project Overview
+
+**c8y-nitro** is a Nitro module for lightning-fast Cumulocity IoT microservice development. It automates Docker builds, generates `cumulocity.json` manifests, creates deployable microservice zip files, and can generate Angular API clients.
+
+**Key Features:**
+
+- ⚡️ Built on Nitro's high-performance engine
+- 📁 Automatic zip creation with Docker image and manifest
+- 🎯 API client generation for Angular applications
+- 📦 Built-in liveness/readiness probes
+- 🔄 Auto-bootstrap for development tenants
+- 🛠️ TypeScript-first with full type safety
+
+## Architecture
+
+```
+src/
+├── index.ts                    # Main entry point - exports c8y() module function
+├── cli/
+│   ├── index.ts                # CLI entry point using citty
+│   ├── commands/
+│   │   ├── bootstrap.ts        # Manual bootstrap command
+│   │   └── roles.ts            # Role management command
+│   └── utils/
+│       ├── c8y-api.ts          # Cumulocity API helpers for CLI
+│       ├── config.ts           # Config loading utilities
+│       └── env-file.ts         # .env file management
+├── module/
+│   ├── apiClient.ts            # Angular API client generation
+│   ├── autoBootstrap.ts        # Auto-bootstrap during dev
+│   ├── c8yzip.ts               # Zip file creation logic
+│   ├── constants.ts            # Shared constants (probe routes, etc.)
+│   ├── docker.ts               # Dockerfile generation & image building
+│   ├── manifest.ts             # cumulocity.json manifest generation
+│   ├── probeCheck.ts           # Validates probe configuration
+│   ├── register.ts             # Registers runtime handlers/middlewares
+│   ├── runtime.ts              # Runtime setup for dev mode
+│   └── runtime/
+│       ├── handlers/
+│       │   └── liveness-readiness.ts  # Probe endpoint handler
+│       ├── middlewares/
+│       │   └── dev-user.ts            # Dev user injection middleware
+│       └── plugins/
+│           └── c8y-variables.ts       # C8Y env variable plugin
+├── types/
+│   ├── index.ts                # Main type exports (C8yNitroModuleOptions)
+│   ├── apiClient.ts            # API client generation types
+│   ├── manifest.ts             # Manifest types (C8YManifest, C8YManifestOptions)
+│   ├── roles.ts                # Role types
+│   └── zip.ts                  # Zip options types
+└── utils/
+    ├── index.ts                # Utility exports
+    ├── client.ts               # Cumulocity client utilities (useUserClient, etc.)
+    ├── credentials.ts          # Credential management (useSubscribedTenantCredentials)
+    ├── middleware.ts           # Auth middlewares (hasUserRequiredRole, etc.)
+    ├── resources.ts            # Resource utilities (useUser, useUserRoles)
+    └── internal/
+        └── common.ts           # Internal shared utilities
+tests/
+├── apiClient.test.ts           # API client generation tests
+├── c8yzip.test.ts              # Zip creation tests
+├── docker.test.ts              # Docker generation tests
+└── manifest.test.ts            # Manifest generation tests
+playground/                     # Development playground microservice
+```
+
+### Package Exports
+
+The package has three entry points:
+
+- `c8y-nitro` — Main module function `c8y()` for Nitro config
+- `c8y-nitro/types` — TypeScript types for configuration
+- `c8y-nitro/utils` — Runtime utilities for microservice handlers
+
+### Module Flow
+
+1. **Setup Phase** (`src/index.ts`): Configures Nitro options, runs auto-bootstrap
+2. **Dev Mode** (`runtime.ts`): Sets up dev middlewares, handlers, and plugins
+3. **Build Phase** (`register.ts`): Registers probe handlers, validates config
+4. **Post-Build** (`c8yzip.ts`): Creates Docker image → manifest → deployable zip
+
+## Development
+
+```sh
+pnpm install    # Install dependencies
+pnpm dev        # Build with watch mode
+pnpm build      # Build with tsdown
+pnpm test       # Run tests with Vitest
+pnpm lint       # Lint with ESLint
+pnpm lint:fix   # Lint and auto-fix
+pnpm typecheck  # TypeScript type checking
+```
+
+### Testing the Playground
+
+```sh
+cd playground
+pnpm dev        # Start dev server
+pnpm build      # Build microservice (creates .zip)
+```
+
+## Code Style
+
+- ESM only (`"type": "module"`)
+- TypeScript strict mode enabled
+- Uses `tsdown` for building
+- Uses `@schplitt/eslint-config` for linting
+- Uses `vitest` for testing
+- Requires Node.js >= 24.0.0
+
+## Testing
+
+- Write tests in the `tests/` directory
+- Use `*.test.ts` file naming convention
+- Run `pnpm test` for watch mode during development
+- Import modules from `../src`
+
+Example test structure:
+
+```ts
+import { expect, test } from 'vitest'
+import { createC8yManifest } from '../src/module/manifest'
+
+test('should create manifest from package.json', async () => {
+  const manifest = await createC8yManifest('/path/to/project')
+  expect(manifest.name).toBeDefined()
+})
+```
+
+## Key Concepts
+
+### Nitro Module Pattern
+
+The main export is a Nitro module factory function:
+
+```ts
+export function c8y(): NitroModule {
+  return {
+    name: 'c8y-nitro',
+    setup: async (nitro) => {
+      // Access options via nitro.options.c8y
+      // Register hooks for build lifecycle
+    },
+  }
+}
+```
+
+### Runtime Utilities
+
+Utilities in `src/utils/` are designed to work with Nitro's request context:
+
+- Accept `H3Event` or `ServerRequest` as parameter if necessary
+- Cache results in request context where appropriate
+
+### Cumulocity Integration
+
+- Uses `@c8y/client` for API interactions
+- Bootstrap credentials stored in `.env` files
+- Supports multi-tenant subscriptions
+
+## Maintaining Documentation
+
+When making changes to the project (new APIs, architectural changes, updated conventions):
+
+- **`AGENTS.md`** — Update with technical details, architecture, and best practices for AI agents
+- **`README.md`** — Update with user-facing documentation (usage, installation, examples) for end users
+
+## Agent Guidelines
+
+When working on this project:
+
+1. **Run tests** after making changes: `pnpm test`
+2. **Run linting** to ensure code quality: `pnpm lint`
+3. **Run type checking** before committing: `pnpm typecheck`
+4. **Maintain exports** — Public APIs in `src/index.ts`, types in `src/types/index.ts`, utils in `src/utils/index.ts`
+5. **Add tests** for new functionality in the `tests/` directory
+6. **Test in playground** — Use `playground/` to verify changes work in a real microservice context
+7. **Record learnings** — When the user corrects a mistake or provides context about how something should be done, add it to the "Project Context & Learnings" section below if it's a recurring pattern (not a one-time fix)
+8. **Notify documentation changes** — When updating `README.md` or `AGENTS.md`, explicitly call out the changes to the user at the end of your response so they can review and don't overlook them
+
+## Project Context & Learnings
+
+This section captures project-specific knowledge, tool quirks, and lessons learned during development. When the user provides corrections or context about how things should be done in this project, add them here if they are recurring patterns (not a one-time fix).
+
+> **Note:** Before adding something here, consider: Is this a one-time fix, or will it come up again? Only document patterns that are likely to recur or are notable enough to prevent future mistakes.
+
+### Tools & Dependencies
+
+- **Nitro v3.0.1-alpha** — Using alpha version; watch for breaking changes
+- **@c8y/client >= 1021** — Peer dependency; provides Cumulocity API client
+- **Docker required** — Must be installed for zip creation during build
+
+### Patterns & Conventions
+
+- Utility functions accept `H3Event | ServerRequest` for flexibility
+- Use `defineCachedFunction` from Nitro for cached API calls (e.g., credentials)
+  - Always include `invalidate` and `refresh` helper functions
+  - Carefully consider what requests make sense to be cached (e.g., credentials, not real-time data, consider security implications)
+- Auto-injected routes use `/_c8y_nitro/` prefix to avoid conflicts with user routes
+- Runtime handlers/middleware/plugins must be in `src/module/runtime/` directory structure:
+  - `runtime/handlers/` — Event handlers (e.g., probe endpoints)
+  - `runtime/middlewares/` — Global middlewares (e.g., dev user injection)
+  - `runtime/plugins/` — Nitro plugins (e.g., env variable validation)
+  - These locations are required for the module to correctly register them
+
+### Common Mistakes to Avoid
+
+- Don't forget to add new utilities to the appropriate `index.ts` export file
