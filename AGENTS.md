@@ -84,13 +84,14 @@ The package has three entry points:
 ## Development
 
 ```sh
-pnpm install    # Install dependencies
-pnpm dev        # Build with watch mode
-pnpm build      # Build with tsdown
-pnpm test       # Run tests with Vitest
-pnpm lint       # Lint with ESLint
-pnpm lint:fix   # Lint and auto-fix
-pnpm typecheck  # TypeScript type checking
+pnpm install       # Install dependencies
+pnpm dev           # Build with watch mode
+pnpm build         # Build with tsdown
+pnpm test          # Run tests with Vitest (watch mode)
+pnpm test -- run   # Run tests once (non-watch mode)
+pnpm lint          # Lint with ESLint
+pnpm lint:fix      # Lint and auto-fix
+pnpm typecheck     # TypeScript type checking
 ```
 
 ### Testing the Playground
@@ -115,6 +116,7 @@ pnpm build      # Build microservice (creates .zip)
 - Write tests in the `tests/` directory
 - Use `*.test.ts` file naming convention
 - Run `pnpm test` for watch mode during development
+- Run `pnpm test -- run` for single test run (use this in automated workflows)
 - Import modules from `../src`
 
 Example test structure:
@@ -160,6 +162,17 @@ Utilities in `src/utils/` are designed to work with Nitro's request context:
 - Bootstrap credentials stored in `.env` files
 - Supports multi-tenant subscriptions
 
+### Configurable Utilities Pattern
+
+Utilities that need configuration from module options use a **virtual module pattern**:
+
+1. Configuration is defined in `C8yNitroModuleOptions` (e.g., `cache.credentialsTTL`)
+2. During setup, `runtime.ts` writes config to virtual module `c8y-nitro/runtime`
+3. Utilities import config from the virtual module at runtime
+4. Type declarations in `src/runtime.d.ts` provide type safety
+
+This pattern allows library utilities to access user configuration without using Nitro's runtime config (which doesn't work for libraries).
+
 ## Maintaining Documentation
 
 When making changes to the project (new APIs, architectural changes, updated conventions):
@@ -171,7 +184,7 @@ When making changes to the project (new APIs, architectural changes, updated con
 
 When working on this project:
 
-1. **Run tests** after making changes: `pnpm test`
+1. **Run tests** after making changes: `pnpm test -- run` (use `-- run` to avoid watch mode)
 2. **Run linting** to ensure code quality: `pnpm lint`
 3. **Run type checking** before committing: `pnpm typecheck`
 4. **Maintain exports** — Public APIs in `src/index.ts`, types in `src/types/index.ts`, utils in `src/utils/index.ts`

@@ -1,11 +1,12 @@
 import type { Nitro } from 'nitro/types'
-import type { C8YManifestOptions } from '../types'
+import type { C8yNitroModuleOptions } from '../types'
 import { join } from 'pathe'
 import { writeFileSync, mkdirSync } from 'fs'
 
-export function setupRuntime(nitro: Nitro, manifestOptions: C8YManifestOptions = {}): void {
+export function setupRuntime(nitro: Nitro, options: C8yNitroModuleOptions = {}): void {
   nitro.logger.debug('Setting up C8Y nitro runtime')
-  const roles = manifestOptions.roles ?? []
+  const roles = options.manifest?.roles ?? []
+  const credentialsTTL = options.cache?.credentialsTTL ?? 600
 
   // write roles types into
   const completeTypesDir = join(nitro.options.rootDir, nitro.options.typescript.generatedTypesDir ?? 'node_modules/.nitro/types')
@@ -23,7 +24,15 @@ ${roles.map((role) => `    '${role}': '${role}';`).join('\n')}
 }
 declare module 'c8y-nitro/runtime' {
   import type { C8YRoles } from 'c8y-nitro/types';
+  
+  export interface C8yRuntimeConfig {
+    cache: {
+      credentialsTTL: number;
+    };
+  }
+  
   export const c8yRoles: C8YRoles;
+  export const c8yConfig: C8yRuntimeConfig;
 }`
 
   // augment the virtual module "c8y-nitro/runtime" to export the roles
@@ -32,6 +41,13 @@ declare module 'c8y-nitro/runtime' {
 export const c8yRoles = {
 ${roles.map((role) => `  '${role}': '${role}',`).join('\n')}
 }
+
+// Internal config - frozen to prevent runtime modification
+export const c8yConfig = Object.freeze({
+  cache: Object.freeze({
+    credentialsTTL: ${credentialsTTL}
+  })
+})
 `
 
   // write file

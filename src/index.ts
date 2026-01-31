@@ -41,10 +41,10 @@ export function c8y(): NitroModule {
       // Auto-bootstrap if needed (silent if already bootstrapped)
       await autoBootstrap(nitro)
 
-      setupRuntime(nitro, options.manifest)
+      setupRuntime(nitro, options)
 
       nitro.hooks.hook('dev:reload', async () => {
-        setupRuntime(nitro, options.manifest)
+        setupRuntime(nitro, options)
         if (options.apiClient) {
           nitro.logger.debug('Generating C8Y API client')
           await writeAPIClient(nitro, options)

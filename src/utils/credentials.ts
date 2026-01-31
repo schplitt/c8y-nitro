@@ -7,11 +7,12 @@ import type { ServerRequest } from 'nitro/types'
 import process from 'node:process'
 import { useUserClient } from './client'
 import { useStorage } from 'nitro/storage'
+import { c8yConfig } from 'c8y-nitro/runtime'
 
 /**
  * Fetches credentials for all tenants subscribed to this microservice.\
  * Uses bootstrap credentials from runtime config to query the microservice subscriptions API.\
- * Results are cached for 10 minutes.\
+ * Results are cached based on the configured TTL (default: 10 minutes).\
  * @returns Object mapping tenant IDs to their respective credentials
  * @example
  * // Get all subscribed tenant credentials:
@@ -47,7 +48,7 @@ export const useSubscribedTenantCredentials = Object.assign(
       {} as Record<string, ICredentials>,
     )
   }, {
-    maxAge: 10 * 60, // 10 minutes
+    maxAge: c8yConfig.cache.credentialsTTL,
     name: '_c8y_nitro_get_subscribed_tenant_credentials',
     group: 'c8y_nitro',
     swr: false,
@@ -69,7 +70,7 @@ export const useSubscribedTenantCredentials = Object.assign(
 /**
  * Fetches credentials for the tenant where this microservice is deployed.\
  * Uses the C8Y_BOOTSTRAP_TENANT environment variable to identify the deployed tenant.\
- * Returns credentials from the subscribed tenant credentials cache (cached for 10 minutes).
+ * Returns credentials from the subscribed tenant credentials cache (cached based on configured TTL, default: 10 minutes).
  * @returns Credentials for the deployed tenant
  * @throws {HTTPError} If no credentials found for the deployed tenant
  * @example
