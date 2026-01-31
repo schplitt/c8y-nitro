@@ -7,7 +7,7 @@ import type { ServerRequest } from 'nitro/types'
 import process from 'node:process'
 import { useUserClient } from './client'
 import { useStorage } from 'nitro/storage'
-import { c8yConfig } from 'c8y-nitro/runtime'
+import { useRuntimeConfig } from 'nitro/runtime-config'
 
 /**
  * Fetches credentials for all tenants subscribed to this microservice.\
@@ -48,7 +48,7 @@ export const useSubscribedTenantCredentials = Object.assign(
       {} as Record<string, ICredentials>,
     )
   }, {
-    maxAge: c8yConfig.cache.credentialsTTL,
+    maxAge: useRuntimeConfig().c8yCredentialsCacheTTL ?? 600,
     name: '_c8y_nitro_get_subscribed_tenant_credentials',
     group: 'c8y_nitro',
     swr: false,

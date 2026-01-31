@@ -134,6 +134,29 @@ For all available manifest options, see the [Cumulocity Microservice Manifest do
 
 > **Note**: Health probe endpoints (`/_c8y_nitro/liveness` and `/_c8y_nitro/readiness`) are automatically injected if not manually defined.
 
+## Cache Configuration
+
+Credential caching can be configured to optimize performance. By default, subscribed tenant credentials are cached for 10 minutes.
+
+```ts
+export default defineNitroConfig({
+  c8y: {
+    cache: {
+      credentialsTTL: 300 // Cache for 5 minutes (in seconds)
+    }
+  },
+  modules: [c8y()],
+})
+```
+
+You can also override this at runtime using the environment variable:
+
+```sh
+NITRO_C8Y_CREDENTIALS_CACHE_TTL=300
+```
+
+> **Note**: The cache is used by `useSubscribedTenantCredentials()` and `useDeployedTenantCredentials()` utilities. Both share the same cache.
+
 ## Development User Injection
 
 During development, `c8y-nitro` automatically injects your development user credentials into all requests. This allows you to test authentication and authorization middlewares locally.
@@ -261,13 +284,15 @@ async function anotherFunction() {
 
 ### Credentials
 
-| Function                           | Description                                               | Request Context |
-| ---------------------------------- | --------------------------------------------------------- | :-------------: |
-| `useSubscribedTenantCredentials()` | Get credentials for all subscribed tenants (cached 10min) |       ❌        |
-| `useDeployedTenantCredentials()`   | Get credentials for the deployed tenant (cached 10 min)   |       ❌        |
-| `useUserTenantCredentials()`       | Get credentials for the current user's tenant             |       ✅        |
+| Function                           | Description                                                        | Request Context |
+| ---------------------------------- | ------------------------------------------------------------------ | :-------------: |
+| `useSubscribedTenantCredentials()` | Get credentials for all subscribed tenants (cached, default 10min) |       ❌        |
+| `useDeployedTenantCredentials()`   | Get credentials for the deployed tenant (cached, default 10min)    |       ❌        |
+| `useUserTenantCredentials()`       | Get credentials for the current user's tenant                      |       ✅        |
 
 > **Note**: `useDeployedTenantCredentials()` shares its cache with `useSubscribedTenantCredentials()`. Both functions support `.invalidate()` and `.refresh()` methods. Invalidating or refreshing one will affect the other.
+>
+> **Cache Duration**: The cache TTL is configurable via the `cache.credentialsTTL` option or `NITRO_C8Y_CREDENTIALS_CACHE_TTL` environment variable. See [Cache Configuration](#cache-configuration) for details.
 
 ### Resources
 
