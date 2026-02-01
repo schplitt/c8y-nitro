@@ -54,29 +54,23 @@ export default defineCommand({
     const availableKeys = manifest.settings.map((s) => s.key)
     consola.success(`Found ${Object.keys(currentOptions).length} options set on tenant`)
 
-    // Main interactive loop
-    let continueLoop = true
-    while (continueLoop) {
-      // Step 6: Prompt for action
-      const action = await consola.prompt('What do you want to do?', {
-        type: 'select',
-        options: [
-          { label: 'Read option value', value: 'read' },
-          { label: 'Update/Create option', value: 'update' },
-          { label: 'Delete option(s)', value: 'delete' },
-        ],
-      })
+    // Main interactive action
+    // Step 6: Prompt for action
+    const action = await consola.prompt('What do you want to do?', {
+      type: 'select',
+      options: [
+        { label: 'Read option value', value: 'read' },
+        { label: 'Update/Create option', value: 'update' },
+        { label: 'Delete option(s)', value: 'delete' },
+      ],
+    })
 
-      if (action === 'read') {
-        await handleRead(envVars.C8Y_BASEURL, category, authHeader, availableKeys, currentOptions)
-        continueLoop = false
-      } else if (action === 'update') {
-        await handleUpdate(envVars.C8Y_BASEURL, category, authHeader, availableKeys, currentOptions)
-        continueLoop = false
-      } else if (action === 'delete') {
-        await handleDelete(envVars.C8Y_BASEURL, category, authHeader, availableKeys, currentOptions)
-        continueLoop = false
-      }
+    if (action === 'read') {
+      await handleRead(envVars.C8Y_BASEURL, category, authHeader, availableKeys, currentOptions)
+    } else if (action === 'update') {
+      await handleUpdate(envVars.C8Y_BASEURL, category, authHeader, availableKeys, currentOptions)
+    } else if (action === 'delete') {
+      await handleDelete(envVars.C8Y_BASEURL, category, authHeader, availableKeys, currentOptions)
     }
   },
 })
@@ -225,13 +219,9 @@ async function handleDelete(
   const keysToDelete = await consola.prompt('Select option(s) to delete:', {
     type: 'multiselect',
     options: allKeys,
-    required: false,
+    required: true,
     cancel: 'reject',
   })
-  if (keysToDelete.length === 0) {
-    consola.warn('No options selected')
-    return
-  }
 
   consola.info(`Deleting ${keysToDelete.length} option(s)...`)
 
