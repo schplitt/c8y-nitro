@@ -195,6 +195,52 @@ When making changes to the project (new APIs, architectural changes, updated con
   - Environment variables that users can set
   - Any feature that users can configure, use, or interact with
 
+### When to Update Documentation (Critical - Always Consider)
+
+**ALWAYS check if documentation needs updating after:**
+
+1. **Adding a new utility function** → Update README.md utilities section with function name, description, and example
+   - Example: Adding `useTenantOption()` requires adding it to the utilities table and showing usage examples
+
+2. **Adding a new configuration option** → Update README.md configuration section and relevant examples
+   - Example: Adding `cache.tenantOptions` requires updating the Cache Configuration section with examples
+
+3. **Adding a new type that users configure** → Update README.md with JSDoc and configuration examples
+   - Example: Adding `C8yTenantOptionsCacheConfig` requires documenting it in cache configuration
+
+4. **Creating a new file in `src/types/`** → Update AGENTS.md architecture diagram
+   - Example: Creating `tenantOptions.ts` requires adding it to the types list in the architecture section
+
+5. **Creating a new file in `src/utils/`** → Update AGENTS.md architecture diagram
+   - Example: Creating `tenantOptions.ts` requires adding it to the utils list in the architecture section
+
+6. **Discovering a pattern that should be documented** → Update AGENTS.md "Patterns & Conventions" or "Common Mistakes to Avoid"
+   - Example: Learning that types should be imported from `'c8y-nitro/types'` instead of relative paths
+
+7. **User corrects how something should be done** → Update AGENTS.md "Project Context & Learnings"
+   - Example: Learning that Nitro v3 requires explicit imports from `'nitro/h3'`
+
+8. **Adding a new environment variable** → Update README.md with the variable name and description
+   - Example: Adding `NITRO_C8Y_DEFAULT_TENANT_OPTIONS_TTL` requires documenting it in the cache section
+
+9. **Changing how a utility works** → Update README.md utility documentation and JSDoc
+   - Example: Adding cache invalidation methods requires updating the utility's documentation
+
+10. **Adding support for new functionality** → Update README.md features and usage sections
+    - Example: Adding tenant options support requires a new section explaining the feature
+
+**Documentation Update Checklist:**
+
+- [ ] Did I add/change a utility? → Update README.md utilities section
+- [ ] Did I add/change a config option? → Update README.md configuration section
+- [ ] Did I add/change a type? → Update README.md and JSDoc with examples
+- [ ] Did I add/change a file? → Update AGENTS.md architecture diagram
+- [ ] Did I learn a pattern? → Update AGENTS.md patterns/conventions
+- [ ] Did I add an env variable? → Update README.md with env var documentation
+- [ ] At the end of my response: Did I explicitly notify the user of documentation changes?
+
+**Remember:** Documentation is NOT optional. Treat it as part of the implementation, not an afterthought.
+
 ## Agent Guidelines
 
 When working on this project:
@@ -220,7 +266,9 @@ This section captures project-specific knowledge, tool quirks, and lessons learn
 - **@c8y/client >= 1021** — Peer dependency; provides Cumulocity API client
 - **Docker required** — Must be installed for zip creation during build
 
-### Patterns & Conventions
+### Code Style
+
+- **Nitro v3 explicit imports** — Use explicit imports from Nitro packages, e.g., `import { defineEventHandler } from 'nitro/h3'`. Auto-imports are not available.
 
 - Utility functions accept `H3Event | ServerRequest` for flexibility
 - Use `defineCachedFunction` from Nitro for cached API calls (e.g., credentials)
