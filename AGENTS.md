@@ -37,6 +37,7 @@ src/
 │   ├── probeCheck.ts           # Validates probe configuration
 │   ├── register.ts             # Registers runtime handlers/middlewares
 │   ├── runtime.ts              # Runtime setup for dev mode
+│   ├── runtimeConfig.ts        # Runtime config setup (maps options to runtime config)
 │   └── runtime/
 │       ├── handlers/
 │       │   └── liveness-readiness.ts  # Probe endpoint handler
@@ -84,13 +85,14 @@ The package has three entry points:
 ## Development
 
 ```sh
-pnpm install    # Install dependencies
-pnpm dev        # Build with watch mode
-pnpm build      # Build with tsdown
-pnpm test       # Run tests with Vitest
-pnpm lint       # Lint with ESLint
-pnpm lint:fix   # Lint and auto-fix
-pnpm typecheck  # TypeScript type checking
+pnpm install       # Install dependencies
+pnpm dev           # Build with watch mode
+pnpm build         # Build with tsdown
+pnpm test          # Run tests with Vitest (watch mode)
+pnpm test:run      # Run tests once (non-watch mode)
+pnpm lint          # Lint with ESLint
+pnpm lint:fix      # Lint and auto-fix
+pnpm typecheck     # TypeScript type checking
 ```
 
 ### Testing the Playground
@@ -115,6 +117,7 @@ pnpm build      # Build microservice (creates .zip)
 - Write tests in the `tests/` directory
 - Use `*.test.ts` file naming convention
 - Run `pnpm test` for watch mode during development
+- Run `pnpm test:run` for single test run (use this in automated workflows)
 - Import modules from `../src`
 
 Example test structure:
@@ -160,18 +163,40 @@ Utilities in `src/utils/` are designed to work with Nitro's request context:
 - Bootstrap credentials stored in `.env` files
 - Supports multi-tenant subscriptions
 
+### Configurable Utilities Pattern
+
+Utilities that need configuration from module options use **Nitro's runtime config**:
+
+1. Configuration is defined in `C8yNitroModuleOptions` (e.g., `cache.credentialsTTL`)
+2. During setup, `runtimeConfig.ts` copies values to `nitro.options.runtimeConfig`
+3. Utilities import and read from runtime config using `useRuntimeConfig()`
+4. Runtime config values can be overridden by environment variables (e.g., `NITRO_C8Y_CREDENTIALS_CACHE_TTL`)
+
+**Pattern for adding new configurable values:**
+
+- Add option to `C8yNitroModuleOptions` in `types/index.ts` (organized in logical groups)
+- Map option to flat runtime config variable in `module/runtimeConfig.ts`
+- Access in utilities via `useRuntimeConfig().yourVariable`
+- Use flat variable names for runtime config (easier to override with env vars)
+
 ## Maintaining Documentation
 
 When making changes to the project (new APIs, architectural changes, updated conventions):
 
 - **`AGENTS.md`** — Update with technical details, architecture, and best practices for AI agents
-- **`README.md`** — Update with user-facing documentation (usage, installation, examples) for end users
+- **`README.md`** — Update with user-facing documentation for end users:
+  - New configuration options (anything in `C8yNitroModuleOptions`)
+  - New utilities or functions exported from `c8y-nitro/utils`
+  - New CLI commands or features
+  - Changes to existing API behavior
+  - Environment variables that users can set
+  - Any feature that users can configure, use, or interact with
 
 ## Agent Guidelines
 
 When working on this project:
 
-1. **Run tests** after making changes: `pnpm test`
+1. **Run tests** after making changes: `pnpm test:run` (runs once, no watch mode)
 2. **Run linting** to ensure code quality: `pnpm lint`
 3. **Run type checking** before committing: `pnpm typecheck`
 4. **Maintain exports** — Public APIs in `src/index.ts`, types in `src/types/index.ts`, utils in `src/utils/index.ts`
@@ -208,3 +233,8 @@ This section captures project-specific knowledge, tool quirks, and lessons learn
 ### Common Mistakes to Avoid
 
 - Don't forget to add new utilities to the appropriate `index.ts` export file
+- **Always update documentation** when changing utilities or configuration:
+  - JSDoc comments in source code (with `@config` tag for configurable values showing how to set them)
+  - `README.md` for user-facing changes (configuration options, utilities, env variables, API behavior)
+  - `AGENTS.md` for technical/architectural changes relevant to AI agents
+  - Explicitly notify the user of documentation updates at the end of your response

@@ -20,4 +20,5 @@ export default defineConfig({
     },
   ],
   failOnWarn: true,
+  external: ['c8y-nitro/runtime', 'nitro/runtime-config'],
 })

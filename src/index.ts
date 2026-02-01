@@ -3,6 +3,7 @@ import type { C8yNitroModuleOptions } from './types'
 import { writeAPIClient } from './module/apiClient'
 import { createC8yZip } from './module/c8yzip'
 import { setupRuntime } from './module/runtime'
+import { setupRuntimeConfig } from './module/runtimeConfig'
 import { registerRuntime } from './module/register'
 import { checkProbes } from './module/probeCheck'
 import { autoBootstrap } from './module/autoBootstrap'
@@ -40,6 +41,8 @@ export function c8y(): NitroModule {
 
       // Auto-bootstrap if needed (silent if already bootstrapped)
       await autoBootstrap(nitro)
+
+      setupRuntimeConfig(nitro, options)
 
       setupRuntime(nitro, options.manifest)
 

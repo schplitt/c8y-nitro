@@ -15,6 +15,9 @@ export default defineNitroConfig({
     manifest: {
       roles: ['SOME_CUSTOM_ROLE', 'ANOTHER_ROLE'],
     },
+    cache: {
+      credentialsTTL: 400,
+    },
   },
 
   modules: [

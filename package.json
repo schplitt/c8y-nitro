@@ -56,7 +56,8 @@
     "typecheck": "tsc --noEmit",
     "prerelease": "eslint && tsc --noEmit && tsdown && vitest run",
     "release": "bumpp",
-    "test": "vitest"
+    "test": "vitest",
+    "test:run": "vitest run"
   },
   "dependencies": {
     "c12": "catalog:",
