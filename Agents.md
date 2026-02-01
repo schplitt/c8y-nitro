@@ -48,8 +48,10 @@ src/
 ├── types/
 │   ├── index.ts                # Main type exports (C8yNitroModuleOptions)
 │   ├── apiClient.ts            # API client generation types
+│   ├── cache.ts                # Cache configuration types
 │   ├── manifest.ts             # Manifest types (C8YManifest, C8YManifestOptions)
 │   ├── roles.ts                # Role types
+│   ├── tenantOptions.ts        # Tenant option key types
 │   └── zip.ts                  # Zip options types
 └── utils/
     ├── index.ts                # Utility exports
@@ -57,6 +59,7 @@ src/
     ├── credentials.ts          # Credential management (useSubscribedTenantCredentials)
     ├── middleware.ts           # Auth middlewares (hasUserRequiredRole, etc.)
     ├── resources.ts            # Resource utilities (useUser, useUserRoles)
+    ├── tenantOptions.ts        # Tenant options fetching (useTenantOption)
     └── internal/
         └── common.ts           # Internal shared utilities
 tests/
@@ -223,6 +226,14 @@ This section captures project-specific knowledge, tool quirks, and lessons learn
 - Use `defineCachedFunction` from Nitro for cached API calls (e.g., credentials)
   - Always include `invalidate` and `refresh` helper functions
   - Carefully consider what requests make sense to be cached (e.g., credentials, not real-time data, consider security implications)
+  - For per-key caching (like tenant options), use a factory pattern with a Map/Record to store fetchers
+  - `maxAge` does NOT accept a function — if you need per-key TTL, create separate cached functions per key
+- Generated types are consolidated into a single `c8y-nitro.d.ts` file for performance
+  - Written to `node_modules/.nitro/types/` by `setupRuntime()`
+  - Augments `c8y-nitro/types` and `c8y-nitro/runtime` modules
+- Virtual module `c8y-nitro/runtime` exports runtime values (roles, tenant option keys)
+  - Use `as const` for tuples to preserve literal types
+  - Keep `src/runtime.d.ts` in sync as a fallback declaration
 - Auto-injected routes use `/_c8y_nitro/` prefix to avoid conflicts with user routes
 - Runtime handlers/middleware/plugins must be in `src/module/runtime/` directory structure:
   - `runtime/handlers/` — Event handlers (e.g., probe endpoints)
@@ -237,4 +248,6 @@ This section captures project-specific knowledge, tool quirks, and lessons learn
   - JSDoc comments in source code (with `@config` tag for configurable values showing how to set them)
   - `README.md` for user-facing changes (configuration options, utilities, env variables, API behavior)
   - `AGENTS.md` for technical/architectural changes relevant to AI agents
+  - Explicitly notify the user of documentation updates at the end of your response
+- **Use package imports for augmentable types** — When a type is augmented by generated types (e.g., `C8YTenantOptionKey`, `C8YTenantOptionKeysCacheConfig`), import from `'c8y-nitro/types'` instead of relative paths. This ensures users benefit from type hints after types are generated. It may cause initial type errors before first build, but resolves after `nitro prepare`.
   - Explicitly notify the user of documentation updates at the end of your response
