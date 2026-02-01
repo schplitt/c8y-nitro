@@ -22,7 +22,8 @@ src/
 │   ├── index.ts                # CLI entry point using citty
 │   ├── commands/
 │   │   ├── bootstrap.ts        # Manual bootstrap command
-│   │   └── roles.ts            # Role management command
+│   │   ├── roles.ts            # Role management command
+│   │   └── options.ts          # Tenant options management command
 │   └── utils/
 │       ├── c8y-api.ts          # Cumulocity API helpers for CLI
 │       ├── config.ts           # Config loading utilities
@@ -269,6 +270,7 @@ This section captures project-specific knowledge, tool quirks, and lessons learn
 ### Code Style
 
 - **Nitro v3 explicit imports** — Use explicit imports from Nitro packages, e.g., `import { defineEventHandler } from 'nitro/h3'`. Auto-imports are not available.
+- **CLI error handling** — In CLI commands using citty, throw errors to exit with a message. Citty automatically catches and displays them. Use `cancel: 'reject'` on consola prompts to throw on user cancellation.
 
 - Utility functions accept `H3Event | ServerRequest` for flexibility
 - Use `defineCachedFunction` from Nitro for cached API calls (e.g., credentials)
