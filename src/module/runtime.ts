@@ -23,15 +23,7 @@ ${roles.map((role) => `    '${role}': '${role}';`).join('\n')}
 }
 declare module 'c8y-nitro/runtime' {
   import type { C8YRoles } from 'c8y-nitro/types';
-  
-  export interface C8yRuntimeConfig {
-    cache: {
-      credentialsTTL: number;
-    };
-  }
-  
   export const c8yRoles: C8YRoles;
-  export const c8yConfig: C8yRuntimeConfig;
 }`
 
   // augment the virtual module "c8y-nitro/runtime" to export the roles
