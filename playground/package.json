@@ -22,7 +22,8 @@
     "preview": "npx srvx --prod .output/",
     "typecheck": "tsc --noEmit",
     "typegen": "nitro prepare",
-    "test": "vitest"
+    "test": "vitest",
+    "bootstrap": "c8y-nitro bootstrap"
   },
   "devDependencies": {
     "c8y-nitro": "workspace:*",
