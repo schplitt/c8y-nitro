@@ -337,3 +337,151 @@ export async function unassignUserRole(
     })
   }
 }
+
+/**
+ * Gets all tenant options for a specific category.
+ * @param baseUrl - The Cumulocity base URL
+ * @param category - The category to fetch options for
+ * @param authHeader - The Basic Auth header
+ * @returns Record of key-value pairs for the category
+ */
+export async function getTenantOptionsByCategory(
+  baseUrl: string,
+  category: string,
+  authHeader: string,
+): Promise<Record<string, string>> {
+  const url = `${baseUrl}/tenant/options/${encodeURIComponent(category)}`
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Authorization: authHeader,
+      Accept: 'application/json',
+    },
+  })
+
+  if (response.status === 404) {
+    // Category doesn't exist yet, return empty object
+    return {}
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Failed to get tenant options for category ${category}: ${response.status} ${response.statusText}\n${errorText}`, {
+      cause: response,
+    })
+  }
+
+  const data = (await response.json()) as Record<string, string>
+  return data
+}
+
+/**
+ * Gets a specific tenant option value.
+ * @param baseUrl - The Cumulocity base URL
+ * @param category - The category of the option
+ * @param key - The option key
+ * @param authHeader - The Basic Auth header
+ * @returns The option value, or undefined if not set
+ */
+export async function getTenantOption(
+  baseUrl: string,
+  category: string,
+  key: string,
+  authHeader: string,
+): Promise<string | undefined> {
+  const url = `${baseUrl}/tenant/options/${encodeURIComponent(category)}/${encodeURIComponent(key)}`
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Authorization: authHeader,
+      Accept: 'application/json',
+    },
+  })
+
+  if (response.status === 404) {
+    // Option doesn't exist, return undefined
+    return undefined
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Failed to get tenant option ${category}/${key}: ${response.status} ${response.statusText}\n${errorText}`, {
+      cause: response,
+    })
+  }
+
+  const data = (await response.json()) as { value: string }
+  return data.value
+}
+
+/**
+ * Updates or creates a tenant option.
+ * @param baseUrl - The Cumulocity base URL
+ * @param category - The category of the option
+ * @param key - The option key
+ * @param value - The new value to set
+ * @param authHeader - The Basic Auth header
+ */
+export async function updateTenantOption(
+  baseUrl: string,
+  category: string,
+  key: string,
+  value: string,
+  authHeader: string,
+): Promise<void> {
+  const url = `${baseUrl}/tenant/options/${encodeURIComponent(category)}/${encodeURIComponent(key)}`
+
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      'Authorization': authHeader,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    },
+    body: JSON.stringify({ value }),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Failed to update tenant option ${category}/${key}: ${response.status} ${response.statusText}\n${errorText}`, {
+      cause: response,
+    })
+  }
+}
+
+/**
+ * Deletes a tenant option.
+ * @param baseUrl - The Cumulocity base URL
+ * @param category - The category of the option
+ * @param key - The option key to delete
+ * @param authHeader - The Basic Auth header
+ */
+export async function deleteTenantOption(
+  baseUrl: string,
+  category: string,
+  key: string,
+  authHeader: string,
+): Promise<void> {
+  const url = `${baseUrl}/tenant/options/${encodeURIComponent(category)}/${encodeURIComponent(key)}`
+
+  const response = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      Authorization: authHeader,
+    },
+  })
+
+  // if it's 404, the option didn't exist, so we can ignore
+  if (response.status === 404) {
+    return
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Failed to delete tenant option ${category}/${key}: ${response.status} ${response.statusText}\n${errorText}`, {
+      cause: response,
+    })
+  }
+}
