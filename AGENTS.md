@@ -233,3 +233,8 @@ This section captures project-specific knowledge, tool quirks, and lessons learn
 ### Common Mistakes to Avoid
 
 - Don't forget to add new utilities to the appropriate `index.ts` export file
+- **Always update documentation** when changing utilities or configuration:
+  - JSDoc comments in source code (with `@config` tag for configurable values showing how to set them)
+  - `README.md` for user-facing changes (configuration options, utilities, env variables, API behavior)
+  - `AGENTS.md` for technical/architectural changes relevant to AI agents
+  - Explicitly notify the user of documentation updates at the end of your response

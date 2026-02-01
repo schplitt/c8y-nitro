@@ -14,6 +14,9 @@ import { useRuntimeConfig } from 'nitro/runtime-config'
  * Uses bootstrap credentials from runtime config to query the microservice subscriptions API.\
  * Results are cached based on the configured TTL (default: 10 minutes).\
  * @returns Object mapping tenant IDs to their respective credentials
+ * @config Cache TTL can be configured via:
+ * - `c8y.cache.credentialsTTL` in the Nitro config (value in seconds)
+ * - `NITRO_C8Y_CACHE_CREDENTIALS_TTL` environment variable
  * @example
  * // Get all subscribed tenant credentials:
  * const credentials = await useSubscribedTenantCredentials()
