@@ -24,7 +24,7 @@ interface CachedTenantOptionFetcher {
 /**
  * Internal storage for cached functions per key
  */
-const tenantOptionFetchers: Record<C8YTenantOptionKey, CachedTenantOptionFetcher> = {}
+const tenantOptionFetchers: Partial<Record<C8YTenantOptionKey, CachedTenantOptionFetcher>> = {}
 
 /**
  * Factory function that creates a cached fetcher for a specific tenant option key.
@@ -158,7 +158,7 @@ export const useTenantOption = Object.assign(
      */
     invalidateAll: async (): Promise<void> => {
       await Promise.all(
-        Object.values(tenantOptionFetchers).map((fetcher) => fetcher.invalidate()),
+        Object.values(tenantOptionFetchers).map((fetcher) => fetcher?.invalidate()),
       )
     },
 
@@ -169,7 +169,7 @@ export const useTenantOption = Object.assign(
      */
     refreshAll: async (): Promise<Record<string, string | undefined>> => {
       const entries = Object.entries(tenantOptionFetchers)
-      const values = await Promise.all(entries.map(([, fetcher]) => fetcher.refresh()))
+      const values = await Promise.all(entries.map(([, fetcher]) => fetcher?.refresh()))
       return Object.fromEntries(entries.map(([key], i) => [key, values[i]]))
     },
   },
