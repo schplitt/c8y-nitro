@@ -112,21 +112,13 @@ async function handleRead(
 
   consola.info(`Reading option: ${key}`)
 
-  try {
-    const apiKey = key.startsWith('credentials.') ? key.replace(/^credentials\./, '') : key
-    const value = await getTenantOption(baseUrl, category, apiKey, authHeader)
+  const apiKey = key.startsWith('credentials.') ? key.replace(/^credentials\./, '') : key
+  const value = await getTenantOption(baseUrl, category, apiKey, authHeader)
 
-    if (value === undefined) {
-      consola.warn(`Option '${key}' is not set`)
-    } else {
-      consola.success(`Value: ${value}`)
-    }
-  } catch (error: any) {
-    if (error?.status === 404) {
-      consola.warn(`Option '${key}' is not set`)
-    } else {
-      throw error
-    }
+  if (value === undefined) {
+    consola.warn(`Option '${key}' is not set`)
+  } else {
+    consola.success(`Value: ${value}`)
   }
 }
 
