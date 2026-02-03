@@ -28,5 +28,8 @@
   "devDependencies": {
     "c8y-nitro": "workspace:*",
     "nitro": "catalog:"
+  },
+  "dependencies": {
+    "memfs": "catalog:"
   }
 }
