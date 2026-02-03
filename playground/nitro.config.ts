@@ -14,9 +14,17 @@ export default defineNitroConfig({
   c8y: {
     manifest: {
       roles: ['SOME_CUSTOM_ROLE', 'ANOTHER_ROLE'],
+      settings: [
+        { key: 'myOption' },
+        { key: 'credentials.secret' },
+      ],
+      requiredRoles: ['ROLE_OPTION_MANAGEMENT_READ'],
     },
     cache: {
       credentialsTTL: 400,
+      tenantOptions: {
+        myOption: 200,
+      },
     },
   },
 

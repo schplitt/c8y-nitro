@@ -22,7 +22,8 @@ src/
 │   ├── index.ts                # CLI entry point using citty
 │   ├── commands/
 │   │   ├── bootstrap.ts        # Manual bootstrap command
-│   │   └── roles.ts            # Role management command
+│   │   ├── roles.ts            # Role management command
+│   │   └── options.ts          # Tenant options management command
 │   └── utils/
 │       ├── c8y-api.ts          # Cumulocity API helpers for CLI
 │       ├── config.ts           # Config loading utilities
@@ -48,8 +49,10 @@ src/
 ├── types/
 │   ├── index.ts                # Main type exports (C8yNitroModuleOptions)
 │   ├── apiClient.ts            # API client generation types
+│   ├── cache.ts                # Cache configuration types
 │   ├── manifest.ts             # Manifest types (C8YManifest, C8YManifestOptions)
 │   ├── roles.ts                # Role types
+│   ├── tenantOptions.ts        # Tenant option key types
 │   └── zip.ts                  # Zip options types
 └── utils/
     ├── index.ts                # Utility exports
@@ -57,6 +60,7 @@ src/
     ├── credentials.ts          # Credential management (useSubscribedTenantCredentials)
     ├── middleware.ts           # Auth middlewares (hasUserRequiredRole, etc.)
     ├── resources.ts            # Resource utilities (useUser, useUserRoles)
+    ├── tenantOptions.ts        # Tenant options fetching (useTenantOption)
     └── internal/
         └── common.ts           # Internal shared utilities
 tests/
@@ -192,6 +196,52 @@ When making changes to the project (new APIs, architectural changes, updated con
   - Environment variables that users can set
   - Any feature that users can configure, use, or interact with
 
+### When to Update Documentation (Critical - Always Consider)
+
+**ALWAYS check if documentation needs updating after:**
+
+1. **Adding a new utility function** → Update README.md utilities section with function name, description, and example
+   - Example: Adding `useTenantOption()` requires adding it to the utilities table and showing usage examples
+
+2. **Adding a new configuration option** → Update README.md configuration section and relevant examples
+   - Example: Adding `cache.tenantOptions` requires updating the Cache Configuration section with examples
+
+3. **Adding a new type that users configure** → Update README.md with JSDoc and configuration examples
+   - Example: Adding `C8yTenantOptionsCacheConfig` requires documenting it in cache configuration
+
+4. **Creating a new file in `src/types/`** → Update AGENTS.md architecture diagram
+   - Example: Creating `tenantOptions.ts` requires adding it to the types list in the architecture section
+
+5. **Creating a new file in `src/utils/`** → Update AGENTS.md architecture diagram
+   - Example: Creating `tenantOptions.ts` requires adding it to the utils list in the architecture section
+
+6. **Discovering a pattern that should be documented** → Update AGENTS.md "Patterns & Conventions" or "Common Mistakes to Avoid"
+   - Example: Learning that types should be imported from `'c8y-nitro/types'` instead of relative paths
+
+7. **User corrects how something should be done** → Update AGENTS.md "Project Context & Learnings"
+   - Example: Learning that Nitro v3 requires explicit imports from `'nitro/h3'`
+
+8. **Adding a new environment variable** → Update README.md with the variable name and description
+   - Example: Adding `NITRO_C8Y_DEFAULT_TENANT_OPTIONS_TTL` requires documenting it in the cache section
+
+9. **Changing how a utility works** → Update README.md utility documentation and JSDoc
+   - Example: Adding cache invalidation methods requires updating the utility's documentation
+
+10. **Adding support for new functionality** → Update README.md features and usage sections
+    - Example: Adding tenant options support requires a new section explaining the feature
+
+**Documentation Update Checklist:**
+
+- [ ] Did I add/change a utility? → Update README.md utilities section
+- [ ] Did I add/change a config option? → Update README.md configuration section
+- [ ] Did I add/change a type? → Update README.md and JSDoc with examples
+- [ ] Did I add/change a file? → Update AGENTS.md architecture diagram
+- [ ] Did I learn a pattern? → Update AGENTS.md patterns/conventions
+- [ ] Did I add an env variable? → Update README.md with env var documentation
+- [ ] At the end of my response: Did I explicitly notify the user of documentation changes?
+
+**Remember:** Documentation is NOT optional. Treat it as part of the implementation, not an afterthought.
+
 ## Agent Guidelines
 
 When working on this project:
@@ -217,12 +267,23 @@ This section captures project-specific knowledge, tool quirks, and lessons learn
 - **@c8y/client >= 1021** — Peer dependency; provides Cumulocity API client
 - **Docker required** — Must be installed for zip creation during build
 
-### Patterns & Conventions
+### Code Style
+
+- **Nitro v3 explicit imports** — Use explicit imports from Nitro packages, e.g., `import { defineEventHandler } from 'nitro/h3'`. Auto-imports are not available.
+- **CLI error handling** — In CLI commands using citty, throw errors to exit with a message. Citty automatically catches and displays them. Use `cancel: 'reject'` on consola prompts to throw on user cancellation.
 
 - Utility functions accept `H3Event | ServerRequest` for flexibility
 - Use `defineCachedFunction` from Nitro for cached API calls (e.g., credentials)
   - Always include `invalidate` and `refresh` helper functions
   - Carefully consider what requests make sense to be cached (e.g., credentials, not real-time data, consider security implications)
+  - For per-key caching (like tenant options), use a factory pattern with a Map/Record to store fetchers
+  - `maxAge` does NOT accept a function — if you need per-key TTL, create separate cached functions per key
+- Generated types are consolidated into a single `c8y-nitro.d.ts` file for performance
+  - Written to `node_modules/.nitro/types/` by `setupRuntime()`
+  - Augments `c8y-nitro/types` and `c8y-nitro/runtime` modules
+- Virtual module `c8y-nitro/runtime` exports runtime values (roles, tenant option keys)
+  - Use `as const` for tuples to preserve literal types
+  - Keep `src/runtime.d.ts` in sync as a fallback declaration
 - Auto-injected routes use `/_c8y_nitro/` prefix to avoid conflicts with user routes
 - Runtime handlers/middleware/plugins must be in `src/module/runtime/` directory structure:
   - `runtime/handlers/` — Event handlers (e.g., probe endpoints)
@@ -237,4 +298,6 @@ This section captures project-specific knowledge, tool quirks, and lessons learn
   - JSDoc comments in source code (with `@config` tag for configurable values showing how to set them)
   - `README.md` for user-facing changes (configuration options, utilities, env variables, API behavior)
   - `AGENTS.md` for technical/architectural changes relevant to AI agents
+  - Explicitly notify the user of documentation updates at the end of your response
+- **Use package imports for augmentable types** — When a type is augmented by generated types (e.g., `C8YTenantOptionKey`, `C8YTenantOptionKeysCacheConfig`), import from `'c8y-nitro/types'` instead of relative paths. This ensures users benefit from type hints after types are generated. It may cause initial type errors before first build, but resolves after `nitro prepare`.
   - Explicitly notify the user of documentation updates at the end of your response

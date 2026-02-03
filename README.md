@@ -142,20 +142,26 @@ Credential caching can be configured to optimize performance. By default, subscr
 export default defineNitroConfig({
   c8y: {
     cache: {
-      credentialsTTL: 300 // Cache for 5 minutes (in seconds)
+      credentialsTTL: 300, // Cache credentials for 5 minutes (in seconds)
+      defaultTenantOptionsTTL: 600, // Default cache for tenant options (in seconds)
+      tenantOptions: {
+        'myOption': 300, // Per-key override: 5 minutes
+        'credentials.secret': 60, // Per-key override: 1 minute
+      },
     }
   },
   modules: [c8y()],
 })
 ```
 
-You can also override this at runtime using the environment variable:
+You can also override these at runtime using environment variables:
 
 ```sh
 NITRO_C8Y_CREDENTIALS_CACHE_TTL=300
+NITRO_C8Y_DEFAULT_TENANT_OPTIONS_TTL=300
 ```
 
-> **Note**: The cache is used by `useSubscribedTenantCredentials()` and `useDeployedTenantCredentials()` utilities. Both share the same cache.
+> **Note**: The credentials cache is used by `useSubscribedTenantCredentials()` and `useDeployedTenantCredentials()` utilities. Both share the same cache.
 
 ## Development User Injection
 
@@ -294,6 +300,57 @@ async function anotherFunction() {
 >
 > **Cache Duration**: The cache TTL is configurable via the `cache.credentialsTTL` option or `NITRO_C8Y_CREDENTIALS_CACHE_TTL` environment variable. See [Cache Configuration](#cache-configuration) for details.
 
+### Tenant Options
+
+| Function            | Description                                              | Request Context |
+| ------------------- | -------------------------------------------------------- | :-------------: |
+| `useTenantOption()` | Get a tenant option value by key (cached, default 10min) |       ❌        |
+
+Fetch tenant options (settings) configured for your microservice:
+
+```ts
+import { useTenantOption } from 'c8y-nitro/utils'
+
+export default defineHandler(async (event) => {
+  // Fetch a tenant option
+  const value = await useTenantOption('myOption')
+
+  // Fetch an encrypted secret
+  const secret = await useTenantOption('credentials.apiKey')
+
+  // Cache management
+  await useTenantOption.invalidate('myOption') // Invalidate specific key
+  const fresh = await useTenantOption.refresh('myOption') // Force refresh
+  await useTenantOption.invalidateAll() // Invalidate all accessed keys
+  await useTenantOption.refreshAll() // Refresh all accessed keys
+  return { value, secret, fresh }
+})
+```
+
+Define your settings in the manifest to get type-safe keys:
+
+```ts
+export default defineNitroConfig({
+  c8y: {
+    manifest: {
+      settings: [
+        { key: 'myOption', defaultValue: 'default' },
+        { key: 'credentials.secret' }, // Encrypted option
+      ],
+      settingsCategory: 'my-service', // Optional, defaults to contextPath/name
+      requiredRoles: ['ROLE_OPTION_MANAGEMENT_READ'], // Required for reading tenant options
+    },
+  },
+  modules: [c8y()],
+})
+```
+
+> **Important**: To read tenant options, your microservice **must** have the `ROLE_OPTION_MANAGEMENT_READ` role in `manifest.requiredRoles`. Without this role, API calls will fail with a 403 Forbidden error.
+
+> **Note on Encrypted Options**: Keys prefixed with `credentials.` are stored encrypted by Cumulocity. The value is automatically decrypted when fetched if your microservice is the owner of the option (the option's category matches your microservice's `settingsCategory`, `contextPath`, or name). The `credentials.` prefix is automatically stripped when calling the API.
+
+> **Note on Missing Options**: If a tenant option is not set (404 Not Found), `useTenantOption()` returns `undefined` instead of throwing an error. Other errors (e.g., 403 Forbidden) are thrown normally.
+
 ### Resources
 
 | Function         | Description                        | Request Context |
@@ -324,6 +381,7 @@ async function anotherFunction() {
 | ----------- | ------------------------------------------------------- |
 | `bootstrap` | Manually register microservice and retrieve credentials |
 | `roles`     | Manage development user roles                           |
+| `options`   | Manage tenant options on development tenant             |
 
 For more information, run:
 

@@ -10,6 +10,7 @@ const main = defineCommand({
   subCommands: {
     bootstrap: () => import('./commands/bootstrap').then((r) => r.default),
     roles: () => import('./commands/roles').then((r) => r.default),
+    options: () => import('./commands/options').then((r) => r.default),
   },
 })
 
