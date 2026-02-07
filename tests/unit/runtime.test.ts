@@ -1,6 +1,6 @@
 import { vol, fs as memFs } from 'memfs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { setupRuntime } from '../src/module/runtime'
+import { setupRuntime } from '../../src/module/runtime'
 
 // Mock fs modules with memfs
 vi.mock('fs', () => ({ ...memFs, default: memFs }))

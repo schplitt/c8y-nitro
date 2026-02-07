@@ -2,8 +2,8 @@ import { vol, fs as memFs } from 'memfs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Buffer } from 'node:buffer'
 import JSZip from 'jszip'
-import type { C8YManifest } from '../src/types/manifest'
-import { createC8yZip, resolveZipOutputPath } from '../src/module/c8yzip'
+import type { C8YManifest } from '../../src/types/manifest'
+import { createC8yZip, resolveZipOutputPath } from '../../src/module/c8yzip'
 
 // Mock spinnies to silence output
 vi.mock('spinnies', () => ({
