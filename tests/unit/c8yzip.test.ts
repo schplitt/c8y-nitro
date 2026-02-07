@@ -16,7 +16,7 @@ vi.mock('spinnies', () => ({
 }))
 
 // Mock docker module to return fake tar path
-vi.mock('../src/module/docker', () => ({
+vi.mock('../../src/module/docker', () => ({
   createDockerImage: vi.fn(() => Promise.resolve('/fake/.c8y/image.tar')),
 }))
 
@@ -31,7 +31,7 @@ const mockManifest = vi.hoisted(() => ({
   } as C8YManifest,
 }))
 
-vi.mock('../src/module/manifest', () => ({
+vi.mock('../../src/module/manifest', () => ({
   createC8yManifestFromNitro: vi.fn(() => Promise.resolve(mockManifest.current)),
 }))
 
