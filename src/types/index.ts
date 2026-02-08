@@ -17,4 +17,5 @@ export interface C8yNitroModuleOptions {
   apiClient?: C8YAPIClientOptions
   zip?: C8YZipOptions
   cache?: C8yCacheOptions
+  skipBootstrap?: boolean
 }

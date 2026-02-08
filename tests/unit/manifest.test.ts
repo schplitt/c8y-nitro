@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createC8yManifest } from '../src/module/manifest'
+import { createC8yManifest } from '../../src/module/manifest'
 
 // Mock pkg-types to return our test package.json data
 const mockPackageData = vi.hoisted(() => ({ current: {} as Record<string, unknown> }))

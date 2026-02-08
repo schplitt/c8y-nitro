@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getDockerfileContent } from '../src/module/docker'
+import { getDockerfileContent } from '../../src/module/docker'
 
 describe('docker', () => {
   describe('getDockerfileContent', () => {
