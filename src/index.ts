@@ -30,8 +30,7 @@ export function c8y(): NitroModule {
 
       // set own library (pkgName) as noExternal to bundle it always
       // makes runtime nitro features available in c8y-nitro utilities
-      // avoids esm issues with @c8y/client
-      nitro.options.noExternals = nitro.options.noExternals && nitro.options.noExternals === true ? nitro.options.noExternals : [...(nitro.options.noExternals || []), pkgName, '@c8y/client']
+      nitro.options.noExternals = nitro.options.noExternals && nitro.options.noExternals === true ? nitro.options.noExternals : [...(nitro.options.noExternals || []), pkgName]
 
       // setup preset
       if (!nitro.options.preset.startsWith('nitro') && !nitro.options.preset.startsWith('node')) {

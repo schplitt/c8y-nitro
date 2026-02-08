@@ -43,6 +43,8 @@ export function hasUserRequiredRole(role: UserRole): EventHandler
 export function hasUserRequiredRole(roles: UserRole[]): EventHandler
 export function hasUserRequiredRole(roleOrRoles: UserRole | UserRole[]): EventHandler {
   return defineHandler(async (event) => {
+    // TODO: rename to userHasOneOfRoles and create a separate userHasAllRoles
+
     const requiredRoles = Array.isArray(roleOrRoles) ? roleOrRoles : [roleOrRoles]
     const userRoles = await useUserRoles(event)
 

@@ -1,6 +1,7 @@
 import {
   afterAll,
   afterEach,
+  beforeEach,
   describe,
   expect,
   it,
@@ -18,6 +19,8 @@ import type {
   C8yNitroModuleOptions,
 } from '../../src/types'
 import process from 'node:process'
+import { mockUtils } from './mocks/client'
+import { mockData } from './mocks/db.mjs'
 
 const rootDir = resolve(__dirname, './fixture')
 
@@ -61,6 +64,19 @@ describe('Nitro Server', () => {
       dev: true,
       rootDir,
       ...input.nitroConfig,
+      builder: 'rolldown',
+      rolldownConfig: {
+        output: {},
+        // Mark db.mjs as external so it's shared between test and server
+        external: [resolve(__dirname, './mocks/db.mjs')],
+        resolve: {
+          alias: {
+            '@c8y/client': resolve(__dirname, './mocks/client.ts'),
+            [resolve(__dirname, './mocks/db.mjs')]: resolve(__dirname, './mocks/db.mjs'),
+          },
+        },
+      },
+
     }, {
       dotenv: {
         env: input.env,
@@ -76,6 +92,11 @@ describe('Nitro Server', () => {
     await ready
     return { nitro, devServer, server }
   }
+
+  beforeEach(() => {
+    // reset mock data
+    mockUtils.reset()
+  })
 
   afterEach(() => {
     // clean up env vars after each test
@@ -116,7 +137,57 @@ describe('Nitro Server', () => {
     expect(json.authHeader).toBe(`Basic ${Buffer.from(`${completeEnv.C8Y_DEVELOPMENT_TENANT}/${completeEnv.C8Y_DEVELOPMENT_USER}:${completeEnv.C8Y_DEVELOPMENT_PASSWORD}`).toString('base64')}`)
   })
 
-  it('should log a warning if the development user is not set', async () => {
+  it('should correctly inject the probe handlers', async () => {
+    const { server } = await createC8yNitroServer({
+      env: completeEnv,
+      nitroConfig: {
 
+      },
+    })
+
+    const res1 = await server.fetch(new Request(new URL('/_c8y_nitro/liveness', server.url)))
+
+    expect(res1.status).toEqual(200)
+
+    const res2 = await server.fetch(new Request(new URL('/_c8y_nitro/readiness', server.url)))
+
+    expect(res2.status).toEqual(200)
+  })
+
+  it('should correctly restrict access to a protected route based on user roles', async () => {
+    // Set mock data directly - since db.mjs is external, this is shared with the server
+    mockData.currentUser = {
+      userName: 'someUser',
+      effectiveRoles: [{
+        // does not have the required ADMIN_ROLE
+        name: 'SOME_CUSTOM_ROLE',
+      }],
+    }
+
+    const { server } = await createC8yNitroServer({
+      env: completeEnv,
+    })
+
+    const res = await server.fetch(new Request(new URL('/protectedRoute', server.url)))
+
+    const json = await res.json()
+
+    expect(json).toEqual({ message: 'User does not have the required role to access this resource: ADMIN_ROLE' })
+    expect(res.status).toEqual(403)
+
+    // Update mock data for second test case
+    mockData.currentUser = {
+      userName: 'adminUser',
+      effectiveRoles: [{
+        name: 'ADMIN_ROLE',
+      }],
+    }
+
+    const res2 = await server.fetch(new Request(new URL('/protectedRoute', server.url)))
+
+    expect(res2.status).toEqual(200)
+
+    const json2 = await res2.json()
+    expect(json2.message).toBe('You have access to the protected route!')
   })
 })
