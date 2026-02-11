@@ -103,6 +103,8 @@ C8Y_BOOTSTRAP_PASSWORD=<generated-password>
 
 > **Manual Bootstrap**: For more control or troubleshooting, you can use the [CLI bootstrap command](#cli-commands) to manually register your microservice.
 
+> **Disable Auto-Bootstrap**: Set `skipBootstrap: true` in your c8y config to disable auto-bootstrap entirely. This is useful in CI/CD pipelines or when you want to manage bootstrap manually.
+
 ## Automatic Zip Creation
 
 `c8y-nitro` automatically generates a ready-to-deploy microservice zip package after each build. The process includes:
