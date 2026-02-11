@@ -401,9 +401,21 @@ pnpm dev
 # Build for production
 pnpm build
 
-# Run tests
+# Run tests (watch mode)
 pnpm test
+
+# Run tests once
+pnpm test:run
 ```
+
+### Testing
+
+Tests are organized in two categories:
+
+- **Unit tests** (`tests/unit/`) — Test individual functions in isolation
+- **Server tests** (`tests/server/`) — Integration tests that spin up a Nitro dev server with the c8y-nitro module
+
+Server tests use Nitro's virtual modules to mock `@c8y/client` at build time, allowing full integration testing without real Cumulocity API calls. See [AGENTS.md](AGENTS.md#server-integration-tests) for implementation details.
 
 ## License
 
