@@ -17,4 +17,13 @@ export interface C8yNitroModuleOptions {
   apiClient?: C8YAPIClientOptions
   zip?: C8YZipOptions
   cache?: C8yCacheOptions
+  /**
+   * Disable auto-bootstrap during development.
+   * When true, the module will not automatically register the microservice
+   * or retrieve bootstrap credentials on startup.
+   *
+   * Useful for CI/CD pipelines or manual bootstrap management.
+   * @default false
+   */
+  skipBootstrap?: boolean
 }

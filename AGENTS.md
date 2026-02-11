@@ -64,10 +64,19 @@ src/
     └── internal/
         └── common.ts           # Internal shared utilities
 tests/
-├── apiClient.test.ts           # API client generation tests
-├── c8yzip.test.ts              # Zip creation tests
-├── docker.test.ts              # Docker generation tests
-└── manifest.test.ts            # Manifest generation tests
+├── unit/                       # Unit tests for individual functions
+│   ├── apiClient.test.ts       # API client generation tests
+│   ├── c8yzip.test.ts          # Zip creation tests
+│   ├── docker.test.ts          # Docker generation tests
+│   ├── manifest.test.ts        # Manifest generation tests
+│   └── runtime.test.ts         # Runtime setup tests
+└── server/                     # Server integration tests
+    ├── server.test.ts          # Main server test file
+    ├── fixture/                # Mini Nitro app for testing
+    │   ├── nitro.config.ts     # Nitro config with c8y module
+    │   └── routes/             # Test route handlers
+    └── mocks/
+        └── generator.ts        # Mock @c8y/client code generator
 playground/                     # Development playground microservice
 ```
 
@@ -124,17 +133,131 @@ pnpm build      # Build microservice (creates .zip)
 - Run `pnpm test:run` for single test run (use this in automated workflows)
 - Import modules from `../src`
 
-Example test structure:
+### Unit Tests
+
+Unit tests are in `tests/unit/` and test individual functions in isolation:
 
 ```ts
 import { expect, test } from 'vitest'
-import { createC8yManifest } from '../src/module/manifest'
+import { createC8yManifest } from '../../src/module/manifest'
 
 test('should create manifest from package.json', async () => {
   const manifest = await createC8yManifest('/path/to/project')
   expect(manifest.name).toBeDefined()
 })
 ```
+
+### Server Integration Tests
+
+Server tests are in `tests/server/` and test the full Nitro server with the c8y-nitro module. These tests use **Nitro's virtual modules** to mock `@c8y/client` at build time.
+
+#### Why Virtual Modules?
+
+The Nitro bundler creates an isolated execution environment. Shared mutable state between test code and server code doesn't work because the server runs bundled code. Virtual modules solve this by injecting mock code as a string during the build phase.
+
+#### Test Structure
+
+```
+tests/server/
+├── server.test.ts           # Main test file
+├── fixture/                  # Test fixture (mini Nitro app)
+│   ├── nitro.config.ts       # Nitro config with c8y module
+│   └── routes/               # Test route handlers
+│       ├── user.get.ts
+│       ├── credentials.get.ts
+│       └── protectedRoute.ts
+└── mocks/
+    └── generator.ts         # Generates mock @c8y/client code
+```
+
+#### Mock Generator
+
+The `generateMockClientCode()` function creates JavaScript code that replaces `@c8y/client`:
+
+```ts
+import { generateMockClientCode } from './mocks/generator'
+import type { MockC8yClientData } from './mocks/generator'
+
+// MockC8yClientData interface:
+// {
+//   currentUser?: ICurrentUser | null      // User returned by client.user.currentWithEffectiveRoles()
+//   subscriptions?: Array<ICredentials>    // Subscribed tenants from bootstrap API
+//   tenantOptions?: Record<string, string> // Tenant options by key (without credentials. prefix)
+// }
+
+const mockData: MockC8yClientData = {
+  currentUser: {
+    userName: 'testUser',
+    effectiveRoles: [{ name: 'ROLE_ADMIN' }],
+  },
+  subscriptions: [
+    { tenant: 't12345', user: 'serviceuser', password: 'pass' },
+  ],
+  tenantOptions: {
+    myOption: 'value',
+    secret: 'decrypted-value', // Note: stored without "credentials." prefix
+  },
+}
+
+const code = generateMockClientCode(mockData)
+```
+
+#### Creating a Server Test
+
+```ts
+/* eslint-disable antfu/no-top-level-await */
+import { createNitro, createDevServer, build, prepare } from 'nitro/builder'
+
+// 1. Create server with mock data via virtual modules
+const nitro = await createNitro({
+  dev: true,
+  rootDir: resolve(__dirname, './fixture'),
+  builder: 'rolldown',
+  virtual: {
+    '@c8y/client': generateMockClientCode(mockData),
+  },
+})
+
+const devServer = createDevServer(nitro)
+const server = devServer.listen({})
+await prepare(nitro)
+await build(nitro)
+
+// 2. Make requests and assert
+const res = await server.fetch(new Request(new URL('/user', server.url)))
+const json = await res.json()
+expect(json.userName).toBe('testUser')
+
+// 3. Cleanup
+await devServer.close()
+await nitro.close()
+```
+
+#### Adding New Test Fixtures
+
+1. Create a route handler in `tests/server/fixture/routes/`
+2. Import and use utilities from `c8y-nitro/utils` (these will use the mocked client)
+3. Add a test that creates a server with appropriate `mockData`
+4. Group related tests to share server instances (reduces ~600ms overhead per server)
+
+#### Performance Tips
+
+- **Share server instances**: Each `beforeAll`/`afterAll` pair adds ~600ms. Group related tests.
+- **Use `builder: 'rolldown'`**: Faster builds than default bundler.
+- **Parallel-safe**: Each describe block gets its own server, so tests within a block run against the same instance.
+
+#### Limitations
+
+Virtual module mocking injects static data at build time. This means:
+
+- **No runtime data changes**: You cannot modify mock data mid-test (e.g., to test cache invalidation or TTL expiration)
+- **No state verification**: Cannot assert that a function wrote to the "database" or called the API a specific number of times
+- **One mock per server**: Changing mock data requires building a new server instance
+
+For testing cache behavior, TTL expiration, or stateful interactions, consider:
+
+- Unit testing the caching logic separately with mocked dependencies
+- Using the playground with a real Cumulocity tenant for manual verification
 
 ## Key Concepts
 

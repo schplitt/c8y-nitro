@@ -40,7 +40,9 @@ export function c8y(): NitroModule {
       }
 
       // Auto-bootstrap if needed (silent if already bootstrapped)
-      await autoBootstrap(nitro)
+      if (!options.skipBootstrap) {
+        await autoBootstrap(nitro)
+      }
 
       await setupRuntimeConfig(nitro, options)
 

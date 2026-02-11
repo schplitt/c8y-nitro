@@ -2,8 +2,8 @@ import { vol, fs as memFs } from 'memfs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Buffer } from 'node:buffer'
 import JSZip from 'jszip'
-import type { C8YManifest } from '../src/types/manifest'
-import { createC8yZip, resolveZipOutputPath } from '../src/module/c8yzip'
+import type { C8YManifest } from '../../src/types/manifest'
+import { createC8yZip, resolveZipOutputPath } from '../../src/module/c8yzip'
 
 // Mock spinnies to silence output
 vi.mock('spinnies', () => ({
@@ -16,7 +16,7 @@ vi.mock('spinnies', () => ({
 }))
 
 // Mock docker module to return fake tar path
-vi.mock('../src/module/docker', () => ({
+vi.mock('../../src/module/docker', () => ({
   createDockerImage: vi.fn(() => Promise.resolve('/fake/.c8y/image.tar')),
 }))
 
@@ -31,7 +31,7 @@ const mockManifest = vi.hoisted(() => ({
   } as C8YManifest,
 }))
 
-vi.mock('../src/module/manifest', () => ({
+vi.mock('../../src/module/manifest', () => ({
   createC8yManifestFromNitro: vi.fn(() => Promise.resolve(mockManifest.current)),
 }))
 
