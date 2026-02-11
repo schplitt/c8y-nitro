@@ -7,7 +7,7 @@ export default defineEventHandler(async () => {
 
   return {
     myOption,
-    secret,
-    message: 'Fetched tenant options successfully',
+    'credentials.secret': secret,
+    'message': 'Fetched tenant options successfully',
   }
 })
