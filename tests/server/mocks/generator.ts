@@ -12,7 +12,7 @@ export interface MockC8yClientData {
 /**
  * Generates virtual module code for \@c8y/client mock with predefined static data
  * This is used by Nitro's virtual modules to replace \@c8y/client imports during build
- * @param data
+ * @param data - Mock data to be returned by the Client methods (currentUser, subscriptions, tenantOptions)
  */
 export function generateMockClientCode(data: MockC8yClientData = {}): string {
   const currentUserCode = data.currentUser
