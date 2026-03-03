@@ -4,6 +4,7 @@ import {
   describe,
   expect,
   it,
+  vi,
 } from 'vitest'
 import {
   build,
@@ -18,6 +19,7 @@ import type {
   C8yNitroModuleOptions,
 } from '../../src/types'
 import process from 'node:process'
+import { consola } from 'consola'
 import { generateMockClientCode } from './mocks/generator'
 import type { MockC8yClientData } from './mocks/generator'
 
@@ -438,6 +440,95 @@ describe('Nitro Server', () => {
 
       const json = await res.json()
       expect(json.message).toContain('t12345')
+    })
+  })
+
+  describe('Logging', () => {
+    let nitro: Awaited<ReturnType<typeof createNitro>>
+    let devServer: ReturnType<typeof createDevServer>
+    let server: Awaited<ReturnType<ReturnType<typeof createDevServer>['listen']>>
+    let env: Record<string, string>
+
+    beforeAll(async () => {
+      const result = await createC8yNitroServer({
+        env: completeEnv,
+      })
+      nitro = result.nitro
+      devServer = result.devServer
+      server = result.server
+      env = result.env
+    })
+
+    afterAll(async () => {
+      for (const key of Object.keys(env)) {
+        delete process.env[key]
+      }
+      await devServer?.close()
+      await nitro?.close()
+    })
+
+    it.sequential('should log wide event context and return correct JSON for success path', async () => {
+      const logs: string[] = []
+      const mockFn = vi.fn((context: unknown) => {
+        logs.push(String(context))
+      })
+
+      consola.mockTypes(() => mockFn)
+      consola.wrapAll()
+
+      try {
+        const res = await server.fetch(new Request(new URL('/logging/success', server.url)))
+
+        expect(res.status).toEqual(200)
+        const json = await res.json()
+        expect(json.message).toBe('ok')
+        expect(json.action).toBe('test-success')
+
+        // Wait for async logs to be written
+        await new Promise<void>((resolve) => {
+          setTimeout(() => resolve(), 100)
+        })
+
+        expect(mockFn).toHaveBeenCalled()
+        const logOutput = logs.join('\n')
+        expect(logOutput).toMatch(/GET \/logging\/success/)
+        expect(logOutput).toContain('user_123')
+      } finally {
+        consola.restoreAll()
+      }
+    })
+
+    it.sequential('should log error wide event and return structured error JSON', async () => {
+      const logs: string[] = []
+      const mockFn = vi.fn((context: unknown) => {
+        logs.push(String(context))
+      })
+
+      consola.mockTypes(() => mockFn)
+      consola.wrapAll()
+
+      try {
+        const res = await server.fetch(new Request(new URL('/logging/error', server.url)))
+
+        expect(res.status).toEqual(400)
+        const json = await res.json()
+        expect(json.message).toBe('Something went wrong')
+        expect(json.data.why).toBe('Test error occurred for logging verification')
+        expect(json.data.fix).toBe('This is a test fixture, nothing to fix')
+        expect(json.data.link).toBe('https://www.evlog.dev/core-concepts/structured-errors')
+
+        // Wait for async logs to be written
+        await new Promise<void>((resolve) => {
+          setTimeout(() => resolve(), 100)
+        })
+
+        expect(mockFn).toHaveBeenCalled()
+        const logOutput = logs.join('\n')
+        expect(logOutput).toMatch(/GET \/logging\/error/)
+        expect(logOutput).toContain('user_456')
+      } finally {
+        consola.restoreAll()
+      }
     })
   })
 })
