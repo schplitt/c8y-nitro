@@ -8,6 +8,8 @@ import { registerRuntime } from './module/register'
 import { checkProbes } from './module/probeCheck'
 import { autoBootstrap } from './module/autoBootstrap'
 import { name as pkgName } from '../package.json'
+import evlog from 'evlog/nitro/v3'
+import { createC8yManifestFromNitro } from './module/manifest'
 
 declare module 'nitro/types' {
   interface NitroOptions {
@@ -31,13 +33,30 @@ export function c8y(): NitroModule {
       // set own library (pkgName) as noExternal to bundle it always
       // makes runtime nitro features available in c8y-nitro utilities
       // avoids esm issues with @c8y/client
-      nitro.options.noExternals = nitro.options.noExternals && nitro.options.noExternals === true ? nitro.options.noExternals : [...(nitro.options.noExternals || []), pkgName, '@c8y/client']
+      nitro.options.noExternals = nitro.options.noExternals === true
+        ? true
+        : [
+            ...(Array.isArray(nitro.options.noExternals) ? nitro.options.noExternals : []),
+            pkgName,
+            '@c8y/client',
+          ]
 
       // setup preset
       if (!nitro.options.preset.startsWith('nitro') && !nitro.options.preset.startsWith('node')) {
         nitro.logger.error(`Unsupported preset "${nitro.options.preset}" for c8y-nitro module, only node presets are supported.`)
         throw new Error('Unsupported preset for c8y-nitro module')
       }
+
+      // setup evlog for logging in runtime
+      const manifest = await createC8yManifestFromNitro(nitro)
+
+      const { setup: setupEvlog } = evlog({
+        env: {
+          service: manifest.name,
+        },
+      })
+
+      await setupEvlog(nitro)
 
       // Auto-bootstrap if needed (silent if already bootstrapped)
       if (!options.skipBootstrap) {
