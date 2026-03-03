@@ -58,6 +58,7 @@ src/
     ├── index.ts                # Utility exports
     ├── client.ts               # Cumulocity client utilities (useUserClient, etc.)
     ├── credentials.ts          # Credential management (useSubscribedTenantCredentials)
+    ├── logging.ts              # Logging utilities (useLogger, createError) re-exported from evlog
     ├── middleware.ts           # Auth middlewares (hasUserRequiredRole, etc.)
     ├── resources.ts            # Resource utilities (useUser, useUserRoles)
     ├── tenantOptions.ts        # Tenant options fetching (useTenantOption)
@@ -394,6 +395,9 @@ This section captures project-specific knowledge, tool quirks, and lessons learn
 
 - **Nitro v3 explicit imports** — Use explicit imports from Nitro packages, e.g., `import { defineEventHandler } from 'nitro/h3'`. Auto-imports are not available.
 - **CLI error handling** — In CLI commands using citty, throw errors to exit with a message. Citty automatically catches and displays them. Use `cancel: 'reject'` on consola prompts to throw on user cancellation.
+- **Logging** — evlog is automatically registered by `c8y()` (service name = manifest name). Import `useLogger`, `createLogger`, and `createError` from `c8y-nitro/utils`. `useLogger(event)` requires the H3Event; `createLogger(ctx?)` is for standalone/background contexts and requires a manual `log.emit()` call; no additional module setup is needed in `nitro.config.ts`.
+- **Structured errors** — always use `createError` from `c8y-nitro/utils` (re-exported from `evlog`) instead of Nitro/h3's built-in `createError`. This ensures the `why`, `fix`, and `link` fields are captured in the wide log event and returned in the JSON response under a `data` key.
+- **Logging test pattern** — Use `consola.mockTypes()` + `consola.wrapAll()` in `it.sequential` tests, then `consola.restoreAll()` in a `finally` block. Wait 100ms after the request for async log emission before asserting on `logOutput`.
 
 - Utility functions accept `H3Event | ServerRequest` for flexibility
 - Use `defineCachedFunction` from Nitro for cached API calls (e.g., credentials)

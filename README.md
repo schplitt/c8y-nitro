@@ -243,6 +243,109 @@ export class MyComponent {
 
 > **Note**: The client regenerates automatically when routes change during development.
 
+## Logging
+
+`c8y-nitro` builds on [evlog](https://www.evlog.dev) to provide structured **wide-event logging**, one comprehensive log per request that accumulates all relevant context rather than scattering individual log lines throughout your code.
+
+evlog is automatically configured, no extra setup required. The service name is derived from your package name.
+
+### useLogger
+
+Use `useLogger(event)` in your route handlers to get a request-scoped logger. The logger accumulates context throughout the request lifetime and emits a single wide event when the response is sent.
+
+```ts
+import { defineHandler } from 'nitro/h3'
+import { useLogger } from 'c8y-nitro/utils'
+
+export default defineHandler(async (event) => {
+  const log = useLogger(event)
+
+  const user = await useUser(event)
+  log.set({ action: 'process-order', user: { id: user.userName } })
+
+  // Add more context as it becomes available
+  log.set({ order: { id: '42', total: 9999 } })
+
+  return { success: true }
+})
+```
+
+> **Note**: `useLogger` requires the `event` parameter. If you enable `experimental.asyncContext: true` in your Nitro config, you can access the logger anywhere in the call stack via `useRequest()` from `nitro/context` — see the [evlog Nitro v3 setup](https://www.evlog.dev/getting-started/installation#nitro-v3) for details.
+
+### createError
+
+Use `createError` from `c8y-nitro/utils` instead of Nitro's built-in error helper to get richer, structured error responses. This adds `why`, `fix`, and `link` fields that are:
+
+- Logged as part of the wide event so you can see exactly what went wrong without guessing
+- Returned in the JSON response body so clients can display actionable context
+
+```ts
+import { defineHandler } from 'nitro/h3'
+import { useLogger, createError } from 'c8y-nitro/utils'
+
+export default defineHandler(async (event) => {
+  const log = useLogger(event)
+  log.set({ action: 'payment', userId: 'user_123' })
+
+  throw createError({
+    message: 'Payment failed',
+    status: 402,
+    why: 'Card declined by issuer (insufficient funds)',
+    fix: 'Try a different payment method or contact your bank',
+    link: 'https://docs.example.com/payments/declined',
+  })
+})
+```
+
+The error response returned to the client:
+
+```json
+{
+  "message": "Payment failed",
+  "status": 402,
+  "data": {
+    "why": "Card declined by issuer (insufficient funds)",
+    "fix": "Try a different payment method or contact your bank",
+    "link": "https://docs.example.com/payments/declined"
+  }
+}
+```
+
+> **Tip**: Always prefer `createError` from `c8y-nitro/utils`. It ensures the error is captured in the wide log event with full context, making investigation straightforward.
+
+### createLogger (standalone)
+
+For code that runs **outside a request handler** — background jobs, queue workers, event-driven workflows, scheduled tasks — use `createLogger()` to get the same wide-event logger interface without needing an HTTP event.
+
+```ts
+import { createLogger } from 'c8y-nitro/utils'
+
+export async function processSubscriptionRenewal(tenantId: string) {
+  const log = createLogger({ job: 'subscription-renewal', tenantId })
+
+  log.set({ subscription: { id: 'sub_123', plan: 'pro' } })
+
+  // ... do work ...
+
+  log.set({ result: 'renewed' })
+  log.emit() // Must call emit() manually outside request context
+}
+```
+
+This is useful for Cumulocity notification workflows where your microservice reacts to platform events (device management, alarms, etc.) outside of the standard request/response cycle.
+
+> **Note**: Unlike `useLogger`, `createLogger` does **not** auto-emit at request end. You must call `log.emit()` manually when the work is complete.
+
+For more on wide events, structured errors, and advanced configuration (sampling, draining to Axiom/Loki, enrichers), see the [evlog documentation](https://www.evlog.dev/core-concepts/wide-events).
+
+### Logging Utilities
+
+| Function               | Description                                                   | Request Context |
+| ---------------------- | ------------------------------------------------------------- | :-------------: |
+| `useLogger(event)`     | Get the request-scoped wide-event logger                      |       ✅        |
+| `createLogger(ctx?)`   | Create a standalone wide-event logger; call `emit()` manually |       ❌        |
+| `createError(options)` | Create a structured error with `why`, `fix`, `link`           |       ❌        |
+
 ## Utilities
 
 `c8y-nitro` provides several utility functions to simplify common tasks in Cumulocity microservices.
