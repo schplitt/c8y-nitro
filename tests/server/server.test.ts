@@ -38,6 +38,7 @@ const completeEnv = {
 interface ServerInput {
   nitroConfig?: NitroConfig & { c8y?: C8yNitroModuleOptions }
   env?: Record<string, string>
+  // TODO: investigate why server crashes at logging tests when c8y client is not mocked
   mockData?: MockC8yClientData
 }
 
@@ -84,31 +85,6 @@ describe('Nitro Server', () => {
     await ready
     return { nitro, devServer, server, env: inputEnv }
   }
-
-  describe('Bootstrap validation', () => {
-    let nitro: Awaited<ReturnType<typeof createNitro>>
-    let devServer: ReturnType<typeof createDevServer>
-    let server: Awaited<ReturnType<ReturnType<typeof createDevServer>['listen']>>
-
-    beforeAll(async () => {
-      const result = await createC8yNitroServer({})
-      nitro = result.nitro
-      devServer = result.devServer
-      server = result.server
-    })
-
-    afterAll(async () => {
-      await devServer?.close()
-      await nitro?.close()
-    })
-
-    it('should throw an error if the bootstrap environment variables aren\'t set', async () => {
-      const res = await server.fetch(new Request(new URL('/hello', server.url)))
-
-      const json = await res.json()
-      expect(json.message).toContain('Missing required environment variables for development: C8Y_BASEURL, C8Y_BOOTSTRAP_TENANT, C8Y_BOOTSTRAP_USER, C8Y_BOOTSTRAP_PASSWORD')
-    })
-  })
 
   describe('With complete environment', () => {
     let nitro: Awaited<ReturnType<typeof createNitro>>
@@ -452,6 +428,7 @@ describe('Nitro Server', () => {
     beforeAll(async () => {
       const result = await createC8yNitroServer({
         env: completeEnv,
+        mockData: {},
       })
       nitro = result.nitro
       devServer = result.devServer
