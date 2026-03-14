@@ -21,5 +21,10 @@ export default defineHandler((event) => {
       // inject auth header into request
       event.req.headers.set('authorization', authHeader)
     }
+
+    // In local dev strip the entire cookie header to prevent any other local host cookies from interfering with the injected dev user credentials
+    if (event.req.headers.has('cookie')) {
+      event.req.headers.delete('cookie')
+    }
   }
 })
