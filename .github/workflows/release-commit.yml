@@ -1,8 +1,19 @@
 name: Publish Any Commit
 
-on: [push, pull_request]
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
 
-permissions: {}
+permissions:
+  contents: read
+
+concurrency:
+  group: pkg-pr-new-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   publish:
