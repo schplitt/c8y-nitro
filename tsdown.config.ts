@@ -6,19 +6,13 @@ export default defineConfig({
     'types': './src/types/index.ts',
     'utils': './src/utils/index.ts',
     'cli/index': './src/cli/index.ts',
+    'runtime/*': './src/module/runtime/**/*.ts',
   },
   target: ['es2023'],
   format: 'esm',
   clean: true,
   dts: true,
   outDir: './dist',
-  unbundle: true,
-  copy: [
-    {
-      from: './src/module/runtime/**/*.ts',
-      flatten: false,
-    },
-  ],
   failOnWarn: true,
   deps: {
     neverBundle: ['c8y-nitro/runtime', 'nitro/runtime-config'],
