@@ -1,7 +1,7 @@
 import { definePlugin } from 'nitro'
+import { c8yManifest } from 'c8y-nitro/runtime'
 
 export default definePlugin(async (nitroApp) => {
-  const { c8yManifest } = await import('c8y-nitro/runtime')
   nitroApp.hooks.hook('evlog:enrich', (enrichContext) => {
     enrichContext.event.ms = {
       name: c8yManifest.name,
