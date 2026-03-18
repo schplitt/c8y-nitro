@@ -1,6 +1,7 @@
+import type { UserConfig } from 'tsdown'
 import { defineConfig } from 'tsdown'
 
-export default defineConfig([{
+const mainConfig: UserConfig = {
   entry: {
     'index': './src/index.ts',
     'types': './src/types/index.ts',
@@ -18,21 +19,18 @@ export default defineConfig([{
   },
 
   globImport: true,
-}, {
-  // separate config for runtime code
-  entry: {
-    'runtime/*': './src/module/runtime/**/*.ts',
-  },
-  target: ['es2023'],
-  format: 'esm',
-  clean: true,
-  // DTS OFF!
-  dts: false,
-  outDir: './dist',
-  failOnWarn: true,
-  deps: {
-    neverBundle: ['c8y-nitro/runtime', 'nitro/runtime-config'],
-  },
+}
 
-  globImport: true,
-}])
+export default defineConfig([
+  mainConfig,
+  {
+    // 2nd config for runtime code only
+    ...mainConfig,
+    // separate config for runtime code
+    entry: {
+      'runtime/*': './src/module/runtime/**/*.ts',
+    },
+    // DTS OFF!
+    dts: false,
+  },
+])
