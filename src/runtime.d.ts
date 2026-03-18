@@ -3,8 +3,10 @@
 // Should match the generated types in module/runtime.ts
 
 declare module 'c8y-nitro/runtime' {
-  import type { C8YRoles } from 'c8y-nitro/types'
+  import type { C8YRoles, C8YManifest } from 'c8y-nitro/types'
 
   export const c8yRoles: C8YRoles
   export const c8yTenantOptionKeys: readonly string[]
+
+  export const c8yManifest: C8YManifest
 }

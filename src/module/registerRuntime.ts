@@ -14,33 +14,29 @@ import { GENERATED_LIVENESS_ROUTE, GENERATED_READINESS_ROUTE } from './constants
 export function registerRuntime(nitro: Nitro, options: C8yNitroModuleOptions = {}) {
   const thisFilePath = fileURLToPath(new URL('.', import.meta.url))
 
-  /**
-   * Plugins
-   */
-  const plugins: string[] = []
-  const c8yVariablesPluginPath = join(thisFilePath, './runtime/plugins/c8y-variables')
-  plugins.push(c8yVariablesPluginPath)
-  nitro.options.plugins.push(...plugins)
+  // @ts-expect-error - import.meta.glob is not typed
+  const allPlugins = Object.keys(import.meta.glob('./runtime/plugins/*.ts', { eager: true })).map((p) => join(thisFilePath, p.replace('.ts', '')))
+  // @ts-expect-error - import.meta.glob is not typed
+  const allMiddlewares = Object.keys(import.meta.glob('./runtime/middlewares/*.ts', { eager: true })).map((p) => join(thisFilePath, p.replace('.ts', '')))
 
   /**
-   * Middlewares (global)
+   * Plugins (auto scanned)
    */
-  const middlewares: string[] = []
-  const devUserMiddlewarePath = join(thisFilePath, './runtime/middlewares/dev-user')
-  middlewares.push(
-    devUserMiddlewarePath,
-  )
+  nitro.options.plugins.push(...allPlugins)
 
-  nitro.options.handlers.push(...middlewares.map((handler) => ({
+  /**
+   * Middlewares (auto scanned)
+   */
+  nitro.options.handlers.push(...allMiddlewares.map((handler) => ({
     route: '/**',
     handler,
     middleware: true,
   })))
 
   /**
-   * Handlers
+   * Handlers (can't be auto scanned as they need methods etc)
    */
-  // TODO: investigate nitro currently only shows the last registered handler in swagger/scalar
+  // TODO: investigate nitro currently only shows the last registered handler in swagger/scalar -> openapi json can be intercepted with middleware if needed
   const handlers: NitroEventHandler[] = []
   const probeHandlerPath = join(thisFilePath, './runtime/handlers/liveness-readiness')
   // Generate liveness probe if user hasn't defined httpGet
@@ -51,7 +47,6 @@ export function registerRuntime(nitro: Nitro, options: C8yNitroModuleOptions = {
       handler: probeHandlerPath,
       method: 'GET',
     })
-
     nitro.logger.debug(`Generated liveness probe at ${GENERATED_LIVENESS_ROUTE}`)
   } else {
     nitro.logger.debug('Liveness probe httpGet defined by user; skipping generation')

@@ -1,12 +1,12 @@
 import type { Nitro } from 'nitro/types'
-import type { C8YManifestOptions } from '../types'
+import type { C8YManifest } from '../types'
 import { join } from 'pathe'
 import { writeFileSync, mkdirSync } from 'fs'
 
-export function setupRuntime(nitro: Nitro, manifestOptions: C8YManifestOptions = {}): void {
+export function setupRuntime(nitro: Nitro, manifest: C8YManifest): void {
   nitro.logger.debug('Setting up C8Y nitro runtime')
-  const roles = manifestOptions.roles ?? []
-  const settings = manifestOptions.settings ?? []
+  const roles = manifest.roles ?? []
+  const settings = manifest.settings ?? []
   const settingKeys = settings.map((s) => s.key)
 
   const completeTypesDir = join(nitro.options.rootDir, nitro.options.typescript.generatedTypesDir ?? 'node_modules/.nitro/types')
@@ -23,9 +23,10 @@ ${roles.map((role) => `    '${role}': '${role}';`).join('\n')}
 }
 
 declare module 'c8y-nitro/runtime' {
-  import type { C8YRoles } from 'c8y-nitro/types';
+  import type { C8YRoles, C8yManifest } from 'c8y-nitro/types';
   export const c8yRoles: C8YRoles;
   export const c8yTenantOptionKeys: readonly [${settingKeys.map((key) => `'${key}'`).join(', ')}];
+  export const c8yManifest: C8yManifest;
 }`
 
   // Generate virtual module with runtime exports
@@ -33,6 +34,8 @@ declare module 'c8y-nitro/runtime' {
 export const c8yRoles = {
 ${roles.map((role) => `  '${role}': '${role}',`).join('\n')}
 }
+
+export const c8yManifest = ${JSON.stringify(manifest, null, 2)}
 
 export const c8yTenantOptionKeys = [${settingKeys.map((key) => `'${key}'`).join(', ')}]
 `
