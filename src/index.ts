@@ -4,7 +4,7 @@ import { writeAPIClient } from './module/apiClient'
 import { createC8yZip } from './module/c8yzip'
 import { setupRuntime } from './module/runtime'
 import { setupRuntimeConfig } from './module/runtimeConfig'
-import { registerRuntime } from './module/register'
+import { registerRuntime } from './module/registerRuntime'
 import { checkProbes } from './module/probeCheck'
 import { autoBootstrap } from './module/autoBootstrap'
 import { name as pkgName } from '../package.json'
@@ -48,7 +48,7 @@ export function c8y(): NitroModule {
       }
 
       // setup evlog for logging in runtime
-      const manifest = await createC8yManifestFromNitro(nitro)
+      let manifest = await createC8yManifestFromNitro(nitro)
 
       const { setup: setupEvlog } = evlog({
         env: {
@@ -65,10 +65,11 @@ export function c8y(): NitroModule {
 
       await setupRuntimeConfig(nitro, options)
 
-      setupRuntime(nitro, options.manifest)
+      setupRuntime(nitro, manifest)
 
       nitro.hooks.hook('dev:reload', async () => {
-        setupRuntime(nitro, options.manifest)
+        manifest = await createC8yManifestFromNitro(nitro)
+        setupRuntime(nitro, manifest)
         if (options.apiClient) {
           nitro.logger.debug('Generating C8Y API client')
           await writeAPIClient(nitro, options)
