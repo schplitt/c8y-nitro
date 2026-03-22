@@ -13,6 +13,7 @@ export default defineNitroConfig({
 
   c8y: {
     skipBootstrap: true, // skip auto-bootstrap for testing purposes
+    enableTenantOptionsInvalidationRoute: true,
     manifest: {
       roles: ['SOME_CUSTOM_ROLE', 'ANOTHER_ROLE'],
       settings: [

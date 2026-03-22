@@ -2,7 +2,11 @@ import type { Nitro, NitroEventHandler } from 'nitro/types'
 import type { C8yNitroModuleOptions } from '../types'
 import { fileURLToPath } from 'node:url'
 import { join } from 'pathe'
-import { GENERATED_LIVENESS_ROUTE, GENERATED_READINESS_ROUTE } from './constants'
+import {
+  GENERATED_INVALIDATE_TENANT_OPTIONS_ROUTE,
+  GENERATED_LIVENESS_ROUTE,
+  GENERATED_READINESS_ROUTE,
+} from './constants'
 
 /**
  * Links runtime middleware, handlers, and plugins to the nitro instance.
@@ -36,7 +40,7 @@ export function registerRuntime(nitro: Nitro, options: C8yNitroModuleOptions = {
   /**
    * Handlers (can't be auto scanned as they need methods etc)
    */
-  // TODO: investigate nitro currently only shows the last registered handler in swagger/scalar -> openapi json can be intercepted with middleware if needed
+  // TODO: investigate nitro currently only shows the last registered handler in swagger/scalar -> openapi json can be intercepted and modified with middleware if needed
   const handlers: NitroEventHandler[] = []
   const probeHandlerPath = join(thisFilePath, './runtime/handlers/liveness-readiness')
   // Generate liveness probe if user hasn't defined httpGet
@@ -61,6 +65,17 @@ export function registerRuntime(nitro: Nitro, options: C8yNitroModuleOptions = {
     nitro.logger.debug(`Generated readiness probe at ${GENERATED_READINESS_ROUTE}`)
   } else {
     nitro.logger.debug('Readiness probe httpGet defined by user; skipping generation')
+  }
+
+  // Add tenant option invalidation route if enabled by user
+  if (options.enableTenantOptionsInvalidationRoute) {
+    const invalidateTenantOptionsHandlerPath = join(thisFilePath, './runtime/handlers/invalidateTenantOptions')
+    handlers.push({
+      route: GENERATED_INVALIDATE_TENANT_OPTIONS_ROUTE,
+      handler: invalidateTenantOptionsHandlerPath,
+      method: 'GET',
+    })
+    nitro.logger.debug(`Generated tenant option invalidation route at ${GENERATED_INVALIDATE_TENANT_OPTIONS_ROUTE}`)
   }
 
   nitro.options.handlers.push(...handlers)

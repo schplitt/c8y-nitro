@@ -64,6 +64,7 @@ src/
     ├── tenantOptions.ts        # Tenant options fetching (useTenantOption)
     └── internal/
       ├── common.ts           # Internal shared utilities
+      ├── tenantOptionFetchers.ts # Internal tenant option fetcher registry for runtime handlers
       └── tenant.ts           # Internal current-user tenant resolution and cache helpers
 tests/
 ├── unit/                       # Unit tests for individual functions
@@ -413,6 +414,10 @@ This section captures project-specific knowledge, tool quirks, and lessons learn
   - Use `as const` for tuples to preserve literal types
   - Keep `src/runtime.d.ts` in sync as a fallback declaration
 - Auto-injected routes use `/_c8y_nitro/` prefix to avoid conflicts with user routes
+- Runtime handler bundling can accidentally pull in the full `utils` dependency graph
+  - If a handler only needs `createError`, import it from `src/utils/logging.ts`, not the `src/utils/index.ts` barrel
+  - If a handler only needs the tenant option fetcher registry, import `src/utils/internal/tenantOptionFetchers.ts`, not `src/utils/tenantOptions.ts`
+  - Otherwise Nitro may bundle `@c8y/client` into the handler chunk, which can trigger a dev worker crash like `Cannot destructure property '__extends' of 'import_tslib.default' as it is undefined`
 - Runtime handlers/middleware/plugins must be in `src/module/runtime/` directory structure:
   - `runtime/handlers/` — Event handlers (e.g., probe endpoints)
   - `runtime/middlewares/` — Global middlewares (e.g., dev user injection)
