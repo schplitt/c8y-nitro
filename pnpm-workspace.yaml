@@ -23,7 +23,7 @@ catalog:
   evlog: ^2.9.0
   jszip: ^3.10.1
   memfs: ^4.57.1
-  nitro: 3.0.1-alpha.2
+  nitro: 3.0.260311-beta
   pathe: ^2.0.3
   pkg-types: ^2.3.0
   spinnies: ^0.5.1
