@@ -54,7 +54,8 @@ export async function useUserTenantClient(requestOrEvent: ServerRequest | H3Even
   }
 
   const userClient = useUserClient(requestOrEvent)
-  const tenantId = userClient.core.tenant
+  // fallback to core.tenant is an empty string
+  const tenantId = userClient.core.tenant || (await userClient.tenant.current()).data.name
 
   const creds = await useSubscribedTenantCredentials()
   if (!creds[tenantId]) {
