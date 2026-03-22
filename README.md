@@ -143,6 +143,7 @@ Credential caching can be configured to optimize performance. By default, subscr
 ```ts
 export default defineNitroConfig({
   c8y: {
+    enableTenantOptionsInvalidationRoute: false,
     cache: {
       credentialsTTL: 300, // Cache credentials for 5 minutes (in seconds)
       defaultTenantOptionsTTL: 600, // Default cache for tenant options (in seconds)

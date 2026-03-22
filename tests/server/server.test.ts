@@ -311,6 +311,55 @@ describe('Nitro Server', () => {
       expect(json.message).toBe('Fetched tenant options successfully')
     })
 
+    it('should invalidate a created tenant option cache by key', async () => {
+      await server.fetch(new Request(new URL('/tenant-options', server.url)))
+
+      const res = await server.fetch(new Request(new URL('/_c8y_nitro/invalidate-tenant-options?key=myOption', server.url)))
+
+      expect(res.status).toEqual(200)
+
+      const json = await res.json()
+      expect(json.message).toBe('success')
+    })
+
+    it('should skip invalidation when the key fetcher was not created yet', async () => {
+      const res = await server.fetch(new Request(new URL('/_c8y_nitro/invalidate-tenant-options?key=credentials.secret', server.url)))
+
+      expect(res.status).toEqual(200)
+
+      const json = await res.json()
+      expect(json.message).toBe('success')
+    })
+
+    it('should prioritize all over key when both query params are present', async () => {
+      await server.fetch(new Request(new URL('/tenant-options', server.url)))
+
+      const res = await server.fetch(new Request(new URL('/_c8y_nitro/invalidate-tenant-options?all=1&key=myOption', server.url)))
+
+      expect(res.status).toEqual(200)
+
+      const json = await res.json()
+      expect(json.message).toBe('success')
+    })
+
+    it('should reject unknown tenant option keys', async () => {
+      const res = await server.fetch(new Request(new URL('/_c8y_nitro/invalidate-tenant-options?key=unknown.option', server.url)))
+
+      expect(res.status).toEqual(400)
+
+      const json = await res.json()
+      expect(json.message).toBe('Invalid tenant option invalidation request')
+    })
+
+    it('should reject invalidation requests without all or key', async () => {
+      const res = await server.fetch(new Request(new URL('/_c8y_nitro/invalidate-tenant-options', server.url)))
+
+      expect(res.status).toEqual(400)
+
+      const json = await res.json()
+      expect(json.message).toBe('Provide either the all or key query parameter')
+    })
+
     it('should allow access for allowed tenant', async () => {
       const res = await server.fetch(new Request(new URL('/tenant-restricted', server.url)))
 

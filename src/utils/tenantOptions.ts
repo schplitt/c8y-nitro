@@ -3,6 +3,8 @@ import { useStorage } from 'nitro/storage'
 import { useRuntimeConfig } from 'nitro/runtime-config'
 import { useDeployedTenantClient } from './client'
 import type { C8YTenantOptionKey } from 'c8y-nitro/types'
+import { tenantOptionFetchers } from './internal/tenantOptionFetchers'
+import type { CachedTenantOptionFetcher } from './internal/tenantOptionFetchers'
 
 /**
  * Gets the cache TTL for a specific tenant option key.
@@ -14,17 +16,6 @@ function getTenantOptionCacheTTL(key: C8YTenantOptionKey): number {
   const perKeyTTL = config.c8yTenantOptionsPerKeyTTL as Record<string, number> | undefined
   return perKeyTTL?.[key] ?? (config.c8yDefaultTenantOptionsTTL as number) ?? 600
 }
-
-interface CachedTenantOptionFetcher {
-  (): Promise<string | undefined>
-  invalidate: () => Promise<void>
-  refresh: () => Promise<string | undefined>
-}
-
-/**
- * Internal storage for cached functions per key
- */
-const tenantOptionFetchers: Partial<Record<C8YTenantOptionKey, CachedTenantOptionFetcher>> = {}
 
 /**
  * Factory function that creates a cached fetcher for a specific tenant option key.

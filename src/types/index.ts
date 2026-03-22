@@ -18,6 +18,18 @@ export interface C8yNitroModuleOptions {
   zip?: C8YZipOptions
   cache?: C8yCacheOptions
   /**
+   * Adds a debug route for invalidating already-created tenant option caches.
+   * Exposes `GET /_c8y_nitro/invalidate-tenant-options`.
+   *
+   * Query params:
+   * - `all`: invalidate all created tenant option fetchers
+   * - `key`: invalidate a single manifest-defined tenant option key if its fetcher exists
+   *
+   * `all` takes priority over `key`.
+   * @default false
+   */
+  enableTenantOptionsInvalidationRoute?: boolean
+  /**
    * Disable auto-bootstrap during development.
    * When true, the module will not automatically register the microservice
    * or retrieve bootstrap credentials on startup.
