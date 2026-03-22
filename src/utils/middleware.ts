@@ -2,7 +2,7 @@ import { defineHandler, HTTPError } from 'nitro/h3'
 import type { EventHandler } from 'nitro/h3'
 import type { C8YRoles } from 'c8y-nitro/types'
 import { useUserRoles } from './resources'
-import { useUserClient } from './client'
+import { getCurrentUserTenantId } from './internal/tenant'
 import process from 'node:process'
 
 // allow any string as role for extensibility
@@ -96,8 +96,7 @@ export function isUserFromAllowedTenant(tenantIds: string[]): EventHandler
 export function isUserFromAllowedTenant(tenantIdOrIds: string | string[]): EventHandler {
   return defineHandler(async (event) => {
     const allowedTenants = Array.isArray(tenantIdOrIds) ? tenantIdOrIds : [tenantIdOrIds]
-    const userClient = useUserClient(event)
-    const userTenantId = userClient.core.tenant
+    const userTenantId = await getCurrentUserTenantId(event)
 
     const isAllowed = allowedTenants.includes(userTenantId)
 
@@ -128,8 +127,7 @@ export function isUserFromAllowedTenant(tenantIdOrIds: string | string[]): Event
  */
 export function isUserFromDeployedTenant(): EventHandler {
   return defineHandler(async (event) => {
-    const userClient = useUserClient(event)
-    const userTenantId = userClient.core.tenant
+    const userTenantId = await getCurrentUserTenantId(event)
     const deployedTenantId = process.env.C8Y_BOOTSTRAP_TENANT
 
     if (!deployedTenantId) {

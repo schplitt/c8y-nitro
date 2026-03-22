@@ -1,5 +1,6 @@
 import { BasicAuth, Client, MicroserviceClientRequestAuth } from '@c8y/client'
 import { convertRequestHeadersToC8yFormat } from './internal/common'
+import { getCurrentUserTenantId } from './internal/tenant'
 import { useSubscribedTenantCredentials } from './credentials'
 import type { H3Event } from 'nitro/h3'
 import { HTTPError } from 'nitro/h3'
@@ -53,9 +54,7 @@ export async function useUserTenantClient(requestOrEvent: ServerRequest | H3Even
     return request.context['c8y_user_tenant_client'] as Client
   }
 
-  const userClient = useUserClient(requestOrEvent)
-  // fallback to core.tenant is an empty string
-  const tenantId = userClient.core.tenant || (await userClient.tenant.current()).data.name
+  const tenantId = await getCurrentUserTenantId(requestOrEvent)
 
   const creds = await useSubscribedTenantCredentials()
   if (!creds[tenantId]) {

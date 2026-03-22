@@ -63,7 +63,8 @@ src/
     ├── resources.ts            # Resource utilities (useUser, useUserRoles)
     ├── tenantOptions.ts        # Tenant options fetching (useTenantOption)
     └── internal/
-        └── common.ts           # Internal shared utilities
+      ├── common.ts           # Internal shared utilities
+      └── tenant.ts           # Internal current-user tenant resolution and cache helpers
 tests/
 ├── unit/                       # Unit tests for individual functions
 │   ├── apiClient.test.ts       # API client generation tests

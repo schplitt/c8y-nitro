@@ -5,7 +5,7 @@ import type { H3Event } from 'nitro/h3'
 import { HTTPError } from 'nitro/h3'
 import type { ServerRequest } from 'nitro/types'
 import process from 'node:process'
-import { useUserClient } from './client'
+import { getCurrentUserTenantId } from './internal/tenant'
 import { useStorage } from 'nitro/storage'
 import { useRuntimeConfig } from 'nitro/runtime-config'
 
@@ -132,9 +132,7 @@ export async function useUserTenantCredentials(requestOrEvent: ServerRequest | H
     return request.context['c8y_user_tenant_credentials'] as ICredentials
   }
 
-  const userClient = useUserClient(requestOrEvent)
-
-  const tenantId = userClient.core.tenant
+  const tenantId = await getCurrentUserTenantId(requestOrEvent)
 
   const creds = await useSubscribedTenantCredentials()
   const userTenantCreds = creds[tenantId]
