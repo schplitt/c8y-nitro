@@ -61,21 +61,6 @@ export default defineNitroConfig({
 })
 ```
 
-Local development behavior can be configured under `c8y.dev`:
-
-```ts
-export default defineNitroConfig({
-  c8y: {
-    dev: {
-      injectUser: false,
-    },
-  },
-  modules: [c8y()],
-})
-```
-
-`c8y.dev` options are only relevant during local Nitro development.
-
 ### Prerequisites
 
 `c8y-nitro` requires:
