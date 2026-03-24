@@ -132,6 +132,51 @@ describe('Nitro Server', () => {
     })
   })
 
+  describe('With dev user injection disabled', () => {
+    let nitro: Awaited<ReturnType<typeof createNitro>>
+    let devServer: ReturnType<typeof createDevServer>
+    let server: Awaited<ReturnType<ReturnType<typeof createDevServer>['listen']>>
+    let env: Record<string, string>
+
+    beforeAll(async () => {
+      const result = await createC8yNitroServer({
+        env: completeEnv,
+        nitroConfig: {
+          c8y: {
+            dev: {
+              injectUser: false,
+            },
+          },
+        },
+      })
+      nitro = result.nitro
+      devServer = result.devServer
+      server = result.server
+      env = result.env
+    })
+
+    afterAll(async () => {
+      for (const key of Object.keys(env)) {
+        delete process.env[key]
+      }
+
+      await devServer?.close()
+      await nitro?.close()
+    })
+
+    it('should not register the dev user middleware when disabled in config', async () => {
+      const upstreamAuthHeader = 'Basic proxy-auth-header'
+      const res = await server.fetch(new Request(new URL('/authHeader', server.url), {
+        headers: {
+          authorization: upstreamAuthHeader,
+        },
+      }))
+      const json = await res.json()
+
+      expect(json).toEqual({ authHeader: upstreamAuthHeader })
+    })
+  })
+
   describe('Access control (denied)', () => {
     let nitro: Awaited<ReturnType<typeof createNitro>>
     let devServer: ReturnType<typeof createDevServer>
