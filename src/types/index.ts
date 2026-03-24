@@ -8,11 +8,23 @@ export type { C8YManifestOptions, C8YManifest } from './manifest'
 export * from './apiClient'
 export type { C8yCacheOptions } from './cache'
 
+export interface C8yDevOptions {
+  /**
+   * Automatically inject the configured development user into incoming requests
+   * during local Nitro dev mode.
+   *
+   * Disable this when a local proxy already forwards the desired user context.
+   * @default true
+   */
+  injectUser?: boolean
+}
+
 // overwritten by module with info from manifest
 export * from './roles'
 export * from './tenantOptions'
 
 export interface C8yNitroModuleOptions {
+  dev?: C8yDevOptions
   manifest?: C8YManifestOptions
   apiClient?: C8YAPIClientOptions
   zip?: C8YZipOptions

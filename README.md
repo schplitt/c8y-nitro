@@ -61,6 +61,21 @@ export default defineNitroConfig({
 })
 ```
 
+Local development behavior can be configured under `c8y.dev`:
+
+```ts
+export default defineNitroConfig({
+  c8y: {
+    dev: {
+      injectUser: false,
+    },
+  },
+  modules: [c8y()],
+})
+```
+
+`c8y.dev` options are only relevant during local Nitro development.
+
 ### Prerequisites
 
 `c8y-nitro` requires:
@@ -179,6 +194,21 @@ C8Y_DEVELOPMENT_PASSWORD=your-password
 ```
 
 This enables testing of access control middlewares like `hasUserRequiredRole()` and `isUserFromAllowedTenant()` without needing to manually set authorization headers.
+
+If you run a local proxy that already forwards a user session or authorization header, disable this middleware:
+
+```ts
+export default defineNitroConfig({
+  c8y: {
+    dev: {
+      injectUser: false,
+    },
+  },
+  modules: [c8y()],
+})
+```
+
+When disabled, `c8y-nitro` does not register the development user injection middleware, so incoming auth headers stay untouched.
 
 ### Managing Development User Roles
 

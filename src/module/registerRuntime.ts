@@ -17,11 +17,32 @@ import {
  */
 export function registerRuntime(nitro: Nitro, options: C8yNitroModuleOptions = {}) {
   const thisFilePath = fileURLToPath(new URL('.', import.meta.url))
+  const isNitroDev = nitro.options.preset === 'nitro-dev'
+
+  const shouldIncludeRuntimeFile = (relativePath: string): boolean => {
+    const isDevOnlyFile = relativePath.endsWith('.dev.ts')
+
+    if (isDevOnlyFile && !isNitroDev) {
+      return false
+    }
+
+    if (relativePath.endsWith('/dev-user.dev.ts') && options.dev?.injectUser === false) {
+      return false
+    }
+
+    return true
+  }
+
+  const toRuntimePath = (relativePath: string) => join(thisFilePath, relativePath.replace(/\.ts$/, ''))
 
   // @ts-expect-error - import.meta.glob is not typed
-  const allPlugins = Object.keys(import.meta.glob('./runtime/plugins/*.ts', { eager: true })).map((p) => join(thisFilePath, p.replace('.ts', '')))
+  const allPlugins = Object.keys(import.meta.glob('./runtime/plugins/*.ts', { eager: true }))
+    .filter(shouldIncludeRuntimeFile)
+    .map(toRuntimePath)
   // @ts-expect-error - import.meta.glob is not typed
-  const allMiddlewares = Object.keys(import.meta.glob('./runtime/middlewares/*.ts', { eager: true })).map((p) => join(thisFilePath, p.replace('.ts', '')))
+  const allMiddlewares = Object.keys(import.meta.glob('./runtime/middlewares/*.ts', { eager: true }))
+    .filter(shouldIncludeRuntimeFile)
+    .map(toRuntimePath)
 
   /**
    * Plugins (auto scanned)

@@ -2,6 +2,7 @@
   "name": "playground",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "description": "Playground microservice for testing c8y-nitro",
   "author": {
     "name": "schplitt"

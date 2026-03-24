@@ -43,9 +43,10 @@ src/
 │       ├── handlers/
 │       │   └── liveness-readiness.ts  # Probe endpoint handler
 │       ├── middlewares/
-│       │   └── dev-user.ts            # Dev user injection middleware
+│       │   └── dev-user.dev.ts        # Dev-only user injection middleware
 │       └── plugins/
-│           └── c8y-variables.ts       # C8Y env variable plugin
+│           ├── c8y-variables.dev.ts   # Dev-only C8Y env variable plugin
+│           └── enrich-logs.ts         # Request log enrichment plugin
 ├── types/
 │   ├── index.ts                # Main type exports (C8yNitroModuleOptions)
 │   ├── apiClient.ts            # API client generation types
@@ -135,6 +136,7 @@ pnpm build      # Build microservice (creates .zip)
 - Run `pnpm test` for watch mode during development
 - Run `pnpm test:run` for single test run (use this in automated workflows)
 - Import modules from `../src`
+- When changing code exercised by `tests/server/fixture/`, rebuild the package before running those fixture tests (`pnpm build`). The fixture server depends on the built package output, not only the live source tree.
 
 ### Unit Tests
 
@@ -400,6 +402,7 @@ This section captures project-specific knowledge, tool quirks, and lessons learn
 - **Logging** — evlog is automatically registered by `c8y()` (service name = manifest name). Import `useLogger`, `createLogger`, and `createError` from `c8y-nitro/utils`. `useLogger(event)` requires the H3Event; `createLogger(ctx?)` is for standalone/background contexts and requires a manual `log.emit()` call; no additional module setup is needed in `nitro.config.ts`.
 - **Structured errors** — always use `createError` from `c8y-nitro/utils` (re-exported from `evlog`) instead of Nitro/h3's built-in `createError`. This ensures the `why`, `fix`, and `link` fields are captured in the wide log event and returned in the JSON response under a `data` key.
 - **Logging test pattern** — Use `consola.mockTypes()` + `consola.wrapAll()` in `it.sequential` tests, then `consola.restoreAll()` in a `finally` block. Wait 100ms after the request for async log emission before asserting on `logOutput`.
+- **Server fixture test dependency** — `tests/server/fixture/` exercises the built package. After changing module/runtime behavior used by fixture tests, run `pnpm build` before running those tests or the fixture server may still use stale output.
 
 - Utility functions accept `H3Event | ServerRequest` for flexibility
 - Use `defineCachedFunction` from Nitro for cached API calls (e.g., credentials)
@@ -423,6 +426,10 @@ This section captures project-specific knowledge, tool quirks, and lessons learn
   - `runtime/middlewares/` — Global middlewares (e.g., dev user injection)
   - `runtime/plugins/` — Nitro plugins (e.g., env variable validation)
   - These locations are required for the module to correctly register them
+- Dev-only runtime middleware/plugins must use a `.dev.ts` suffix
+  - `registerRuntime()` only includes `.dev.ts` runtime files when `nitro.options.preset === 'nitro-dev'`
+  - Prefer excluding a dev-only runtime file entirely over adding runtime guards inside it
+  - For configurable dev-only behavior like user injection, keep the user-facing option in `c8y.dev`, then skip registering the `.dev.ts` file when disabled
 
 ### Common Mistakes to Avoid
 
