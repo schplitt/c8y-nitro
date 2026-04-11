@@ -156,6 +156,39 @@ describe('manifest generation', () => {
       expect(manifest.resources).toEqual({ cpu: '500m', memory: '512M' })
     })
 
+    it('should throw error when a setting default value is empty', async () => {
+      mockPackageData.current = {
+        name: 'my-service',
+        version: '1.0.0',
+        author: 'Test Author',
+      }
+
+      await expect(createC8yManifest('/project', {
+        settings: [
+          { key: 'valid.setting', defaultValue: 'configured' },
+          { key: 'credentials.secret', defaultValue: '' },
+        ],
+      }))
+        .rejects
+        .toThrow('manifest.settings entries must define a non-empty defaultValue. Invalid keys: "credentials.secret"')
+    })
+
+    it('should throw error when a setting default value is missing', async () => {
+      mockPackageData.current = {
+        name: 'my-service',
+        version: '1.0.0',
+        author: 'Test Author',
+      }
+
+      await expect(createC8yManifest('/project', {
+        settings: [
+          { key: 'credentials.secret' } as never,
+        ],
+      }))
+        .rejects
+        .toThrow('manifest.settings entries must define a non-empty defaultValue. Invalid keys: "credentials.secret"')
+    })
+
     it('should throw error when package.json is missing required fields', async () => {
       mockPackageData.current = {
         name: 'my-service',

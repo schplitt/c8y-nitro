@@ -456,7 +456,7 @@ export default defineNitroConfig({
     manifest: {
       settings: [
         { key: 'myOption', defaultValue: 'default' },
-        { key: 'credentials.secret' }, // Encrypted option
+        { key: 'credentials.secret', defaultValue: 'change-me' }, // Encrypted option
       ],
       settingsCategory: 'my-service', // Optional, defaults to contextPath/name
       requiredRoles: ['ROLE_OPTION_MANAGEMENT_READ'], // Required for reading tenant options
@@ -465,6 +465,8 @@ export default defineNitroConfig({
   modules: [c8y()],
 })
 ```
+
+`manifest.settings[].defaultValue` is required and must be a non-empty string. `''` is rejected during manifest generation so invalid settings fail early during development/build.
 
 > **Important**: To read tenant options, your microservice **must** have the `ROLE_OPTION_MANAGEMENT_READ` role in `manifest.requiredRoles`. Without this role, API calls will fail with a 403 Forbidden error.
 
