@@ -38,9 +38,20 @@ export function c8y(): NitroModule {
         : [
             ...(Array.isArray(nitro.options.noExternals) ? nitro.options.noExternals : []),
             pkgName,
-            // TODO: can crash tests as it may pull in entire tslib in a broken way? (Cannot destructure property '__extends' of 'import_tslib.default' as it is undefined)
             '@c8y/client',
           ]
+
+      // ensure correct tslib bundling
+      nitro.options.rolldownConfig = {
+        ...nitro.options.rolldownConfig,
+        resolve: {
+          ...nitro.options.rolldownConfig?.resolve,
+          alias: {
+            ...nitro.options.rolldownConfig?.resolve?.alias,
+            tslib: 'tslib/tslib.es6.mjs',
+          },
+        },
+      }
 
       // setup preset
       if (!nitro.options.preset.startsWith('nitro') && !nitro.options.preset.startsWith('node')) {
