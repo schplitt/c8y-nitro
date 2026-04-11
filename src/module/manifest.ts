@@ -11,6 +11,17 @@ interface PackageJsonFields {
   contextPath: string
 }
 
+function validateManifestSettings(options: C8YManifestOptions): void {
+  const invalidSettings = options.settings?.filter((setting) => typeof setting.defaultValue !== 'string' || setting.defaultValue.length === 0) ?? []
+
+  if (invalidSettings.length === 0) {
+    return
+  }
+
+  const invalidKeys = invalidSettings.map((setting) => `"${setting.key}"`).join(', ')
+  throw new Error(`manifest.settings entries must define a non-empty defaultValue. Invalid keys: ${invalidKeys}`)
+}
+
 async function readPackageJsonFieldsForManifest(
   rootDir: string,
   logger?: ConsolaInstance,
@@ -62,6 +73,8 @@ export async function createC8yManifest(
   options: C8YManifestOptions = {},
   logger?: ConsolaInstance,
 ): Promise<C8YManifest> {
+  validateManifestSettings(options)
+
   const {
     name,
     version,

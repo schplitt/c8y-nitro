@@ -15,8 +15,8 @@ export default defineNitroConfig({
     manifest: {
       roles: ['SOME_CUSTOM_ROLE', 'ANOTHER_ROLE'],
       settings: [
-        { key: 'myOption' },
-        { key: 'credentials.secret' },
+        { key: 'myOption', defaultValue: 'default' },
+        { key: 'credentials.secret', defaultValue: 'change-me' },
       ],
       requiredRoles: ['ROLE_OPTION_MANAGEMENT_READ'],
     },

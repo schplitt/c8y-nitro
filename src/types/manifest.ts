@@ -204,10 +204,10 @@ export interface Option {
   key: string
 
   /**
-   * Initial value if not overridden.
+   * Initial non-empty value if not overridden.
    * @example "1234"
    */
-  defaultValue?: string
+  defaultValue: string
 
   /**
    * Allow tenants to modify at runtime.
