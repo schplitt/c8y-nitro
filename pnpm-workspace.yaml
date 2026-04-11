@@ -29,6 +29,7 @@ catalog:
   spinnies: ^0.5.1
   tinyexec: ^1.0.4
   tsdown: ^0.21.4
+  tsnapi: ^0.1.1
   typescript: ^5.9.3
   vitest: ^4.1.0
 onlyBuiltDependencies:
@@ -36,4 +37,3 @@ onlyBuiltDependencies:
   - esbuild
   - protobufjs
   - ssh2
-

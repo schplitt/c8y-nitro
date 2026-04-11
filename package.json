@@ -24,22 +24,12 @@
     "url": "https://github.com/schplitt/c8y-nitro/issues"
   },
   "exports": {
-    ".": {
-      "types": "./dist/index.d.mts",
-      "import": "./dist/index.mjs"
-    },
-    "./types": {
-      "types": "./dist/types.d.mts",
-      "import": "./dist/types.mjs"
-    },
-    "./utils": {
-      "types": "./dist/utils.d.mts",
-      "import": "./dist/utils.mjs"
-    }
+    ".": "./dist/index.mjs",
+    "./cli": "./dist/cli/index.mjs",
+    "./types": "./dist/types.mjs",
+    "./utils": "./dist/utils.mjs",
+    "./package.json": "./package.json"
   },
-  "main": "./dist/index.mjs",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
   "bin": {
     "c8y-nitro": "./dist/cli/index.mjs"
   },
@@ -51,6 +41,7 @@
   "scripts": {
     "dev": "tsdown --watch",
     "build": "tsdown",
+    "build:update": "tsdown --update-snapshot",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
     "typecheck": "tsc --noEmit",
@@ -68,7 +59,8 @@
     "pathe": "catalog:",
     "pkg-types": "catalog:",
     "spinnies": "catalog:",
-    "tinyexec": "catalog:"
+    "tinyexec": "catalog:",
+    "tsnapi": "catalog:"
   },
   "devDependencies": {
     "@schplitt/eslint-config": "catalog:",
