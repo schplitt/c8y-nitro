@@ -1,5 +1,6 @@
 import type { UserConfig } from 'tsdown'
 import { defineConfig } from 'tsdown'
+import ApiSnapshot from 'tsnapi/rolldown'
 
 const mainConfig: UserConfig = {
   entry: {
@@ -19,6 +20,10 @@ const mainConfig: UserConfig = {
   },
 
   globImport: true,
+  plugins: [
+    ApiSnapshot(),
+  ],
+  exports: true,
 }
 
 export default defineConfig([
@@ -32,5 +37,6 @@ export default defineConfig([
     },
     // DTS OFF!
     dts: false,
+    exports: false,
   },
 ])

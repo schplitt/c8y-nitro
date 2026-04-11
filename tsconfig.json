@@ -27,4 +27,5 @@
     "skipLibCheck": true,
   },
   "include": ["./src", "./types"],
+  "exclude": ["./__snapshots__/**/*"]
 }
