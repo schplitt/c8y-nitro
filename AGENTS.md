@@ -43,6 +43,7 @@ src/
 │       ├── handlers/
 │       │   └── liveness-readiness.ts  # Probe endpoint handler
 │       ├── middlewares/
+│       │   ├── c8y-client.ts         # Normalizes raw @c8y/client thrown HTTP errors into structured server errors
 │       │   └── dev-user.dev.ts        # Dev-only user injection middleware
 │       └── plugins/
 │           ├── c8y-variables.dev.ts   # Dev-only C8Y env variable plugin
@@ -426,6 +427,9 @@ This section captures project-specific knowledge, tool quirks, and lessons learn
   - `runtime/middlewares/` — Global middlewares (e.g., dev user injection)
   - `runtime/plugins/` — Nitro plugins (e.g., env variable validation)
   - These locations are required for the module to correctly register them
+- `@c8y/client` throws plain objects like `{ res, data }` for HTTP failures instead of `Error` instances
+  - Normalize those at a global runtime boundary if they should become structured server errors
+  - Keep upstream payloads in `createError({ internal: ... })` so they are logged without being exposed to clients
 - Dev-only runtime middleware/plugins must use a `.dev.ts` suffix
   - `registerRuntime()` only includes `.dev.ts` runtime files when `nitro.options.preset === 'nitro-dev'`
   - Prefer excluding a dev-only runtime file entirely over adding runtime guards inside it
