@@ -55,6 +55,7 @@ export function c8y(): NitroModule {
         env: {
           service: manifest.name,
         },
+        exclude: [manifest.livenessProbe?.httpGet?.path, manifest.readinessProbe?.httpGet?.path].filter(Boolean) as string[],
       })
 
       await setupEvlog(nitro)

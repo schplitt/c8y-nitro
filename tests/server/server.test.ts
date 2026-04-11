@@ -601,5 +601,36 @@ describe('Nitro Server', () => {
         consola.restoreAll()
       }
     })
+
+    it.sequential('should not log liveness and readiness probe requests', async () => {
+      const logs: string[] = []
+      const mockFn = vi.fn((context: unknown) => {
+        logs.push(String(context))
+      })
+
+      consola.mockTypes(() => mockFn)
+      consola.wrapAll()
+
+      try {
+        const livenessRes = await server.fetch(new Request(new URL('/_c8y_nitro/liveness', server.url)))
+        const readinessRes = await server.fetch(new Request(new URL('/_c8y_nitro/readiness', server.url)))
+        const helloRes = await server.fetch(new Request(new URL('/hello', server.url)))
+
+        expect(livenessRes.status).toEqual(200)
+        expect(readinessRes.status).toEqual(200)
+        expect(helloRes.status).toEqual(200)
+
+        await new Promise<void>((resolve) => {
+          setTimeout(() => resolve(), 100)
+        })
+
+        const logOutput = logs.join('\n')
+        expect(logOutput).toMatch(/GET \/hello/)
+        expect(logOutput).not.toMatch(/GET \/_c8y_nitro\/liveness/)
+        expect(logOutput).not.toMatch(/GET \/_c8y_nitro\/readiness/)
+      } finally {
+        consola.restoreAll()
+      }
+    })
   })
 })
