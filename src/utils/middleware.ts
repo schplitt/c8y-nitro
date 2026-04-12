@@ -1,12 +1,22 @@
 import { defineHandler, HTTPError } from 'nitro/h3'
 import type { EventHandler } from 'nitro/h3'
 import type { C8YRoles } from 'c8y-nitro/types'
+import { c8yManifest } from 'c8y-nitro/runtime'
 import { useUserRoles } from './resources'
 import { getCurrentUserTenantId } from './internal/tenant'
 import process from 'node:process'
 
 // allow any string as role for extensibility
 type UserRole = keyof C8YRoles | (string & {})
+
+const probePaths = [
+  c8yManifest.livenessProbe?.httpGet?.path,
+  c8yManifest.readinessProbe?.httpGet?.path,
+].filter((path): path is string => Boolean(path))
+
+function isProbeRequest(pathname: string): boolean {
+  return probePaths.some((probePath) => pathname.startsWith(probePath))
+}
 
 /**
  * Middleware to check if the current user has the required role.\
@@ -43,6 +53,10 @@ export function hasUserRequiredRole(role: UserRole): EventHandler
 export function hasUserRequiredRole(roles: UserRole[]): EventHandler
 export function hasUserRequiredRole(roleOrRoles: UserRole | UserRole[]): EventHandler {
   return defineHandler(async (event) => {
+    if (isProbeRequest(event.url.pathname)) {
+      return
+    }
+
     // TODO: rename to userHasOneOfRoles and create a separate userHasAllRoles
 
     const requiredRoles = Array.isArray(roleOrRoles) ? roleOrRoles : [roleOrRoles]
@@ -95,6 +109,10 @@ export function isUserFromAllowedTenant(tenantId: string): EventHandler
 export function isUserFromAllowedTenant(tenantIds: string[]): EventHandler
 export function isUserFromAllowedTenant(tenantIdOrIds: string | string[]): EventHandler {
   return defineHandler(async (event) => {
+    if (isProbeRequest(event.url.pathname)) {
+      return
+    }
+
     const allowedTenants = Array.isArray(tenantIdOrIds) ? tenantIdOrIds : [tenantIdOrIds]
     const userTenantId = await getCurrentUserTenantId(event)
 
@@ -127,6 +145,10 @@ export function isUserFromAllowedTenant(tenantIdOrIds: string | string[]): Event
  */
 export function isUserFromDeployedTenant(): EventHandler {
   return defineHandler(async (event) => {
+    if (isProbeRequest(event.url.pathname)) {
+      return
+    }
+
     const userTenantId = await getCurrentUserTenantId(event)
     const deployedTenantId = process.env.C8Y_BOOTSTRAP_TENANT
 

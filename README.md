@@ -498,6 +498,8 @@ export default defineNitroConfig({
 | `isUserFromAllowedTenant(tenant\|tenants)` | Check if user is from allowed tenant(s)   |       ✅        |
 | `isUserFromDeployedTenant()`               | Check if user is from the deployed tenant |       ✅        |
 
+Probe requests targeting the manifest-defined `livenessProbe.httpGet.path` or `readinessProbe.httpGet.path` bypass these auth helpers so orchestration health checks are not blocked by route-wide access control.
+
 ## CLI Commands
 
 | Command     | Description                                             |
