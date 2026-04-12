@@ -27,6 +27,12 @@ export interface C8yConfig {
   configFile: string
 }
 
+function normalizeBaseUrl(baseUrl: string): string {
+  return baseUrl.endsWith('/')
+    ? baseUrl.slice(0, -1)
+    : baseUrl
+}
+
 /**
  * Loads c8y configuration from nitro.config and .env files.
  * Searches in cwd.
@@ -92,13 +98,8 @@ export function validateBootstrapEnv(env: Record<string, string | undefined>): B
     )
   }
 
-  const endsWithSlash = env.C8Y_BASEURL!.endsWith('/')
-  const baseUrl = endsWithSlash
-    ? env.C8Y_BASEURL!.slice(0, -1)
-    : env.C8Y_BASEURL!
-
   return {
-    C8Y_BASEURL: baseUrl,
+    C8Y_BASEURL: normalizeBaseUrl(env.C8Y_BASEURL!),
     C8Y_DEVELOPMENT_TENANT: env.C8Y_DEVELOPMENT_TENANT!,
     C8Y_DEVELOPMENT_USER: env.C8Y_DEVELOPMENT_USER!,
     C8Y_DEVELOPMENT_PASSWORD: env.C8Y_DEVELOPMENT_PASSWORD!,

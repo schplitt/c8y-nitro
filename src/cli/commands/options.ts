@@ -5,7 +5,7 @@ import {
   createBasicAuthHeader,
   getTenantOptionsByCategory,
   getTenantOption,
-  updateTenantOption,
+  upsertTenantOption,
   deleteTenantOption,
 } from '../utils/c8y-api'
 import { createC8yManifest } from '../../module/manifest'
@@ -101,6 +101,10 @@ async function handleRead(
     return
   }
 
+  if (credentialsKeys.length > 0) {
+    consola.warn('Encrypted credentials.* options cannot be read in decrypted form with the development user in this CLI.')
+  }
+
   const key = await consola.prompt('Select option to read:', {
     type: 'select',
     options: allKeys.map((k) => ({
@@ -112,8 +116,7 @@ async function handleRead(
 
   consola.info(`Reading option: ${key}`)
 
-  const apiKey = key.startsWith('credentials.') ? key.replace(/^credentials\./, '') : key
-  const value = await getTenantOption(baseUrl, category, apiKey, authHeader)
+  const value = await getTenantOption(baseUrl, category, key, authHeader)
 
   if (value === undefined) {
     consola.warn(`Option '${key}' is not set`)
@@ -162,8 +165,13 @@ async function handleUpdate(
 
     consola.info(`Updating option: ${key}`)
 
-    const apiKey = key.replace(/^credentials\./, '')
-    await updateTenantOption(baseUrl, category, apiKey, newValue, authHeader)
+    await upsertTenantOption(
+      baseUrl,
+      category,
+      key,
+      newValue,
+      authHeader,
+    )
 
     // Update local cache
     currentOptions[key] = newValue
@@ -219,8 +227,8 @@ async function handleDelete(
 
   for (const key of keysToDelete) {
     consola.info(`Deleting option: ${key}`)
-    const apiKey = key.startsWith('credentials.') ? key.replace(/^credentials\./, '') : key
-    await deleteTenantOption(baseUrl, category, apiKey, authHeader)
+    await deleteTenantOption(baseUrl, category, key, authHeader)
+    delete currentOptions[key]
     consola.success(`✓ Deleted: ${key}`)
   }
 

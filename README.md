@@ -470,7 +470,7 @@ export default defineNitroConfig({
 
 > **Important**: To read tenant options, your microservice **must** have the `ROLE_OPTION_MANAGEMENT_READ` role in `manifest.requiredRoles`. Without this role, API calls will fail with a 403 Forbidden error.
 
-> **Note on Encrypted Options**: Keys prefixed with `credentials.` are stored encrypted by Cumulocity. The value is automatically decrypted when fetched if your microservice is the owner of the option (the option's category matches your microservice's `settingsCategory`, `contextPath`, or name). The `credentials.` prefix is automatically stripped when calling the API.
+> **Note on Encrypted Options**: Keys prefixed with `credentials.` are stored encrypted by Cumulocity. See more details [here](https://cumulocity.com/api/core/#operation/postOptionCollectionResource).
 
 > **Note on Missing Options**: If a tenant option is not set (404 Not Found), `useTenantOption()` returns `undefined` instead of throwing an error. Other errors (e.g., 403 Forbidden) are thrown normally.
 

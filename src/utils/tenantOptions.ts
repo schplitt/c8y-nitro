@@ -28,12 +28,10 @@ function createCachedTenantOptionFetcher(key: C8YTenantOptionKey): CachedTenantO
     async (): Promise<string | undefined> => {
       const client = await useDeployedTenantClient()
       const category = useRuntimeConfig().c8ySettingsCategory as string
-      // Strip credentials. prefix for API call only
-      const apiKey = key.replace(/^credentials\./, '')
 
       try {
         const response = await client.options.tenant.detail({
-          key: apiKey,
+          key,
           category,
         })
         return response.data.value
@@ -92,11 +90,6 @@ function getOrCreateFetcher(key: C8YTenantOptionKey): CachedTenantOptionFetcher 
  * - `c8y.cache.defaultTenantOptionsTTL` — Default TTL for all keys (in seconds)
  * - `c8y.cache.tenantOptions` — Per-key TTL overrides
  * - `NITRO_C8Y_DEFAULT_TENANT_OPTIONS_TTL` — Environment variable for default TTL
- *
- * @note For encrypted options (keys starting with `credentials.`), the value is automatically
- * decrypted by Cumulocity if this microservice is the owner of the option (category matches
- * the microservice's settingsCategory/contextPath/name). The `credentials.` prefix is
- * automatically stripped when calling the API.
  *
  * @example
  * // Fetch a tenant option:
