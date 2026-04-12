@@ -304,9 +304,8 @@ describe('Nitro Server', () => {
             { tenant: 't67890', user: 'serviceuser2', password: 'pass2' },
           ],
           tenantOptions: {
-            myOption: 'hello-world',
-            // stored without credentials. prefix since useTenantOption strips it before the API call
-            secret: 'super-secret-value',
+            'myOption': 'hello-world',
+            'credentials.secret': 'super-secret-value',
           },
         },
       })
