@@ -401,7 +401,6 @@ export async function getTenantOption(
   })
 
   if (response.status === 404) {
-    // Option doesn't exist, return undefined
     return undefined
   }
 
@@ -417,7 +416,42 @@ export async function getTenantOption(
 }
 
 /**
- * Updates or creates a tenant option.
+ * Creates a tenant option.
+ * @param baseUrl - The Cumulocity base URL
+ * @param category - The category of the option
+ * @param key - The option key
+ * @param value - The value to set
+ * @param authHeader - The Basic Auth header
+ */
+export async function createTenantOption(
+  baseUrl: string,
+  category: string,
+  key: string,
+  value: string,
+  authHeader: string,
+): Promise<void> {
+  const url = `${baseUrl}/tenant/options`
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': authHeader,
+      'Content-Type': 'application/vnd.com.nsn.cumulocity.option+json',
+      'Accept': 'application/json',
+    },
+    body: JSON.stringify({ category, key, value }),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Failed to create tenant option ${category}/${key}: ${response.status} ${response.statusText}\n${errorText}`, {
+      cause: response,
+    })
+  }
+}
+
+/**
+ * Updates an existing tenant option.
  * @param baseUrl - The Cumulocity base URL
  * @param category - The category of the option
  * @param key - The option key
@@ -448,6 +482,33 @@ export async function updateTenantOption(
     throw new Error(`Failed to update tenant option ${category}/${key}: ${response.status} ${response.statusText}\n${errorText}`, {
       cause: response,
     })
+  }
+}
+
+/**
+ * Updates a tenant option if it exists, otherwise creates it.
+ * @param baseUrl - The Cumulocity base URL
+ * @param category - The category of the option
+ * @param key - The option key
+ * @param value - The new value to set
+ * @param authHeader - The Basic Auth header
+ */
+export async function upsertTenantOption(
+  baseUrl: string,
+  category: string,
+  key: string,
+  value: string,
+  authHeader: string,
+): Promise<void> {
+  try {
+    await updateTenantOption(baseUrl, category, key, value, authHeader)
+  } catch (error) {
+    if ((error as Error & { cause?: { status?: number } }).cause?.status === 404) {
+      await createTenantOption(baseUrl, category, key, value, authHeader)
+      return
+    }
+
+    throw error
   }
 }
 
