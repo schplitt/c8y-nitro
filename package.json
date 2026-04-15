@@ -75,7 +75,7 @@
   },
   "peerDependencies": {
     "@c8y/client": ">=1021",
-    "nitro": "3.0.260311-beta"
+    "nitro": "3.0.260415-beta"
   },
   "engines": {
     "node": ">=24.0.0"
