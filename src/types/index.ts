@@ -19,12 +19,22 @@ export interface C8yDevOptions {
   injectUser?: boolean
 }
 
+export interface C8ySchedulerOptions {
+  /**
+   * Controls whether scheduled task state is only kept in memory or also persisted.
+   * The in-memory scheduler is always active; persistence support is additive.
+   * @default 'memory'
+   */
+  persistence?: 'memory' | 'inventory'
+}
+
 // overwritten by module with info from manifest
 export * from './roles'
 export * from './tenantOptions'
 
 export interface C8yNitroModuleOptions {
   dev?: C8yDevOptions
+  scheduler?: C8ySchedulerOptions
   manifest?: C8YManifestOptions
   apiClient?: C8YAPIClientOptions
   zip?: C8YZipOptions

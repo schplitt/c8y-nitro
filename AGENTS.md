@@ -63,6 +63,7 @@ src/
     ├── logging.ts              # Logging utilities (useLogger, createError) re-exported from evlog
     ├── middleware.ts           # Auth middlewares (hasUserRequiredRole, etc.)
     ├── resources.ts            # Resource utilities (useUser, useUserRoles)
+    ├── schedule.ts             # One-shot Nitro task scheduling utilities
     ├── tenantOptions.ts        # Tenant options fetching (useTenantOption)
     └── internal/
       ├── common.ts           # Internal shared utilities
@@ -402,8 +403,9 @@ This section captures project-specific knowledge, tool quirks, and lessons learn
 - **CLI error handling** — In CLI commands using citty, throw errors to exit with a message. Citty automatically catches and displays them. Use `cancel: 'reject'` on consola prompts to throw on user cancellation.
 - **Logging** — evlog is automatically registered by `c8y()` (service name = manifest name). Import `useLogger`, `createLogger`, and `createError` from `c8y-nitro/utils`. `useLogger(event)` requires the H3Event; `createLogger(ctx?)` is for standalone/background contexts and requires a manual `log.emit()` call; no additional module setup is needed in `nitro.config.ts`.
 - **Structured errors** — always use `createError` from `c8y-nitro/utils` (re-exported from `evlog`) instead of Nitro/h3's built-in `createError`. This ensures the `why`, `fix`, and `link` fields are captured in the wide log event and returned in the JSON response under a `data` key.
-- **Logging test pattern** — Use `consola.mockTypes()` + `consola.wrapAll()` in `it.sequential` tests, then `consola.restoreAll()` in a `finally` block. Wait 100ms after the request for async log emission before asserting on `logOutput`.
+- **Logging test pattern** — Use `consola.mockTypes()` + `consola.wrapAll()` in `it.sequential` tests, then `consola.restoreAll()` in a `finally` block. Capture logs with a plain function that pushes `String(context)` into an array; do not use `vi.fn()` or Vitest mock-call assertions for fixture server logs because Nitro runs prebuilt bundled server code. Wait 100ms after the request for async log emission before asserting on `logOutput`.
 - **Server fixture test dependency** — `tests/server/fixture/` exercises the built package. After changing module/runtime behavior used by fixture tests, run `pnpm build` before running those tests or the fixture server may still use stale output.
+- **Scheduled task test pattern** — Enable `experimental.tasks: true` in the fixture config and place a real Nitro task in `tests/server/fixture/tasks/` so Nitro auto-registers it; do not add a manual `tasks` handler path unless the test specifically needs one. Nitro derives task names from file paths, so use nested paths like `tasks/scheduler/log.ts` for `scheduler:log`. Schedule it through a route using `scheduleTask()`, assert all captured logs do not contain the task marker immediately after the request, then sleep until `runAt` plus a short buffer and assert the marker appears. Do not use `vi.waitFor()` for this built fixture timing check. Reuse an existing fixture server `describe` block when possible instead of adding another server setup just for scheduler coverage. Use `consola.mockTypes()` + `consola.wrapAll()` for log assertions, and make the fixture task log through `consola` rather than spying on `console.log` directly.
 
 - Utility functions accept `H3Event | ServerRequest` for flexibility
 - Use `defineCachedFunction` from Nitro for cached API calls (e.g., credentials)
