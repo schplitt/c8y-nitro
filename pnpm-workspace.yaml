@@ -1,3 +1,13 @@
+catalogMode: prefer
+shellEmulator: true
+
+trustPolicy: no-downgrade
+
+trustPolicyExclude:
+  - cached-factory@0.1.0
+  - ts-api-utils@2.2.0
+  - undici-types@6.21.0
+  - evlog@2.12.0
 packages:
   - ./
   - playground
@@ -26,18 +36,8 @@ catalog:
   tsnapi: ^0.1.2
   typescript: ^6.0.2
   vitest: ^4.1.4
-catalogMode: prefer
 onlyBuiltDependencies:
   - cpu-features
   - esbuild
   - protobufjs
   - ssh2
-shellEmulator: true
-
-trustPolicy: no-downgrade
-
-trustPolicyExclude:
-  - cached-factory@0.1.0
-  - ts-api-utils@2.2.0
-  - undici-types@6.21.0
-  - evlog@2.12.0

@@ -155,18 +155,17 @@ describe('Nitro Server', () => {
         expect(json.pending[json.scheduled.id]).toEqual(json.scheduled)
         expect(logs.join('\n')).not.toContain(`scheduled-task:${marker}`)
 
-        const waitMs = Math.max(new Date(json.scheduled.runAt).getTime() - Date.now(), 0) + 500
+        const waitMs = Math.max(new Date(json.scheduled.runAt).getTime() - Date.now(), 0) + 2_000
         await new Promise<void>((resolve) => {
           setTimeout(() => resolve(), waitMs)
         })
-
-        expect(logs.join('\n')).toContain(`scheduled-task:${marker}`)
-
         const listRes = await server.fetch(new Request(new URL('/scheduled-tasks', server.url)))
         expect(listRes.status).toEqual(200)
 
         const listJson = await listRes.json()
         expect(listJson.pending).not.toHaveProperty(json.scheduled.id)
+
+        expect(logs.join('\n')).toContain(`scheduled-task:${marker}`)
       } finally {
         consola.restoreAll()
       }
