@@ -212,7 +212,6 @@ const code = generateMockClientCode(mockData)
 #### Creating a Server Test
 
 ```ts
-/* eslint-disable antfu/no-top-level-await */
 import { createNitro, createDevServer, build, prepare } from 'nitro/builder'
 
 // 1. Create server with mock data via virtual modules

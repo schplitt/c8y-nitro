@@ -542,7 +542,7 @@ await cancelScheduledTask(scheduled.id)
 `listScheduledTasks()` returns an object keyed by scheduled task ID:
 
 ```ts
-{
+const pendingTasks = {
   '550e8400-e29b-41d4-a716-446655440000': {
     id: '550e8400-e29b-41d4-a716-446655440000',
     task: 'reports:generate',
