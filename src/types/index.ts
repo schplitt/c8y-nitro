@@ -35,7 +35,7 @@ export interface C8yNitroModuleOptions {
    *
    * Query params:
    * - `all`: invalidate all created tenant option fetchers
-   * - `key`: invalidate a single manifest-defined tenant option key if its fetcher exists
+   * - `key`: invalidate a single manifest-defined tenant option key if it exists
    *
    * `all` takes priority over `key`.
    * @default false

@@ -130,6 +130,46 @@ describe('Nitro Server', () => {
 
       expect(res2.status).toEqual(200)
     })
+
+    it.sequential('should run a scheduled task after its delay', async () => {
+      const marker = `marker-${Date.now()}`
+      const logs: string[] = []
+      const mockFn = vi.fn((context: unknown) => {
+        logs.push(String(context))
+      })
+
+      consola.mockTypes(() => mockFn)
+      consola.wrapAll()
+
+      try {
+        const res = await server.fetch(new Request(new URL(`/schedule-task?marker=${marker}&schedule=0.2`, server.url)))
+
+        expect(res.status).toEqual(200)
+
+        const json = await res.json()
+        expect(json.scheduled).toEqual({
+          id: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/),
+          task: 'scheduler:log',
+          runAt: expect.any(String),
+        })
+        expect(json.pending[json.scheduled.id]).toEqual(json.scheduled)
+        expect(logs.join('\n')).not.toContain(`scheduled-task:${marker}`)
+
+        const waitMs = Math.max(new Date(json.scheduled.runAt).getTime() - Date.now(), 0) + 2_000
+        await new Promise<void>((resolve) => {
+          setTimeout(() => resolve(), waitMs)
+        })
+        const listRes = await server.fetch(new Request(new URL('/scheduled-tasks', server.url)))
+        expect(listRes.status).toEqual(200)
+
+        const listJson = await listRes.json()
+        expect(listJson.pending).not.toHaveProperty(json.scheduled.id)
+
+        expect(logs.join('\n')).toContain(`scheduled-task:${marker}`)
+      } finally {
+        consola.restoreAll()
+      }
+    })
   })
 
   describe('With dev user injection disabled', () => {

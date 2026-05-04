@@ -474,6 +474,85 @@ export default defineNitroConfig({
 
 > **Note on Missing Options**: If a tenant option is not set (404 Not Found), `useTenantOption()` returns `undefined` instead of throwing an error. Other errors (e.g., 403 Forbidden) are thrown normally.
 
+### Scheduled Tasks
+
+| Function                | Description                                                |
+| ----------------------- | ---------------------------------------------------------- |
+| `scheduleTask()`        | Schedule a Nitro task to run once in the future            |
+| `listScheduledTasks()`  | List pending scheduled tasks by their UUID                 |
+| `cancelScheduledTask()` | Cancel a pending scheduled task before it starts execution |
+
+The scheduler is a lightweight one-shot scheduling layer on top of Nitro's [`runTask()`](https://nitro.build/docs/tasks#programmatically-run-tasks). It does not implement recurring schedules; use Nitro's scheduled tasks/cron support for repetition.
+
+Enable Nitro tasks in your config and define a task in `tasks/`. Nitro derives the task name from the file path, so `tasks/reports/generate.ts` becomes `reports:generate`.
+
+```ts
+export default defineNitroConfig({
+  experimental: {
+    tasks: true,
+  },
+  modules: [c8y()],
+})
+```
+
+```ts
+// tasks/reports/generate.ts
+import { defineTask } from 'nitro/task'
+
+export default defineTask({
+  meta: {
+    name: 'reports:generate',
+    description: 'Generate a report later',
+  },
+  run({ payload }) {
+    return { result: payload.reportId }
+  },
+})
+```
+
+Schedule it from your application code:
+
+```ts
+import { scheduleTask, listScheduledTasks, cancelScheduledTask } from 'c8y-nitro/utils'
+
+const scheduled = await scheduleTask('reports:generate', {
+  payload: { reportId: 'report-1' },
+  schedule: '1 hour',
+})
+
+console.log(scheduled)
+// {
+//   id: '550e8400-e29b-41d4-a716-446655440000',
+//   task: 'reports:generate',
+//   runAt: '2026-05-01T13:00:00.000Z'
+// }
+
+const pending = await listScheduledTasks()
+console.log(pending[scheduled.id])
+
+await cancelScheduledTask(scheduled.id)
+```
+
+`schedule` accepts:
+
+- `number` — seconds from now, for example `30`
+- `string` — human-readable durations parsed by [`itty-time`](https://github.com/kwhitley/itty-time), for example `'10 minutes'`, `'1 hour'`, or `'3 days'`
+- `Date` — exact run time
+
+`listScheduledTasks()` returns an object keyed by scheduled task ID:
+
+```ts
+const pendingTasks = {
+  '550e8400-e29b-41d4-a716-446655440000': {
+    id: '550e8400-e29b-41d4-a716-446655440000',
+    task: 'reports:generate',
+    runAt: '2026-05-01T13:00:00.000Z',
+  },
+}
+```
+
+> **Cancellation**: `cancelScheduledTask(id)` only cancels tasks that have not started yet. Once the scheduler calls Nitro's `runTask()`, execution belongs to Nitro and cannot be stopped by this utility.
+
 ### Resources
 
 | Function         | Description                        | Request Context |

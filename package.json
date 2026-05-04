@@ -51,10 +51,12 @@
     "test:run": "vitest run"
   },
   "dependencies": {
+    "@types/node": "catalog:",
     "c12": "catalog:",
     "citty": "catalog:",
     "consola": "catalog:",
     "evlog": "catalog:",
+    "itty-time": "catalog:",
     "jszip": "catalog:",
     "pathe": "catalog:",
     "pkg-types": "catalog:",
