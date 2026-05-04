@@ -37,7 +37,6 @@ export interface C8YManifest {
 }
 export interface C8yNitroModuleOptions {
   dev?: C8yDevOptions;
-  scheduler?: C8ySchedulerOptions;
   manifest?: C8YManifestOptions;
   apiClient?: C8YAPIClientOptions;
   zip?: C8YZipOptions;
@@ -46,9 +45,6 @@ export interface C8yNitroModuleOptions {
   skipBootstrap?: boolean;
 }
 export interface C8YRoles {}
-export interface C8ySchedulerOptions {
-  persistence?: 'memory' | 'inventory';
-}
 export interface C8YZipOptions {
   name?: string | ((packageName: string, version: string) => string);
   outputDir?: string;
