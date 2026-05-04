@@ -63,6 +63,7 @@ interface ScheduledTaskRecord {
   timeoutId?: number
 }
 
+// TODO: Add persisted scheduler state when inventory-backed scheduling is implemented.
 const scheduledTasks = new Map<string, ScheduledTaskRecord>()
 const scheduledTaskTimers = new Map<number, ReturnType<typeof setTimeout>>()
 const schedulerReady: Promise<void> = Promise.resolve()
