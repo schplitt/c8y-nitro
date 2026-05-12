@@ -13,7 +13,7 @@ packages:
   - playground
 catalog:
   # eslint-disable-next-line pnpm/yaml-no-unused-catalog-item
-  '@c8y/client': ^1021.81.0
+  '@c8y/client': ^1023.80.0
   '@schplitt/eslint-config': ^1.5.0
   '@types/node': ^24.12.3
   '@types/spinnies': ^0.5.3
@@ -22,8 +22,8 @@ catalog:
   changelogithub: ^14.0.0
   citty: ^0.2.2
   consola: ^3.4.2
-  eslint: ^10.2.0
-  evlog: ^2.16.0
+  eslint: ^10.3.0
+  evlog: ^2.17.0
   itty-time: ^2.0.2
   jszip: ^3.10.1
   memfs: ^4.57.2
@@ -33,9 +33,9 @@ catalog:
   spinnies: ^0.5.1
   tinyexec: ^1.1.2
   tsdown: ^0.22.0
-  tsnapi: ^0.3.2
+  tsnapi: ^0.3.3
   typescript: ^6.0.3
-  vitest: ^4.1.5
+  vitest: ^4.1.6
 onlyBuiltDependencies:
   - cpu-features
   - esbuild
