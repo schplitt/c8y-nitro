@@ -1,5 +1,4 @@
 import { defineCachedFunction } from 'nitro/cache'
-import { useStorage } from 'nitro/storage'
 import { useRuntimeConfig } from 'nitro/runtime-config'
 import { useDeployedTenantClient } from './client'
 import type { C8YTenantOptionKey } from 'c8y-nitro/types'
@@ -24,7 +23,8 @@ function getTenantOptionCacheTTL(key: C8YTenantOptionKey): number {
 function createCachedTenantOptionFetcher(key: C8YTenantOptionKey): CachedTenantOptionFetcher {
   const cacheName = `_c8y_nitro_tenant_option_${key.replace(/\./g, '_')}`
 
-  const fetcher = defineCachedFunction(
+  // TODO: Remove this cast once Nitro's `defineCachedFunction()` types expose ocache's `.invalidate()` helper.
+  const cachedFetcher = defineCachedFunction(
     async (): Promise<string | undefined> => {
       const client = await useDeployedTenantClient()
       const category = useRuntimeConfig().c8ySettingsCategory as string
@@ -50,19 +50,18 @@ function createCachedTenantOptionFetcher(key: C8YTenantOptionKey): CachedTenantO
       group: 'c8y_nitro',
       swr: false,
     },
-  )
+  ) as (() => Promise<string | undefined>) & {
+    invalidate: () => Promise<void>
+  }
 
-  return Object.assign(fetcher, {
-    invalidate: async (): Promise<void> => {
-      const completeKey = `c8y_nitro:functions:${cacheName}.json`
-      await useStorage('cache').removeItem(completeKey)
-    },
+  const fetcher: CachedTenantOptionFetcher = Object.assign(cachedFetcher, {
     refresh: async (): Promise<string | undefined> => {
-      const completeKey = `c8y_nitro:functions:${cacheName}.json`
-      await useStorage('cache').removeItem(completeKey)
-      return await fetcher()
+      await cachedFetcher.invalidate()
+      return await cachedFetcher()
     },
   })
+
+  return fetcher
 }
 
 /**

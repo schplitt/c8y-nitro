@@ -330,6 +330,15 @@ describe('Nitro Server', () => {
     beforeAll(async () => {
       const result = await createC8yNitroServer({
         env: completeEnv,
+        nitroConfig: {
+          c8y: {
+            cache: {
+              tenantOptions: {
+                cacheExpiryOption: 4,
+              },
+            },
+          },
+        },
         mockData: {
           currentUser: {
             userName: 'testUser',
@@ -346,6 +355,7 @@ describe('Nitro Server', () => {
           tenantOptions: {
             'myOption': 'hello-world',
             'credentials.secret': 'super-secret-value',
+            'cacheExpiryOption': 'cache-initial-value',
           },
         },
       })
@@ -392,6 +402,7 @@ describe('Nitro Server', () => {
       const json = await res.json()
       expect(json.myOption).toBe('hello-world')
       expect(json['credentials.secret']).toBe('super-secret-value')
+      expect(json.cacheExpiryOption).toBe('cache-initial-value')
       expect(json.message).toBe('Fetched tenant options successfully')
     })
 
@@ -461,6 +472,39 @@ describe('Nitro Server', () => {
       const json = await res.json()
       expect(json.message).toBe('You are from the deployed tenant!')
     })
+
+    it('should keep the cached tenant option until TTL expires and then return the updated value', async () => {
+      const initialRes = await server.fetch(new Request(new URL('/tenant-options', server.url)))
+      expect(initialRes.status).toEqual(200)
+      const initialJson = await initialRes.json()
+      expect(initialJson.cacheExpiryOption).toBe('cache-initial-value')
+
+      const updateRes = await server.fetch(new Request(new URL('/mock-tenant-option?key=cacheExpiryOption&value=cache-updated-value', server.url)))
+      expect(updateRes.status).toEqual(200)
+      const updateJson = await updateRes.json()
+      expect(updateJson).toEqual({
+        key: 'cacheExpiryOption',
+        value: 'cache-updated-value',
+      })
+
+      await new Promise<void>((resolve) => {
+        setTimeout(() => resolve(), 2_000)
+      })
+
+      const cachedRes = await server.fetch(new Request(new URL('/tenant-options', server.url)))
+      expect(cachedRes.status).toEqual(200)
+      const cachedJson = await cachedRes.json()
+      expect(cachedJson.cacheExpiryOption).toBe('cache-initial-value')
+
+      await new Promise<void>((resolve) => {
+        setTimeout(() => resolve(), 3_200)
+      })
+
+      const refreshedRes = await server.fetch(new Request(new URL('/tenant-options', server.url)))
+      expect(refreshedRes.status).toEqual(200)
+      const refreshedJson = await refreshedRes.json()
+      expect(refreshedJson.cacheExpiryOption).toBe('cache-updated-value')
+    }, 8_000)
   })
 
   describe('Tenant restriction (disallowed tenant)', () => {
