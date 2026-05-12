@@ -20,6 +20,7 @@ export default defineNitroConfig({
       settings: [
         { key: 'myOption', defaultValue: 'default' },
         { key: 'credentials.secret', defaultValue: 'change-me' },
+        { key: 'cacheExpiryOption', defaultValue: 'cache-default' },
       ],
       requiredRoles: ['ROLE_OPTION_MANAGEMENT_READ'],
     },

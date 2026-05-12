@@ -254,14 +254,16 @@ await nitro.close()
 
 #### Limitations
 
-Virtual module mocking injects static data at build time. This means:
+Virtual module mocking injects module code at build time. By default, the generated mock data is static per server instance, but the mock module can also expose explicit helper functions for controlled runtime mutation when a test needs to simulate backend state changes.
 
-- **No runtime data changes**: You cannot modify mock data mid-test (e.g., to test cache invalidation or TTL expiration)
-- **No state verification**: Cannot assert that a function wrote to the "database" or called the API a specific number of times
-- **One mock per server**: Changing mock data requires building a new server instance
+- **Static by default**: Most mock data is fixed per built server instance unless the virtual module intentionally exposes mutable helpers
+- **Controlled runtime mutation is possible**: For cache invalidation or TTL-expiration tests, add explicit helper exports to the virtual module and trigger them through fixture routes so the bundled server mutates its own in-memory mock state
+- **No call-count/state introspection by default**: Cannot assert writes or API call counts unless the virtual module is extended to record that state
+- **One virtual module per server build**: Changing the mock implementation itself still requires building a new server instance
 
 For testing cache behavior, TTL expiration, or stateful interactions, consider:
 
+- Extending the virtual module with focused runtime mutation helpers and hitting them through fixture routes
 - Unit testing the caching logic separately with mocked dependencies
 - Using the playground with a real Cumulocity tenant for manual verification
 
@@ -408,11 +410,15 @@ This section captures project-specific knowledge, tool quirks, and lessons learn
 - **Structured errors** — always use `createError` from `c8y-nitro/utils` (re-exported from `evlog`) instead of Nitro/h3's built-in `createError`. This ensures the `why`, `fix`, and `link` fields are captured in the wide log event and returned in the JSON response under a `data` key.
 - **Logging test pattern** — Use `consola.mockTypes()` + `consola.wrapAll()` in `it.sequential` tests, then `consola.restoreAll()` in a `finally` block. Capturing logs with `vi.fn((context) => logs.push(String(context)))` is fine when passed through `consola.mockTypes()`. Wait 100ms after the request for async log emission before asserting on `logOutput`.
 - **Server fixture test dependency** — `tests/server/fixture/` exercises the built package. After changing module/runtime behavior used by fixture tests, run `pnpm build` before running those tests or the fixture server may still use stale output.
+- **Nitro workspace version alignment** — Keep `pnpm-workspace.yaml`'s Nitro catalog version aligned with the package-level Nitro version before diagnosing Nitro type or cache helper behavior. A catalog mismatch can leave the workspace on an older Nitro build and make cache helper typings or runtime assumptions look wrong.
+- **Nitro cache typing gap** — In Nitro `3.0.260429-beta`, `defineCachedFunction()` runtime/docs expose `.invalidate()` and `.resolveKeys()`, but Nitro's exported TypeScript declaration still returns a plain cached function signature without those helper members. When using Nitro's built-in cache invalidation helpers from TypeScript, keep a narrow local cast around the cached function until Nitro updates its type declarations.
 - **Scheduled task test pattern** — Enable `experimental.tasks: true` in the fixture config and place a real Nitro task in `tests/server/fixture/tasks/` so Nitro auto-registers it; do not add a manual `tasks` handler path unless the test specifically needs one. Nitro derives task names from file paths, so use nested paths like `tasks/scheduler/log.ts` for `scheduler:log`. Schedule it through a route using `scheduleTask()`, assert all captured logs do not contain the task marker immediately after the request, then sleep until `runAt` plus a generous buffer and assert the marker appears. Do not use `vi.waitFor()` for this built fixture timing check. Reuse an existing fixture server `describe` block when possible instead of adding another server setup just for scheduler coverage. Use `consola.mockTypes()` + `consola.wrapAll()` for log assertions, and make fixture tasks log through the standalone `createLogger()` utility so task logs use the same consola-backed logging path as the app.
+- **Shared fixture cache tests** — When adding cache-expiration coverage to an existing shared server describe block, prefer introducing a dedicated manifest-defined tenant option key used only by that test instead of reusing a key that other assertions depend on. This avoids cross-test state coupling while still saving the extra server startup/teardown cost.
 
 - Utility functions accept `H3Event | ServerRequest` for flexibility
 - Use `defineCachedFunction` from Nitro for cached API calls (e.g., credentials)
   - Always include `invalidate` and `refresh` helper functions
+  - Prefer Nitro/ocache's built-in cached function `.invalidate()` over manually constructing storage keys with `useStorage('cache').removeItem(...)`; manual keys are easy to get wrong when `group`, `base`, or `getKey` differ from defaults
   - Carefully consider what requests make sense to be cached (e.g., credentials, not real-time data, consider security implications)
   - For per-key caching (like tenant options), use a factory pattern with a Map/Record to store fetchers
   - `maxAge` does NOT accept a function — if you need per-key TTL, create separate cached functions per key

@@ -6,7 +6,6 @@ import { HTTPError } from 'nitro/h3'
 import type { ServerRequest } from 'nitro/types'
 import process from 'node:process'
 import { getCurrentUserTenantId } from './internal/tenant'
-import { useStorage } from 'nitro/storage'
 import { useRuntimeConfig } from 'nitro/runtime-config'
 
 /**
@@ -31,44 +30,44 @@ import { useRuntimeConfig } from 'nitro/runtime-config'
  * // Force refresh:
  * const freshCreds = await useSubscribedTenantCredentials.refresh()
  */
-export const useSubscribedTenantCredentials = Object.assign(
-  defineCachedFunction(async () => {
-    // all env vars are enforced to be set
-    const subscriptions = await Client.getMicroserviceSubscriptions({
-      tenant: process.env.C8Y_BOOTSTRAP_TENANT!,
-      user: process.env.C8Y_BOOTSTRAP_USER!,
-      password: process.env.C8Y_BOOTSTRAP_PASSWORD!,
-    }, process.env.C8Y_BASEURL!)
+// TODO: Remove this cast once Nitro's `defineCachedFunction()` types expose ocache's `.invalidate()` helper.
+const cachedSubscribedTenantCredentials = defineCachedFunction(async () => {
+  // all env vars are enforced to be set
+  const subscriptions = await Client.getMicroserviceSubscriptions({
+    tenant: process.env.C8Y_BOOTSTRAP_TENANT!,
+    user: process.env.C8Y_BOOTSTRAP_USER!,
+    password: process.env.C8Y_BOOTSTRAP_PASSWORD!,
+  }, process.env.C8Y_BASEURL!)
 
-    // we map them as an object with tenant as key for easier access
-    return subscriptions.reduce(
-      (acc, cred) => {
-        if (cred.tenant) {
-          acc[cred.tenant] = cred
-        }
-        return acc
-      },
-      {} as Record<string, ICredentials>,
-    )
-  }, {
-    maxAge: useRuntimeConfig().c8yCredentialsCacheTTL ?? 600,
-    name: '_c8y_nitro_get_subscribed_tenant_credentials',
-    group: 'c8y_nitro',
-    swr: false,
-  }),
-  {
-    invalidate: async () => {
-      const completeKey = `c8y_nitro:functions:_c8y_nitro_get_subscribed_tenant_credentials.json`
-      await useStorage('cache').removeItem(completeKey)
+  // we map them as an object with tenant as key for easier access
+  return subscriptions.reduce(
+    (acc, cred) => {
+      if (cred.tenant) {
+        acc[cred.tenant] = cred
+      }
+      return acc
     },
-    refresh: async () => {
-      // call the invalidate part
-      await useSubscribedTenantCredentials.invalidate()
-      // then call the function to refresh
-      return await useSubscribedTenantCredentials()
-    },
+    {} as Record<string, ICredentials>,
+  )
+}, {
+  maxAge: useRuntimeConfig().c8yCredentialsCacheTTL ?? 600,
+  name: '_c8y_nitro_get_subscribed_tenant_credentials',
+  group: 'c8y_nitro',
+  swr: false,
+}) as (() => Promise<Record<string, ICredentials>>) & {
+  invalidate: () => Promise<void>
+}
+
+// TODO: Remove this explicit type once Nitro's `defineCachedFunction()` return type includes ocache helper methods.
+export const useSubscribedTenantCredentials: (() => Promise<Record<string, ICredentials>>) & {
+  invalidate: () => Promise<void>
+  refresh: () => Promise<Record<string, ICredentials>>
+} = Object.assign(cachedSubscribedTenantCredentials, {
+  refresh: async () => {
+    await cachedSubscribedTenantCredentials.invalidate()
+    return await cachedSubscribedTenantCredentials()
   },
-)
+})
 
 /**
  * Fetches credentials for the tenant where this microservice is deployed.\
@@ -88,7 +87,11 @@ export const useSubscribedTenantCredentials = Object.assign(
  * const freshCreds = await useDeployedTenantCredentials.refresh()
  * @note This function is not cached separately. It uses the cache of `useSubscribedTenantCredentials()`. Invalidating or refreshing one will refresh `useDeployedTenantCredentials()`s cache.
  */
-export const useDeployedTenantCredentials = Object.assign(async (): Promise<ICredentials> => {
+// TODO: Remove this explicit type once Nitro's `defineCachedFunction()` return type includes ocache helper methods.
+export const useDeployedTenantCredentials: (() => Promise<ICredentials>) & {
+  invalidate: () => Promise<void>
+  refresh: () => Promise<ICredentials>
+} = Object.assign(async (): Promise<ICredentials> => {
   const tenant = process.env.C8Y_BOOTSTRAP_TENANT!
   const allCredsPromise = await useSubscribedTenantCredentials()
   if (!allCredsPromise[tenant]) {
@@ -102,9 +105,7 @@ export const useDeployedTenantCredentials = Object.assign(async (): Promise<ICre
 }, {
   invalidate: useSubscribedTenantCredentials.invalidate,
   refresh: async () => {
-    // call the invalidate part
-    await useDeployedTenantCredentials.invalidate()
-    // then call the function to refresh
+    await useSubscribedTenantCredentials.refresh()
     return await useDeployedTenantCredentials()
   },
 })
