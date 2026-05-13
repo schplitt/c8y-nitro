@@ -12,6 +12,24 @@ import { useNitroHooks } from 'nitro/app'
 
 let prevCredentials: TenantCredentials | null = null
 
+function shouldEmitTenantCredentialsUpdated(prev: TenantCredentials | null, next: TenantCredentials): boolean {
+  if (!prev) {
+    return true
+  }
+
+  const prevTenantIds = Object.keys(prev)
+  const nextTenantIds = Object.keys(next)
+
+  if (prevTenantIds.length !== nextTenantIds.length) {
+    return true
+  }
+
+  // new set with ids that are exclusive to either prev or next
+  const changedTenantIds = new Set(nextTenantIds).symmetricDifference(new Set(prevTenantIds))
+  // if there are any tenant ids that are new or removed, we should emit the update
+  return changedTenantIds.size > 0
+}
+
 /**
  * Fetches credentials for all tenants subscribed to this microservice.\
  * Uses bootstrap credentials from runtime config to query the microservice subscriptions API.\
@@ -54,7 +72,9 @@ const cachedSubscribedTenantCredentials = defineCachedFunction(async () => {
     {} as TenantCredentials,
   )
 
-  await useNitroHooks().callHook('c8y:tenantCredentialsUpdated', prevCredentials, newCredentials)
+  if (shouldEmitTenantCredentialsUpdated(prevCredentials, newCredentials)) {
+    await useNitroHooks().callHook('c8y:tenantCredentialsUpdated', prevCredentials, newCredentials)
+  }
 
   prevCredentials = newCredentials
 
@@ -72,10 +92,17 @@ const cachedSubscribedTenantCredentials = defineCachedFunction(async () => {
 export const useSubscribedTenantCredentials: (() => Promise<TenantCredentials>) & {
   invalidate: () => Promise<void>
   refresh: () => Promise<TenantCredentials>
-} = Object.assign(cachedSubscribedTenantCredentials, {
+} = Object.assign(async (): Promise<TenantCredentials> => {
+  const credentials = await cachedSubscribedTenantCredentials()
+  prevCredentials = credentials
+  return credentials
+}, {
+  invalidate: cachedSubscribedTenantCredentials.invalidate,
   refresh: async () => {
     await cachedSubscribedTenantCredentials.invalidate()
-    return await cachedSubscribedTenantCredentials()
+    const credentials = await cachedSubscribedTenantCredentials()
+    prevCredentials = credentials
+    return credentials
   },
 })
 

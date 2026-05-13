@@ -5,6 +5,7 @@ import { defineEventHandler, getQuery } from 'nitro/h3'
 
 const mockSubscriptionApi = c8yClient as unknown as {
   __setMockSubscription: (subscription: ICredentials) => void
+  __deleteMockSubscription: (tenant: string) => void
   __getMockSubscriptions: () => Array<ICredentials>
 }
 
@@ -13,6 +14,11 @@ export default defineEventHandler(async (event) => {
   const tenant = typeof query.tenant === 'string' ? query.tenant : undefined
   const user = typeof query.user === 'string' ? query.user : undefined
   const password = typeof query.password === 'string' ? query.password : undefined
+  const deleteTenant = typeof query.deleteTenant === 'string' ? query.deleteTenant : undefined
+
+  if (deleteTenant) {
+    mockSubscriptionApi.__deleteMockSubscription(deleteTenant)
+  }
 
   if (tenant && user && password) {
     mockSubscriptionApi.__setMockSubscription({ tenant, user, password })

@@ -423,7 +423,7 @@ async function anotherFunction() {
 
 #### Tenant credentials lifecycle hook
 
-`c8y-nitro` emits a Nitro runtime hook whenever the subscribed tenant credentials cache is populated or refreshed:
+`c8y-nitro` emits a Nitro runtime hook when the subscribed tenant credentials cache is populated for the first time or refreshed with a changed tenant subscription set:
 
 - Hook: `c8y:tenantCredentialsUpdated`
 - Payload type: `TenantCredentials` from `c8y-nitro/types`
@@ -442,7 +442,7 @@ export default definePlugin((nitroApp) => {
 })
 ```
 
-`prev` is `null` for the first population and otherwise contains the previously cached tenant credential map. `next` contains the newly fetched credentials keyed by tenant.
+`prev` is `null` for the first population and otherwise contains the previously cached tenant credential map. `next` contains the newly fetched credentials keyed by tenant. Refreshing the cache with the same tenant ids does not emit the hook. The comparison is based on tenant ids, not credential field ordering.
 
 If you extend this hook in your own code, prefer reusing exported types from `c8y-nitro/types` instead of repeating `Record<string, ICredentials>` locally.
 
