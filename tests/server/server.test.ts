@@ -506,7 +506,7 @@ describe('Nitro Server', () => {
       expect(refreshedJson.cacheExpiryOption).toBe('cache-updated-value')
     }, 8_000)
 
-    it('should fire the tenant credentials lifecycle hook when credentials are refreshed after a mocked subscription change', async () => {
+    it('should only emit the tenant credentials lifecycle hook when the tenant id set changes', async () => {
       const clearInitialRes = await server.fetch(new Request(new URL('/credentials-hook-events?clear=1', server.url)))
       expect(clearInitialRes.status).toEqual(200)
 
@@ -515,16 +515,8 @@ describe('Nitro Server', () => {
       const initialJson = await initialRes.json() as Record<string, any>
       expect(initialJson.subscribedTenants).toEqual(['t12345', 't67890'])
 
-      const clearCachedEventsRes = await server.fetch(new Request(new URL('/credentials-hook-events?clear=1', server.url)))
-      expect(clearCachedEventsRes.status).toEqual(200)
-
-      const baselineRefreshRes = await server.fetch(new Request(new URL('/subscribed-credentials?refresh=1', server.url)))
-      expect(baselineRefreshRes.status).toEqual(200)
-      const baselineRefreshJson = await baselineRefreshRes.json() as Record<string, any>
-      expect(baselineRefreshJson.subscribedTenants).toEqual(['t12345', 't67890'])
-
-      const clearBaselineEventsRes = await server.fetch(new Request(new URL('/credentials-hook-events?clear=1', server.url)))
-      expect(clearBaselineEventsRes.status).toEqual(200)
+      const clearAfterInitialRes = await server.fetch(new Request(new URL('/credentials-hook-events?clear=1', server.url)))
+      expect(clearAfterInitialRes.status).toEqual(200)
 
       const unchangedRefreshRes = await server.fetch(new Request(new URL('/subscribed-credentials?refresh=1', server.url)))
       expect(unchangedRefreshRes.status).toEqual(200)
@@ -536,29 +528,72 @@ describe('Nitro Server', () => {
       const unchangedEventsJson = await unchangedEventsRes.json() as Record<string, any>
       expect(unchangedEventsJson.events).toEqual([])
 
-      const mutateRes = await server.fetch(new Request(new URL('/subscribed-credentials?tenant=t99999&user=serviceuser3&password=pass3', server.url)))
-      expect(mutateRes.status).toEqual(200)
-      const mutateJson = await mutateRes.json() as Record<string, any>
-      expect(mutateJson.mockSubscribedTenants).toEqual(['t12345', 't67890', 't99999'])
-      expect(mutateJson.subscribedTenants).toEqual(['t12345', 't67890'])
+      const addTenantRes = await server.fetch(new Request(new URL('/subscribed-credentials?tenant=t99999&user=serviceuser3&password=pass3', server.url)))
+      expect(addTenantRes.status).toEqual(200)
+      const addTenantJson = await addTenantRes.json() as Record<string, any>
+      expect(addTenantJson.mockSubscribedTenants).toEqual(['t12345', 't67890', 't99999'])
+      expect(addTenantJson.subscribedTenants).toEqual(['t12345', 't67890'])
 
-      const staleRes = await server.fetch(new Request(new URL('/subscribed-credentials', server.url)))
-      expect(staleRes.status).toEqual(200)
-      const staleJson = await staleRes.json() as Record<string, any>
-      expect(staleJson.subscribedTenants).toEqual(['t12345', 't67890'])
+      const addRefreshRes = await server.fetch(new Request(new URL('/subscribed-credentials?refresh=1', server.url)))
+      expect(addRefreshRes.status).toEqual(200)
+      const addRefreshJson = await addRefreshRes.json() as Record<string, any>
+      expect(addRefreshJson.subscribedTenants).toEqual(['t12345', 't67890', 't99999'])
 
-      const refreshRes = await server.fetch(new Request(new URL('/subscribed-credentials?refresh=1', server.url)))
-      expect(refreshRes.status).toEqual(200)
-      const refreshJson = await refreshRes.json() as Record<string, any>
-      expect(refreshJson.subscribedTenants).toEqual(['t12345', 't67890', 't99999'])
-
-      const refreshEventsRes = await server.fetch(new Request(new URL('/credentials-hook-events?clear=1', server.url)))
-      expect(refreshEventsRes.status).toEqual(200)
-      const refreshEventsJson = await refreshEventsRes.json() as Record<string, any>
-      expect(refreshEventsJson.events).toEqual([
+      const addEventsRes = await server.fetch(new Request(new URL('/credentials-hook-events?clear=1', server.url)))
+      expect(addEventsRes.status).toEqual(200)
+      const addEventsJson = await addEventsRes.json() as Record<string, any>
+      expect(addEventsJson.events).toEqual([
         {
           prevTenants: ['t12345', 't67890'],
           nextTenants: ['t12345', 't67890', 't99999'],
+        },
+      ])
+
+      const removeTenantRes = await server.fetch(new Request(new URL('/subscribed-credentials?deleteTenant=t67890', server.url)))
+      expect(removeTenantRes.status).toEqual(200)
+      const removeTenantJson = await removeTenantRes.json() as Record<string, any>
+      expect(removeTenantJson.mockSubscribedTenants).toEqual(['t12345', 't99999'])
+      expect(removeTenantJson.subscribedTenants).toEqual(['t12345', 't67890', 't99999'])
+
+      const removeRefreshRes = await server.fetch(new Request(new URL('/subscribed-credentials?refresh=1', server.url)))
+      expect(removeRefreshRes.status).toEqual(200)
+      const removeRefreshJson = await removeRefreshRes.json() as Record<string, any>
+      expect(removeRefreshJson.subscribedTenants).toEqual(['t12345', 't99999'])
+
+      const removeEventsRes = await server.fetch(new Request(new URL('/credentials-hook-events?clear=1', server.url)))
+      expect(removeEventsRes.status).toEqual(200)
+      const removeEventsJson = await removeEventsRes.json() as Record<string, any>
+      expect(removeEventsJson.events).toEqual([
+        {
+          prevTenants: ['t12345', 't67890', 't99999'],
+          nextTenants: ['t12345', 't99999'],
+        },
+      ])
+
+      const replaceRemoveRes = await server.fetch(new Request(new URL('/subscribed-credentials?deleteTenant=t12345', server.url)))
+      expect(replaceRemoveRes.status).toEqual(200)
+      const replaceRemoveJson = await replaceRemoveRes.json() as Record<string, any>
+      expect(replaceRemoveJson.mockSubscribedTenants).toEqual(['t99999'])
+      expect(replaceRemoveJson.subscribedTenants).toEqual(['t12345', 't99999'])
+
+      const replaceAddRes = await server.fetch(new Request(new URL('/subscribed-credentials?tenant=t67890&user=serviceuser2&password=pass2', server.url)))
+      expect(replaceAddRes.status).toEqual(200)
+      const replaceAddJson = await replaceAddRes.json() as Record<string, any>
+      expect(replaceAddJson.mockSubscribedTenants).toEqual(['t67890', 't99999'])
+      expect(replaceAddJson.subscribedTenants).toEqual(['t12345', 't99999'])
+
+      const replaceRefreshRes = await server.fetch(new Request(new URL('/subscribed-credentials?refresh=1', server.url)))
+      expect(replaceRefreshRes.status).toEqual(200)
+      const replaceRefreshJson = await replaceRefreshRes.json() as Record<string, any>
+      expect(replaceRefreshJson.subscribedTenants).toEqual(['t67890', 't99999'])
+
+      const replaceEventsRes = await server.fetch(new Request(new URL('/credentials-hook-events?clear=1', server.url)))
+      expect(replaceEventsRes.status).toEqual(200)
+      const replaceEventsJson = await replaceEventsRes.json() as Record<string, any>
+      expect(replaceEventsJson.events).toEqual([
+        {
+          prevTenants: ['t12345', 't99999'],
+          nextTenants: ['t67890', 't99999'],
         },
       ])
     })

@@ -12,24 +12,22 @@ import { useNitroHooks } from 'nitro/app'
 
 let prevCredentials: TenantCredentials | null = null
 
-function normalizeTenantCredentials(credentials: TenantCredentials | null): string {
-  if (!credentials) {
-    return 'null'
+function shouldEmitTenantCredentialsUpdated(prev: TenantCredentials | null, next: TenantCredentials): boolean {
+  if (!prev) {
+    return true
   }
 
-  return JSON.stringify(
-    Object.entries(credentials)
-      .map(([tenant, credential]) => ({
-        tenant,
-        user: credential.user ?? null,
-        password: credential.password ?? null,
-      }))
-      .sort((a, b) => a.tenant.localeCompare(b.tenant)),
-  )
-}
+  const prevTenantIds = Object.keys(prev)
+  const nextTenantIds = Object.keys(next)
 
-function areTenantCredentialsEqual(a: TenantCredentials | null, b: TenantCredentials): boolean {
-  return normalizeTenantCredentials(a) === normalizeTenantCredentials(b)
+  if (prevTenantIds.length !== nextTenantIds.length) {
+    return true
+  }
+
+  // new set with ids that are exclusive to either prev or next
+  const changedTenantIds = new Set(nextTenantIds).symmetricDifference(new Set(prevTenantIds))
+  // if there are any tenant ids that are new or removed, we should emit the update
+  return changedTenantIds.size > 0
 }
 
 /**
@@ -74,7 +72,7 @@ const cachedSubscribedTenantCredentials = defineCachedFunction(async () => {
     {} as TenantCredentials,
   )
 
-  if (!areTenantCredentialsEqual(prevCredentials, newCredentials)) {
+  if (shouldEmitTenantCredentialsUpdated(prevCredentials, newCredentials)) {
     await useNitroHooks().callHook('c8y:tenantCredentialsUpdated', prevCredentials, newCredentials)
   }
 
@@ -90,21 +88,21 @@ const cachedSubscribedTenantCredentials = defineCachedFunction(async () => {
   invalidate: () => Promise<void>
 }
 
-async function getSubscribedTenantCredentials(): Promise<TenantCredentials> {
-  const credentials = await cachedSubscribedTenantCredentials()
-  prevCredentials = credentials
-  return credentials
-}
-
 // TODO: Remove this explicit type once Nitro's `defineCachedFunction()` return type includes ocache helper methods.
 export const useSubscribedTenantCredentials: (() => Promise<TenantCredentials>) & {
   invalidate: () => Promise<void>
   refresh: () => Promise<TenantCredentials>
-} = Object.assign(getSubscribedTenantCredentials, {
+} = Object.assign(async (): Promise<TenantCredentials> => {
+  const credentials = await cachedSubscribedTenantCredentials()
+  prevCredentials = credentials
+  return credentials
+}, {
   invalidate: cachedSubscribedTenantCredentials.invalidate,
   refresh: async () => {
     await cachedSubscribedTenantCredentials.invalidate()
-    return await getSubscribedTenantCredentials()
+    const credentials = await cachedSubscribedTenantCredentials()
+    prevCredentials = credentials
+    return credentials
   },
 })
 
