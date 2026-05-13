@@ -114,7 +114,7 @@ describe('Nitro Server', () => {
 
     it('should get the development user auth injected if present', async () => {
       const res = await server.fetch(new Request(new URL('/authHeader', server.url)))
-      const json = await res.json()
+      const json = await res.json() as Record<string, any>
 
       expect(json).toEqual({ authHeader: expect.any(String) })
 
@@ -146,7 +146,7 @@ describe('Nitro Server', () => {
 
         expect(res.status).toEqual(200)
 
-        const json = await res.json()
+        const json = await res.json() as Record<string, any>
         expect(json.scheduled).toEqual({
           id: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/),
           task: 'scheduler:log',
@@ -162,7 +162,7 @@ describe('Nitro Server', () => {
         const listRes = await server.fetch(new Request(new URL('/scheduled-tasks', server.url)))
         expect(listRes.status).toEqual(200)
 
-        const listJson = await listRes.json()
+        const listJson = await listRes.json() as Record<string, any>
         expect(listJson.pending).not.toHaveProperty(json.scheduled.id)
 
         expect(logs.join('\n')).toContain(`scheduled-task:${marker}`)
@@ -211,7 +211,7 @@ describe('Nitro Server', () => {
           authorization: upstreamAuthHeader,
         },
       }))
-      const json = await res.json()
+      const json = await res.json() as Record<string, any>
 
       expect(json).toEqual({ authHeader: upstreamAuthHeader })
     })
@@ -252,7 +252,7 @@ describe('Nitro Server', () => {
     it('should deny access to protected route', async () => {
       const res = await server.fetch(new Request(new URL('/protectedRoute', server.url)))
 
-      const json = await res.json()
+      const json = await res.json() as Record<string, any>
 
       expect(json.message).toEqual('User does not have required role(s) to access this resource: ADMIN_ROLE')
       expect(res.status).toEqual(403)
@@ -263,7 +263,7 @@ describe('Nitro Server', () => {
 
       expect(res.status).toEqual(403)
 
-      const json = await res.json()
+      const json = await res.json() as Record<string, any>
       expect(json.message).toContain('ROLE_A')
       expect(json.message).toContain('ROLE_B')
     })
@@ -307,7 +307,7 @@ describe('Nitro Server', () => {
 
       expect(res.status).toEqual(200)
 
-      const json = await res.json()
+      const json = await res.json() as Record<string, any>
       expect(json.message).toBe('You have access to the protected route!')
     })
 
@@ -316,7 +316,7 @@ describe('Nitro Server', () => {
 
       expect(res.status).toEqual(200)
 
-      const json = await res.json()
+      const json = await res.json() as Record<string, any>
       expect(json.message).toBe('You have one of the required roles!')
     })
   })
@@ -378,7 +378,7 @@ describe('Nitro Server', () => {
 
       expect(res.status).toEqual(200)
 
-      const json = await res.json()
+      const json = await res.json() as Record<string, any>
       expect(json.userName).toBe('testUser')
       expect(json.roles).toEqual(['ROLE_INVENTORY_READ', 'ROLE_ALARM_READ', 'ROLE_DEVICE_CONTROL'])
     })
@@ -388,7 +388,7 @@ describe('Nitro Server', () => {
 
       expect(res.status).toEqual(200)
 
-      const json = await res.json()
+      const json = await res.json() as Record<string, any>
       expect(json.subscribedTenants).toEqual(expect.arrayContaining(['t12345', 't67890']))
       expect(json.deployedTenant).toBe('t12345')
       expect(json.userTenant).toBe('t12345')
@@ -399,7 +399,7 @@ describe('Nitro Server', () => {
 
       expect(res.status).toEqual(200)
 
-      const json = await res.json()
+      const json = await res.json() as Record<string, any>
       expect(json.myOption).toBe('hello-world')
       expect(json['credentials.secret']).toBe('super-secret-value')
       expect(json.cacheExpiryOption).toBe('cache-initial-value')
@@ -413,7 +413,7 @@ describe('Nitro Server', () => {
 
       expect(res.status).toEqual(200)
 
-      const json = await res.json()
+      const json = await res.json() as Record<string, any>
       expect(json.message).toBe('success')
     })
 
@@ -422,7 +422,7 @@ describe('Nitro Server', () => {
 
       expect(res.status).toEqual(200)
 
-      const json = await res.json()
+      const json = await res.json() as Record<string, any>
       expect(json.message).toBe('success')
     })
 
@@ -433,7 +433,7 @@ describe('Nitro Server', () => {
 
       expect(res.status).toEqual(200)
 
-      const json = await res.json()
+      const json = await res.json() as Record<string, any>
       expect(json.message).toBe('success')
     })
 
@@ -442,7 +442,7 @@ describe('Nitro Server', () => {
 
       expect(res.status).toEqual(400)
 
-      const json = await res.json()
+      const json = await res.json() as Record<string, any>
       expect(json.message).toBe('Invalid tenant option invalidation request')
     })
 
@@ -451,7 +451,7 @@ describe('Nitro Server', () => {
 
       expect(res.status).toEqual(400)
 
-      const json = await res.json()
+      const json = await res.json() as Record<string, any>
       expect(json.message).toBe('Provide either the all or key query parameter')
     })
 
@@ -460,7 +460,7 @@ describe('Nitro Server', () => {
 
       expect(res.status).toEqual(200)
 
-      const json = await res.json()
+      const json = await res.json() as Record<string, any>
       expect(json.message).toBe('Your tenant is allowed!')
     })
 
@@ -469,19 +469,19 @@ describe('Nitro Server', () => {
 
       expect(res.status).toEqual(200)
 
-      const json = await res.json()
+      const json = await res.json() as Record<string, any>
       expect(json.message).toBe('You are from the deployed tenant!')
     })
 
     it('should keep the cached tenant option until TTL expires and then return the updated value', async () => {
       const initialRes = await server.fetch(new Request(new URL('/tenant-options', server.url)))
       expect(initialRes.status).toEqual(200)
-      const initialJson = await initialRes.json()
+      const initialJson = await initialRes.json() as Record<string, any>
       expect(initialJson.cacheExpiryOption).toBe('cache-initial-value')
 
       const updateRes = await server.fetch(new Request(new URL('/mock-tenant-option?key=cacheExpiryOption&value=cache-updated-value', server.url)))
       expect(updateRes.status).toEqual(200)
-      const updateJson = await updateRes.json()
+      const updateJson = await updateRes.json() as Record<string, any>
       expect(updateJson).toEqual({
         key: 'cacheExpiryOption',
         value: 'cache-updated-value',
@@ -493,7 +493,7 @@ describe('Nitro Server', () => {
 
       const cachedRes = await server.fetch(new Request(new URL('/tenant-options', server.url)))
       expect(cachedRes.status).toEqual(200)
-      const cachedJson = await cachedRes.json()
+      const cachedJson = await cachedRes.json() as Record<string, any>
       expect(cachedJson.cacheExpiryOption).toBe('cache-initial-value')
 
       await new Promise<void>((resolve) => {
@@ -502,9 +502,48 @@ describe('Nitro Server', () => {
 
       const refreshedRes = await server.fetch(new Request(new URL('/tenant-options', server.url)))
       expect(refreshedRes.status).toEqual(200)
-      const refreshedJson = await refreshedRes.json()
+      const refreshedJson = await refreshedRes.json() as Record<string, any>
       expect(refreshedJson.cacheExpiryOption).toBe('cache-updated-value')
     }, 8_000)
+
+    it('should fire the tenant credentials lifecycle hook when credentials are refreshed after a mocked subscription change', async () => {
+      const clearInitialRes = await server.fetch(new Request(new URL('/credentials-hook-events?clear=1', server.url)))
+      expect(clearInitialRes.status).toEqual(200)
+
+      const initialRes = await server.fetch(new Request(new URL('/subscribed-credentials', server.url)))
+      expect(initialRes.status).toEqual(200)
+      const initialJson = await initialRes.json() as Record<string, any>
+      expect(initialJson.subscribedTenants).toEqual(['t12345', 't67890'])
+
+      const clearCachedEventsRes = await server.fetch(new Request(new URL('/credentials-hook-events?clear=1', server.url)))
+      expect(clearCachedEventsRes.status).toEqual(200)
+
+      const mutateRes = await server.fetch(new Request(new URL('/subscribed-credentials?tenant=t99999&user=serviceuser3&password=pass3', server.url)))
+      expect(mutateRes.status).toEqual(200)
+      const mutateJson = await mutateRes.json() as Record<string, any>
+      expect(mutateJson.mockSubscribedTenants).toEqual(['t12345', 't67890', 't99999'])
+      expect(mutateJson.subscribedTenants).toEqual(['t12345', 't67890'])
+
+      const staleRes = await server.fetch(new Request(new URL('/subscribed-credentials', server.url)))
+      expect(staleRes.status).toEqual(200)
+      const staleJson = await staleRes.json() as Record<string, any>
+      expect(staleJson.subscribedTenants).toEqual(['t12345', 't67890'])
+
+      const refreshRes = await server.fetch(new Request(new URL('/subscribed-credentials?refresh=1', server.url)))
+      expect(refreshRes.status).toEqual(200)
+      const refreshJson = await refreshRes.json() as Record<string, any>
+      expect(refreshJson.subscribedTenants).toEqual(['t12345', 't67890', 't99999'])
+
+      const refreshEventsRes = await server.fetch(new Request(new URL('/credentials-hook-events?clear=1', server.url)))
+      expect(refreshEventsRes.status).toEqual(200)
+      const refreshEventsJson = await refreshEventsRes.json() as Record<string, any>
+      expect(refreshEventsJson.events).toEqual([
+        {
+          prevTenants: ['t12345', 't67890'],
+          nextTenants: ['t12345', 't67890', 't99999'],
+        },
+      ])
+    })
   })
 
   describe('Tenant restriction (disallowed tenant)', () => {
@@ -546,7 +585,7 @@ describe('Nitro Server', () => {
 
       expect(res.status).toEqual(403)
 
-      const json = await res.json()
+      const json = await res.json() as Record<string, any>
       expect(json.message).toContain('t00000')
       expect(json.message).toContain('not allowed')
     })
@@ -591,7 +630,7 @@ describe('Nitro Server', () => {
 
       expect(res.status).toEqual(403)
 
-      const json = await res.json()
+      const json = await res.json() as Record<string, any>
       expect(json.message).toContain('t12345')
     })
   })
@@ -634,7 +673,7 @@ describe('Nitro Server', () => {
         const res = await server.fetch(new Request(new URL('/logging/success', server.url)))
 
         expect(res.status).toEqual(200)
-        const json = await res.json()
+        const json = await res.json() as Record<string, any>
         expect(json.message).toBe('ok')
         expect(json.action).toBe('test-success')
 
@@ -665,7 +704,7 @@ describe('Nitro Server', () => {
         const res = await server.fetch(new Request(new URL('/logging/error', server.url)))
 
         expect(res.status).toEqual(400)
-        const json = await res.json()
+        const json = await res.json() as Record<string, any>
         expect(json.message).toBe('Something went wrong')
         expect(json.data.why).toBe('Test error occurred for logging verification')
         expect(json.data.fix).toBe('This is a test fixture, nothing to fix')

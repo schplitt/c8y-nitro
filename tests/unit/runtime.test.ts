@@ -1,5 +1,6 @@
 import { vol, fs as memFs } from 'memfs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { C8YManifest } from '../../src/types'
 import { setupRuntime } from '../../src/module/runtime'
 
 // Mock fs modules with memfs
@@ -34,7 +35,7 @@ describe('setupRuntime', () => {
     it('should generate types file with no roles or settings', () => {
       const nitro = createMockNitro()
 
-      setupRuntime(nitro, {})
+      setupRuntime(nitro, {} as C8YManifest)
 
       const generatedFiles = vol.toJSON()
       const typesPath = '/project/node_modules/.nitro/types/c8y-nitro.d.ts'
@@ -57,7 +58,7 @@ describe('setupRuntime', () => {
 
       setupRuntime(nitro, {
         roles: ['ROLE_APPLICATION_ADMIN', 'ROLE_MEASUREMENT_READ'],
-      })
+      } as C8YManifest)
 
       const generatedFiles = vol.toJSON()
       const typesPath = '/project/node_modules/.nitro/types/c8y-nitro.d.ts'
@@ -77,7 +78,7 @@ describe('setupRuntime', () => {
           { key: 'feature.enabled', defaultValue: 'true' },
           { key: 'max.connections', defaultValue: '10' },
         ],
-      })
+      } as C8YManifest)
 
       const generatedFiles = vol.toJSON()
       const typesPath = '/project/node_modules/.nitro/types/c8y-nitro.d.ts'
@@ -97,7 +98,7 @@ describe('setupRuntime', () => {
           { key: 'api.timeout', defaultValue: '30' },
           { key: 'cache.ttl', defaultValue: '60' },
         ],
-      })
+      } as C8YManifest)
 
       const generatedFiles = vol.toJSON()
       const typesPath = '/project/node_modules/.nitro/types/c8y-nitro.d.ts'
@@ -115,7 +116,7 @@ describe('setupRuntime', () => {
     it('should respect custom generatedTypesDir', () => {
       const nitro = createMockNitro('/project', 'custom-types')
 
-      setupRuntime(nitro, {})
+      setupRuntime(nitro, {} as C8YManifest)
 
       const generatedFiles = vol.toJSON()
       const typesPath = '/project/custom-types/c8y-nitro.d.ts'
@@ -126,7 +127,7 @@ describe('setupRuntime', () => {
     it('should create directory recursively', () => {
       const nitro = createMockNitro('/project', 'nested/deep/types')
 
-      setupRuntime(nitro, {})
+      setupRuntime(nitro, {} as C8YManifest)
 
       const generatedFiles = vol.toJSON()
       const typesPath = '/project/nested/deep/types/c8y-nitro.d.ts'
@@ -140,7 +141,7 @@ describe('setupRuntime', () => {
       setupRuntime(nitro, {
         roles: ['ROLE_ADMIN'],
         settings: [{ key: 'test.key', defaultValue: 'value' }],
-      })
+      } as C8YManifest)
 
       const generatedFiles = vol.toJSON()
 
@@ -158,7 +159,7 @@ describe('setupRuntime', () => {
     it('should generate virtual module with empty roles and keys', () => {
       const nitro = createMockNitro()
 
-      setupRuntime(nitro, {})
+      setupRuntime(nitro, {} as C8YManifest)
 
       const virtualModule = nitro.options.virtual['c8y-nitro/runtime']
 
@@ -172,7 +173,7 @@ describe('setupRuntime', () => {
 
       setupRuntime(nitro, {
         roles: ['ROLE_ADMIN', 'ROLE_USER'],
-      })
+      } as C8YManifest)
 
       const virtualModule = nitro.options.virtual['c8y-nitro/runtime']
 
@@ -189,7 +190,7 @@ describe('setupRuntime', () => {
           { key: 'key1', defaultValue: 'value1' },
           { key: 'key2', defaultValue: 'value2' },
         ],
-      })
+      } as C8YManifest)
 
       const virtualModule = nitro.options.virtual['c8y-nitro/runtime']
 
@@ -202,7 +203,7 @@ describe('setupRuntime', () => {
       setupRuntime(nitro, {
         roles: ['ROLE_TEST'],
         settings: [{ key: 'test.key', defaultValue: 'value' }],
-      })
+      } as C8YManifest)
 
       const virtualModule = nitro.options.virtual['c8y-nitro/runtime']
 
@@ -215,7 +216,7 @@ describe('setupRuntime', () => {
     it('should log debug messages', () => {
       const nitro = createMockNitro()
 
-      setupRuntime(nitro, {})
+      setupRuntime(nitro, {} as C8YManifest)
 
       expect(nitro.logger.debug).toHaveBeenCalledWith('Setting up C8Y nitro runtime')
       expect(nitro.logger.debug).toHaveBeenCalledWith(
@@ -230,7 +231,7 @@ describe('setupRuntime', () => {
 
       setupRuntime(nitro, {
         roles: ['ROLE_WITH-DASH', 'ROLE_WITH_UNDERSCORE'],
-      })
+      } as C8YManifest)
 
       const generatedFiles = vol.toJSON()
       const content = generatedFiles['/project/node_modules/.nitro/types/c8y-nitro.d.ts'] as string
@@ -248,7 +249,7 @@ describe('setupRuntime', () => {
           { key: 'key-with-dashes', defaultValue: 'value' },
           { key: 'key_with_underscores', defaultValue: 'value' },
         ],
-      })
+      } as C8YManifest)
 
       const generatedFiles = vol.toJSON()
       const content = generatedFiles['/project/node_modules/.nitro/types/c8y-nitro.d.ts'] as string
@@ -263,7 +264,7 @@ describe('setupRuntime', () => {
 
       setupRuntime(nitro, {
         roles: ['ROLE_SINGLE'],
-      })
+      } as C8YManifest)
 
       const generatedFiles = vol.toJSON()
       const content = generatedFiles['/project/node_modules/.nitro/types/c8y-nitro.d.ts'] as string
@@ -276,7 +277,7 @@ describe('setupRuntime', () => {
 
       setupRuntime(nitro, {
         settings: [{ key: 'single.key', defaultValue: 'value' }],
-      })
+      } as C8YManifest)
 
       const generatedFiles = vol.toJSON()
       const content = generatedFiles['/project/node_modules/.nitro/types/c8y-nitro.d.ts'] as string
@@ -295,7 +296,7 @@ describe('setupRuntime', () => {
 
       setupRuntime(nitro, {
         roles: ['ROLE_NEW'],
-      })
+      } as C8YManifest)
 
       const generatedFiles = vol.toJSON()
       const content = generatedFiles['/project/node_modules/.nitro/types/c8y-nitro.d.ts'] as string

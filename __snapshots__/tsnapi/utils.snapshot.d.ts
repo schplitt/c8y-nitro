@@ -43,9 +43,9 @@ export declare const useDeployedTenantCredentials: (() => Promise<ICredentials>)
   invalidate: () => Promise<void>;
   refresh: () => Promise<ICredentials>;
 };
-export declare const useSubscribedTenantCredentials: (() => Promise<Record<string, ICredentials>>) & {
+export declare const useSubscribedTenantCredentials: (() => Promise<TenantCredentials>) & {
   invalidate: () => Promise<void>;
-  refresh: () => Promise<Record<string, ICredentials>>;
+  refresh: () => Promise<TenantCredentials>;
 };
 export declare const useTenantOption: ((key: C8YTenantOptionKey) => Promise<string | undefined>) & {
   invalidate: (key: C8YTenantOptionKey) => Promise<void>;

@@ -1,5 +1,6 @@
 import { Client } from '@c8y/client'
 import type { ICredentials } from '@c8y/client'
+import type { TenantCredentials } from '../types/credentials'
 import { defineCachedFunction } from 'nitro/cache'
 import type { H3Event } from 'nitro/h3'
 import { HTTPError } from 'nitro/h3'
@@ -7,6 +8,9 @@ import type { ServerRequest } from 'nitro/types'
 import process from 'node:process'
 import { getCurrentUserTenantId } from './internal/tenant'
 import { useRuntimeConfig } from 'nitro/runtime-config'
+import { useNitroHooks } from 'nitro/app'
+
+let prevCredentials: TenantCredentials | null = null
 
 /**
  * Fetches credentials for all tenants subscribed to this microservice.\
@@ -40,28 +44,34 @@ const cachedSubscribedTenantCredentials = defineCachedFunction(async () => {
   }, process.env.C8Y_BASEURL!)
 
   // we map them as an object with tenant as key for easier access
-  return subscriptions.reduce(
+  const newCredentials: TenantCredentials = subscriptions.reduce(
     (acc, cred) => {
       if (cred.tenant) {
         acc[cred.tenant] = cred
       }
       return acc
     },
-    {} as Record<string, ICredentials>,
+    {} as TenantCredentials,
   )
+
+  await useNitroHooks().callHook('c8y:tenantCredentialsUpdated', prevCredentials, newCredentials)
+
+  prevCredentials = newCredentials
+
+  return newCredentials
 }, {
   maxAge: useRuntimeConfig().c8yCredentialsCacheTTL ?? 600,
   name: '_c8y_nitro_get_subscribed_tenant_credentials',
   group: 'c8y_nitro',
   swr: false,
-}) as (() => Promise<Record<string, ICredentials>>) & {
+}) as (() => Promise<TenantCredentials>) & {
   invalidate: () => Promise<void>
 }
 
 // TODO: Remove this explicit type once Nitro's `defineCachedFunction()` return type includes ocache helper methods.
-export const useSubscribedTenantCredentials: (() => Promise<Record<string, ICredentials>>) & {
+export const useSubscribedTenantCredentials: (() => Promise<TenantCredentials>) & {
   invalidate: () => Promise<void>
-  refresh: () => Promise<Record<string, ICredentials>>
+  refresh: () => Promise<TenantCredentials>
 } = Object.assign(cachedSubscribedTenantCredentials, {
   refresh: async () => {
     await cachedSubscribedTenantCredentials.invalidate()
