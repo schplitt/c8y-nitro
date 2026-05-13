@@ -26,6 +26,6 @@
     "skipDefaultLibCheck": true,
     "skipLibCheck": true,
   },
-  "include": ["./src", "./types"],
+  "include": ["./src", "./tests", "./types"],
   "exclude": ["./__snapshots__/**/*"]
 }

@@ -10,12 +10,20 @@ import { autoBootstrap } from './module/autoBootstrap'
 import { name as pkgName } from '../package.json'
 import evlog from 'evlog/nitro/v3'
 import { createC8yManifestFromNitro } from './module/manifest'
+import type { TenantCredentials } from './types/credentials'
 
 declare module 'nitro/types' {
   interface NitroOptions {
     c8y?: C8yNitroModuleOptions
   }
 }
+
+declare module 'nitro/types' {
+  interface NitroRuntimeHooks {
+    'c8y:tenantCredentialsUpdated': (prev: TenantCredentials | null, next: TenantCredentials) => void
+  }
+}
+
 export function c8y(): NitroModule {
   return {
     name: 'c8y-nitro',

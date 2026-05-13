@@ -7,6 +7,7 @@ export type * from './zip'
 export type { C8YManifestOptions, C8YManifest } from './manifest'
 export * from './apiClient'
 export type { C8yCacheOptions } from './cache'
+export type { TenantCredentials } from './credentials'
 
 export interface C8yDevOptions {
   /**

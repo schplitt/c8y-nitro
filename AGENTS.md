@@ -52,6 +52,7 @@ src/
 │   ├── index.ts                # Main type exports (C8yNitroModuleOptions)
 │   ├── apiClient.ts            # API client generation types
 │   ├── cache.ts                # Cache configuration types
+│   ├── credentials.ts          # Shared tenant credential map types (TenantCredentials)
 │   ├── manifest.ts             # Manifest types (C8YManifest, C8YManifestOptions)
 │   ├── roles.ts                # Role types
 │   ├── tenantOptions.ts        # Tenant option key types
@@ -414,6 +415,7 @@ This section captures project-specific knowledge, tool quirks, and lessons learn
 - **Nitro cache typing gap** — In Nitro `3.0.260429-beta`, `defineCachedFunction()` runtime/docs expose `.invalidate()` and `.resolveKeys()`, but Nitro's exported TypeScript declaration still returns a plain cached function signature without those helper members. When using Nitro's built-in cache invalidation helpers from TypeScript, keep a narrow local cast around the cached function until Nitro updates its type declarations.
 - **Scheduled task test pattern** — Enable `experimental.tasks: true` in the fixture config and place a real Nitro task in `tests/server/fixture/tasks/` so Nitro auto-registers it; do not add a manual `tasks` handler path unless the test specifically needs one. Nitro derives task names from file paths, so use nested paths like `tasks/scheduler/log.ts` for `scheduler:log`. Schedule it through a route using `scheduleTask()`, assert all captured logs do not contain the task marker immediately after the request, then sleep until `runAt` plus a generous buffer and assert the marker appears. Do not use `vi.waitFor()` for this built fixture timing check. Reuse an existing fixture server `describe` block when possible instead of adding another server setup just for scheduler coverage. Use `consola.mockTypes()` + `consola.wrapAll()` for log assertions, and make fixture tasks log through the standalone `createLogger()` utility so task logs use the same consola-backed logging path as the app.
 - **Shared fixture cache tests** — When adding cache-expiration coverage to an existing shared server describe block, prefer introducing a dedicated manifest-defined tenant option key used only by that test instead of reusing a key that other assertions depend on. This avoids cross-test state coupling while still saving the extra server startup/teardown cost.
+- **Lifecycle hook fixture tests** — Reuse an existing shared fixture server `describe` block when the required mock data already matches instead of creating another `beforeAll`/`afterAll` server pair. For credential lifecycle coverage, prefer one fixture plugin that records hook events plus two routes: one route that reads/mutates/refreshes the credential cache through query params and one route that returns/clears recorded hook events.
 
 - Utility functions accept `H3Event | ServerRequest` for flexibility
 - Use `defineCachedFunction` from Nitro for cached API calls (e.g., credentials)
@@ -425,6 +427,10 @@ This section captures project-specific knowledge, tool quirks, and lessons learn
 - Generated types are consolidated into a single `c8y-nitro.d.ts` file for performance
   - Written to `node_modules/.nitro/types/` by `setupRuntime()`
   - Augments `c8y-nitro/types` and `c8y-nitro/runtime` modules
+- Public Nitro hook augmentations that consumers should get from `import 'c8y-nitro'` must live in the root entrypoint type graph
+  - Put `declare module 'nitro/types'` hook augmentations in `src/index.ts` so they are emitted in `dist/index.d.mts`
+  - Export shared hook payload types from `c8y-nitro/types` (for example `TenantCredentials`) and reference those in the augmentation instead of repeating inline records
+  - Do not hide consumer-facing Nitro hook augmentations only behind `c8y-nitro/types`-only files unless the root entrypoint imports them for declaration generation
 - Virtual module `c8y-nitro/runtime` exports runtime values (roles, tenant option keys)
   - Use `as const` for tuples to preserve literal types
   - Keep `src/runtime.d.ts` in sync as a fallback declaration

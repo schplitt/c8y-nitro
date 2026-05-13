@@ -13,8 +13,9 @@ export interface MockC8yClientData {
  * Generates virtual module code for \@c8y/client mock with predefined test data.
  * This is used by Nitro's virtual modules to replace \@c8y/client imports during build.
  *
- * The generated mock keeps tenant options in mutable module state so fixture routes can
- * simulate changing server-side data and exercise cache expiration/invalidation behavior.
+ * The generated mock keeps subscriptions and tenant options in mutable module state so
+ * fixture routes can simulate changing server-side data and exercise cache expiration,
+ * invalidation, and lifecycle hook behavior.
  *
  * @param data - Mock data to be returned by the Client methods (currentUser, subscriptions, tenantOptions)
  */
@@ -41,6 +42,29 @@ export function generateMockClientCode(data: MockC8yClientData = {}): string {
 const mockCurrentUser = ${currentUserCode}
 const mockSubscriptions = ${subscriptionsCode}
 const mockTenantOptions = ${tenantOptionsCode}
+
+export function __setMockSubscription(subscription) {
+  const index = mockSubscriptions.findIndex((item) => item.tenant === subscription.tenant)
+
+  if (index === -1) {
+    mockSubscriptions.push(subscription)
+    return
+  }
+
+  mockSubscriptions[index] = subscription
+}
+
+export function __deleteMockSubscription(tenant) {
+  const index = mockSubscriptions.findIndex((item) => item.tenant === tenant)
+
+  if (index !== -1) {
+    mockSubscriptions.splice(index, 1)
+  }
+}
+
+export function __getMockSubscriptions() {
+  return mockSubscriptions.map((subscription) => ({ ...subscription }))
+}
 
 export function __setMockTenantOption(key, value) {
   mockTenantOptions[key] = value

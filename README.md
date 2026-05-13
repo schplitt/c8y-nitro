@@ -421,6 +421,31 @@ async function anotherFunction() {
 >
 > **Cache Duration**: The cache TTL is configurable via the `cache.credentialsTTL` option or `NITRO_C8Y_CREDENTIALS_CACHE_TTL` environment variable. See [Cache Configuration](#cache-configuration) for details.
 
+#### Tenant credentials lifecycle hook
+
+`c8y-nitro` emits a Nitro runtime hook whenever the subscribed tenant credentials cache is populated or refreshed:
+
+- Hook: `c8y:tenantCredentialsUpdated`
+- Payload type: `TenantCredentials` from `c8y-nitro/types`
+
+```ts
+import type { TenantCredentials } from 'c8y-nitro/types'
+import { definePlugin } from 'nitro'
+
+export default definePlugin((nitroApp) => {
+  nitroApp.hooks.hook('c8y:tenantCredentialsUpdated', (prev, next) => {
+    const previousTenants = prev ? Object.keys(prev) : []
+    const nextTenants = Object.keys(next)
+
+    console.log({ previousTenants, nextTenants })
+  })
+})
+```
+
+`prev` is `null` for the first population and otherwise contains the previously cached tenant credential map. `next` contains the newly fetched credentials keyed by tenant.
+
+If you extend this hook in your own code, prefer reusing exported types from `c8y-nitro/types` instead of repeating `Record<string, ICredentials>` locally.
+
 ### Tenant Options
 
 | Function            | Description                                              | Request Context |
