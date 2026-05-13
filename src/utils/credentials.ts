@@ -12,6 +12,26 @@ import { useNitroHooks } from 'nitro/app'
 
 let prevCredentials: TenantCredentials | null = null
 
+function normalizeTenantCredentials(credentials: TenantCredentials | null): string {
+  if (!credentials) {
+    return 'null'
+  }
+
+  return JSON.stringify(
+    Object.entries(credentials)
+      .map(([tenant, credential]) => ({
+        tenant,
+        user: credential.user ?? null,
+        password: credential.password ?? null,
+      }))
+      .sort((a, b) => a.tenant.localeCompare(b.tenant)),
+  )
+}
+
+function areTenantCredentialsEqual(a: TenantCredentials | null, b: TenantCredentials): boolean {
+  return normalizeTenantCredentials(a) === normalizeTenantCredentials(b)
+}
+
 /**
  * Fetches credentials for all tenants subscribed to this microservice.\
  * Uses bootstrap credentials from runtime config to query the microservice subscriptions API.\
@@ -54,7 +74,9 @@ const cachedSubscribedTenantCredentials = defineCachedFunction(async () => {
     {} as TenantCredentials,
   )
 
-  await useNitroHooks().callHook('c8y:tenantCredentialsUpdated', prevCredentials, newCredentials)
+  if (!areTenantCredentialsEqual(prevCredentials, newCredentials)) {
+    await useNitroHooks().callHook('c8y:tenantCredentialsUpdated', prevCredentials, newCredentials)
+  }
 
   prevCredentials = newCredentials
 
@@ -68,14 +90,21 @@ const cachedSubscribedTenantCredentials = defineCachedFunction(async () => {
   invalidate: () => Promise<void>
 }
 
+async function getSubscribedTenantCredentials(): Promise<TenantCredentials> {
+  const credentials = await cachedSubscribedTenantCredentials()
+  prevCredentials = credentials
+  return credentials
+}
+
 // TODO: Remove this explicit type once Nitro's `defineCachedFunction()` return type includes ocache helper methods.
 export const useSubscribedTenantCredentials: (() => Promise<TenantCredentials>) & {
   invalidate: () => Promise<void>
   refresh: () => Promise<TenantCredentials>
-} = Object.assign(cachedSubscribedTenantCredentials, {
+} = Object.assign(getSubscribedTenantCredentials, {
+  invalidate: cachedSubscribedTenantCredentials.invalidate,
   refresh: async () => {
     await cachedSubscribedTenantCredentials.invalidate()
-    return await cachedSubscribedTenantCredentials()
+    return await getSubscribedTenantCredentials()
   },
 })
 

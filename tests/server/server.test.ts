@@ -518,6 +518,24 @@ describe('Nitro Server', () => {
       const clearCachedEventsRes = await server.fetch(new Request(new URL('/credentials-hook-events?clear=1', server.url)))
       expect(clearCachedEventsRes.status).toEqual(200)
 
+      const baselineRefreshRes = await server.fetch(new Request(new URL('/subscribed-credentials?refresh=1', server.url)))
+      expect(baselineRefreshRes.status).toEqual(200)
+      const baselineRefreshJson = await baselineRefreshRes.json() as Record<string, any>
+      expect(baselineRefreshJson.subscribedTenants).toEqual(['t12345', 't67890'])
+
+      const clearBaselineEventsRes = await server.fetch(new Request(new URL('/credentials-hook-events?clear=1', server.url)))
+      expect(clearBaselineEventsRes.status).toEqual(200)
+
+      const unchangedRefreshRes = await server.fetch(new Request(new URL('/subscribed-credentials?refresh=1', server.url)))
+      expect(unchangedRefreshRes.status).toEqual(200)
+      const unchangedRefreshJson = await unchangedRefreshRes.json() as Record<string, any>
+      expect(unchangedRefreshJson.subscribedTenants).toEqual(['t12345', 't67890'])
+
+      const unchangedEventsRes = await server.fetch(new Request(new URL('/credentials-hook-events?clear=1', server.url)))
+      expect(unchangedEventsRes.status).toEqual(200)
+      const unchangedEventsJson = await unchangedEventsRes.json() as Record<string, any>
+      expect(unchangedEventsJson.events).toEqual([])
+
       const mutateRes = await server.fetch(new Request(new URL('/subscribed-credentials?tenant=t99999&user=serviceuser3&password=pass3', server.url)))
       expect(mutateRes.status).toEqual(200)
       const mutateJson = await mutateRes.json() as Record<string, any>
