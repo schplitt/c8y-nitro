@@ -51,7 +51,6 @@ export default defineNitroConfig({
         { key: 'credentials.secret', defaultValue: 'change-me' }, // Encrypted option
       ],
       settingsCategory: 'my-service', // Optional, defaults to contextPath/name
-      requiredRoles: ['ROLE_OPTION_MANAGEMENT_READ'], // Required for reading tenant options
     },
   },
   modules: [c8y()],
@@ -62,4 +61,4 @@ export default defineNitroConfig({
 
 > **Note on Encrypted Options**: Keys prefixed with `credentials.` are stored encrypted by Cumulocity. See more details [here](https://cumulocity.com/api/core/#operation/postOptionCollectionResource).
 
-> **Important**: To read tenant options, your microservice **must** have the `ROLE_OPTION_MANAGEMENT_READ` role in `manifest.requiredRoles`. Without this role, API calls will fail with a 403 Forbidden error.
+> **Auto-injected role**: When `settings` are defined, `ROLE_OPTION_MANAGEMENT_READ` is automatically added to `requiredRoles` so the microservice can read its own tenant options. You do not need to add it manually. If you have already added `ROLE_OPTION_MANAGEMENT_READ` or `ROLE_OPTION_MANAGEMENT_ADMIN`, no duplicate is inserted.

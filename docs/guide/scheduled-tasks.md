@@ -71,6 +71,18 @@ const cancelled = await cancelScheduledTask(scheduled.id)
 
 `cancelScheduledTask()` returns `true` only when a pending task was found and cancelled. Once Nitro starts running the task, cancellation belongs to the task implementation, not to this scheduler.
 
+## Concurrent Scheduling of the Same Task
+
+You can schedule the same task name multiple times concurrently with different payloads. Each invocation runs independently — there is no name-level deduplication.
+
+```ts
+// Both run at their respective times, with their own payloads
+await scheduleTask('reports:generate', { payload: { reportId: 'r1' }, schedule: '1 minute' })
+await scheduleTask('reports:generate', { payload: { reportId: 'r2' }, schedule: '2 minutes' })
+```
+
+This differs from Nitro's built-in `runTask()`, which deduplicates concurrent calls by task name.
+
 ## Important Limitation
 
 Scheduled tasks are kept in process memory. They are useful for lightweight delayed work, but they are not a durable queue. A restart clears pending tasks.
