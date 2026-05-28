@@ -378,7 +378,8 @@ When making changes to the project (new APIs, architectural changes, updated con
 
 When working on this project:
 
-1. **Run tests** after making changes: `pnpm test:run` (runs once, no watch mode)
+1. **Never commit or push without explicit user instruction** — Do not run `git commit`, `git push`, or any equivalent workflow action unless the user has explicitly asked for it in that message. Do not ask whether to commit. Do not commit "just to wrap up". Wait for the user to say so.
+2. **Run tests** after making changes: `pnpm test:run` (runs once, no watch mode)
 2. **Run linting** to ensure code quality: `pnpm lint`
 3. **Run type checking** before committing: `pnpm typecheck`
 4. **Maintain exports** — Public APIs in `src/index.ts`, types in `src/types/index.ts`, utils in `src/utils/index.ts`
