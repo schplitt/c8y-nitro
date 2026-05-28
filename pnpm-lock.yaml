@@ -86,9 +86,6 @@ importers:
       '@c8y/client':
         specifier: '>=1021'
         version: 1023.61.12
-      '@types/node':
-        specifier: 'catalog:'
-        version: 24.12.3
       c12:
         specifier: 'catalog:'
         version: 4.0.0-beta.5(chokidar@5.0.0)(dotenv@17.3.1)(giget@2.0.0)(jiti@2.6.1)
@@ -122,13 +119,13 @@ importers:
       tinyexec:
         specifier: 'catalog:'
         version: 1.1.2
-      tsnapi:
-        specifier: 'catalog:'
-        version: 0.3.3(vitest@4.1.6(@types/node@24.12.3)(vite@8.0.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@types/node@24.12.3)(esbuild@0.27.7)(jiti@2.6.1)(yaml@2.8.4)))
     devDependencies:
       '@schplitt/eslint-config':
         specifier: 'catalog:'
         version: 1.5.0(@angular/cli@21.2.3(@types/node@24.12.3)(chokidar@5.0.0))(@vue/compiler-sfc@3.5.35)(chokidar@5.0.0)(jiti@2.6.1)(typescript-eslint@8.57.1(eslint@10.3.0(jiti@2.6.1))(typescript@6.0.3))(typescript@6.0.3)
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.12.3
       '@types/spinnies':
         specifier: 'catalog:'
         version: 0.5.3
@@ -147,6 +144,9 @@ importers:
       tsdown:
         specifier: 'catalog:'
         version: 0.22.0(typescript@6.0.3)
+      tsnapi:
+        specifier: 'catalog:'
+        version: 0.3.3(vitest@4.1.6(@types/node@24.12.3)(vite@8.0.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@types/node@24.12.3)(esbuild@0.27.7)(jiti@2.6.1)(yaml@2.8.4)))
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
