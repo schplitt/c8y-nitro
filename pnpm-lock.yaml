@@ -6,6 +6,9 @@ settings:
 
 catalogs:
   default:
+    '@c8y/client':
+      specifier: ^1023.80.0
+      version: 1023.82.4
     '@schplitt/eslint-config':
       specifier: ^1.5.0
       version: 1.5.0
@@ -156,6 +159,9 @@ importers:
 
   playground:
     devDependencies:
+      '@c8y/client':
+        specifier: 'catalog:'
+        version: 1023.82.4
       c8y-nitro:
         specifier: workspace:*
         version: link:..
@@ -345,6 +351,9 @@ packages:
 
   '@c8y/client@1023.61.12':
     resolution: {integrity: sha512-JyWIdpeY9k6bZNwGqCakbUpdP4peynHptpoLktSIjH00JI6lN6jnkWBF1k0hmtEfotTKneHlDVVBgiVdB0tcwQ==}
+
+  '@c8y/client@1023.82.4':
+    resolution: {integrity: sha512-kZAzHVexV5+rmXz/HBaz/NpOY4CLcm4g/tkW/RNy2OPPjMAS3Kp/0l4rjFcwCKPxprIATEoBCzGkt6pMiq693A==}
 
   '@docsearch/css@4.6.3':
     resolution: {integrity: sha512-nlOwcXcsNAptQl4vlL4MA78qNJKO0Qlds5GuBjCoePgkebTXLSf8Qt1oyZ3YBshYupKXG9VRGEsk1zr23d+bzQ==}
@@ -4943,6 +4952,20 @@ snapshots:
       '@babel/helper-validator-identifier': 8.0.0-rc.4
 
   '@c8y/client@1023.61.12':
+    dependencies:
+      '@types/cometd': 4.0.8
+      '@types/node': 20.19.37
+      b2a: 1.1.2
+      cometd: 4.0.8
+      cometd-nodejs-client: 1.0.2
+      cross-fetch: 4.1.0
+      form-data: 4.0.4
+      isomorphic-cometd: 1.1.0(cometd-nodejs-client@1.0.2)(cometd@4.0.8)
+      tslib: 2.8.1
+    transitivePeerDependencies:
+      - encoding
+
+  '@c8y/client@1023.82.4':
     dependencies:
       '@types/cometd': 4.0.8
       '@types/node': 20.19.37
