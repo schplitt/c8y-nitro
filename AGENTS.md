@@ -320,26 +320,38 @@ Utilities that need configuration from module options use **Nitro's runtime conf
 When making changes to the project (new APIs, architectural changes, updated conventions):
 
 - **`AGENTS.md`** — Update with technical details, architecture, and best practices for AI agents
-- **`README.md`** — Update with user-facing documentation for end users:
-  - New configuration options (anything in `C8yNitroModuleOptions`)
-  - New utilities or functions exported from `c8y-nitro/utils`
-  - New CLI commands or features
-  - Changes to existing API behavior
-  - Environment variables that users can set
-  - Any feature that users can configure, use, or interact with
+- **`docs/` VitePress site** — Primary user-facing documentation for end users. Update the relevant guide/reference page whenever behavior, configuration, commands, utilities, runtime hooks, environment variables, workflows, or deployment behavior change.
+- **`README.md`** — Keep short and entry-point focused. Update only when the quickstart, package positioning, install instructions, or docs links change. Do not move full feature documentation back into the README.
+
+User-facing documentation belongs in `docs/` first:
+
+- New configuration options (anything in `C8yNitroModuleOptions`) → `docs/reference/module-options.md` and any relevant guide page
+- New utilities or functions exported from `c8y-nitro/utils` → `docs/reference/utilities.md` and, for non-trivial behavior, a guide page
+- New CLI commands or features → `docs/reference/cli.md`
+- Runtime hooks → `docs/reference/runtime-hooks.md`
+- Environment variables → `docs/reference/environment-variables.md`
+- Generated runtime exports or generated types → `docs/reference/runtime-module.md`
+- Deployment, CI, release, or GitHub Pages behavior → `docs/guide/deployment.md`
+- Changes to existing API behavior → update the relevant `docs/guide/**` and `docs/reference/**` pages
+- Any feature that users can configure, use, or interact with
+
+After changing docs, run `pnpm docs:build` when feasible to catch broken links, bad frontmatter, or VitePress config problems.
 
 ### When to Update Documentation (Critical - Always Consider)
 
 **ALWAYS check if documentation needs updating after:**
 
-1. **Adding a new utility function** → Update README.md utilities section with function name, description, and example
-   - Example: Adding `useTenantOption()` requires adding it to the utilities table and showing usage examples
+1. **Adding a new utility function** → Update `docs/reference/utilities.md` with function name, description, request-context expectations, and example. Add or update a guide page for non-trivial workflows.
 
-2. **Adding a new configuration option** → Update README.md configuration section and relevant examples
-   - Example: Adding `cache.tenantOptions` requires updating the Cache Configuration section with examples
+- Example: Adding a new scheduler helper requires updating `docs/reference/utilities.md` and `docs/guide/scheduled-tasks.md`
 
-3. **Adding a new type that users configure** → Update README.md with JSDoc and configuration examples
-   - Example: Adding `C8yTenantOptionsCacheConfig` requires documenting it in cache configuration
+2. **Adding a new configuration option** → Update `docs/reference/module-options.md` and the relevant guide page.
+
+- Example: Adding `cache.tenantOptions` requires updating `docs/reference/module-options.md` and `docs/guide/cache.md`
+
+3. **Adding a new type that users configure** → Update JSDoc plus the relevant docs reference/guide page.
+
+- Example: Adding `C8yTenantOptionsCacheConfig` requires documenting it in cache configuration docs
 
 4. **Creating a new file in `src/types/`** → Update AGENTS.md architecture diagram
    - Example: Creating `tenantOptions.ts` requires adding it to the types list in the architecture section
@@ -353,23 +365,31 @@ When making changes to the project (new APIs, architectural changes, updated con
 7. **User corrects how something should be done** → Update AGENTS.md "Project Context & Learnings"
    - Example: Learning that Nitro v3 requires explicit imports from `'nitro/h3'`
 
-8. **Adding a new environment variable** → Update README.md with the variable name and description
-   - Example: Adding `NITRO_C8Y_DEFAULT_TENANT_OPTIONS_TTL` requires documenting it in the cache section
+8. **Adding a new environment variable** → Update `docs/reference/environment-variables.md` with the variable name, source, and behavior. Also update any guide page that teaches the workflow.
 
-9. **Changing how a utility works** → Update README.md utility documentation and JSDoc
+- Example: Adding `NITRO_C8Y_DEFAULT_TENANT_OPTIONS_TTL` requires documenting it in env-var reference and cache docs
+
+9. **Changing how a utility works** → Update JSDoc, `docs/reference/utilities.md`, and the relevant guide page
    - Example: Adding cache invalidation methods requires updating the utility's documentation
 
-10. **Adding support for new functionality** → Update README.md features and usage sections
-    - Example: Adding tenant options support requires a new section explaining the feature
+10. **Adding support for new functionality** → Add or update a dedicated docs guide when the behavior needs explanation, plus the relevant reference page
+
+- Example: Adding tenant options support requires `docs/guide/tenant-options.md` plus reference updates
+
+11. **Changing release, CI, docs build, or Pages behavior** → Update `docs/guide/deployment.md` and, if needed, `README.md` links or quickstart notes
 
 **Documentation Update Checklist:**
 
-- [ ] Did I add/change a utility? → Update README.md utilities section
-- [ ] Did I add/change a config option? → Update README.md configuration section
-- [ ] Did I add/change a type? → Update README.md and JSDoc with examples
+- [ ] Did I add/change a utility? → Update `docs/reference/utilities.md` and relevant guide docs
+- [ ] Did I add/change a config option? → Update `docs/reference/module-options.md` and relevant guide docs
+- [ ] Did I add/change a type? → Update JSDoc and relevant docs pages
 - [ ] Did I add/change a file? → Update AGENTS.md architecture diagram
 - [ ] Did I learn a pattern? → Update AGENTS.md patterns/conventions
-- [ ] Did I add an env variable? → Update README.md with env var documentation
+- [ ] Did I add an env variable? → Update `docs/reference/environment-variables.md`
+- [ ] Did I change runtime exports/generated types? → Update `docs/reference/runtime-module.md`
+- [ ] Did I change release/deploy behavior? → Update `docs/guide/deployment.md`
+- [ ] Did I change quickstart/install/package positioning? → Update `README.md`
+- [ ] Did I update docs? → Run `pnpm docs:build` when feasible
 - [ ] At the end of my response: Did I explicitly notify the user of documentation changes?
 
 **Remember:** Documentation is NOT optional. Treat it as part of the implementation, not an afterthought.

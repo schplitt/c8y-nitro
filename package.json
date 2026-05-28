@@ -48,7 +48,10 @@
     "prerelease": "eslint && tsc --noEmit && tsdown && vitest run",
     "release": "bumpp",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
   },
   "dependencies": {
     "@types/node": "catalog:",
@@ -73,6 +76,7 @@
     "memfs": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:",
+    "vitepress": "catalog:",
     "vitest": "catalog:"
   },
   "peerDependencies": {
