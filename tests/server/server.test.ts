@@ -885,4 +885,39 @@ describe('Nitro Server', () => {
       }
     })
   })
+
+  describe('With tasks disabled', () => {
+    let nitro: Awaited<ReturnType<typeof createNitro>>
+    let devServer: ReturnType<typeof createDevServer>
+    let server: Awaited<ReturnType<ReturnType<typeof createDevServer>['listen']>>
+    let env: Record<string, string>
+
+    beforeAll(async () => {
+      const result = await createC8yNitroServer({
+        env: completeEnv,
+        nitroConfig: {
+          experimental: { tasks: false },
+        },
+      })
+      nitro = result.nitro
+      devServer = result.devServer
+      server = result.server
+      env = result.env
+    })
+
+    afterAll(async () => {
+      for (const key of Object.keys(env)) {
+        delete process.env[key]
+      }
+      await devServer?.close()
+      await nitro?.close()
+    })
+
+    it('should throw when scheduleTask() is called with tasks disabled', async () => {
+      const res = await server.fetch(new Request(new URL('/schedule-task?marker=probe&schedule=1', server.url)))
+      expect(res.status).toEqual(500)
+      const text = await res.text()
+      expect(text).toContain('scheduleTask() requires tasks to be enabled. Set `experimental: { tasks: true }` in your nitro.config.ts.')
+    })
+  })
 })

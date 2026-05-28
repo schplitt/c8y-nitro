@@ -204,7 +204,11 @@ function stopSchedulerIntervalIfIdle(): void {
  * })
  */
 export async function scheduleTask(taskName: string, options: ScheduleTaskOptions): Promise<ScheduledTaskInfo> {
-  await schedulerReady
+  if (!import.meta._tasks) {
+    throw new Error(
+      'scheduleTask() requires tasks to be enabled. Set `experimental: { tasks: true }` in your nitro.config.ts.',
+    )
+  }
 
   if (!taskName) {
     throw new TypeError('taskName is required')
