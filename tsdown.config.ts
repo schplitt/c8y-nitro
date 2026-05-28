@@ -16,7 +16,9 @@ const mainConfig: UserConfig = {
   outDir: './dist',
   failOnWarn: true,
   deps: {
-    neverBundle: ['c8y-nitro/runtime', 'nitro/runtime-config'],
+    // '#nitro/virtual/tasks' is a virtual module injected by Nitro's bundler at
+    // runtime — it does not exist as a real package and must not be bundled.
+    neverBundle: ['c8y-nitro/runtime', 'nitro/runtime-config', '#nitro/virtual/tasks'],
   },
 
   globImport: true,

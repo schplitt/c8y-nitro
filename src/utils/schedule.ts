@@ -1,7 +1,10 @@
 import { ms } from 'itty-time'
 import type { TaskContext, TaskPayload } from 'nitro/types'
 import { randomUUID } from 'node:crypto'
-import { runTask } from 'nitro/task'
+// Direct import of Nitro's virtual task registry — bypasses runTask()'s
+// name-only deduplication lock so the same task name can run concurrently
+// with different payloads. See: https://github.com/nitrojs/nitro/issues/3448
+import { tasks as nitroTasks } from '#nitro/virtual/tasks'
 
 const MAX_TIMEOUT_MS = 2_147_483_647
 const SCHEDULE_LOOKAHEAD_MS = 60 * 60 * 1000
@@ -18,15 +21,15 @@ export type ScheduledTaskInput = Date | number | string
 
 /**
  * Options for scheduling a Nitro task to run once in the future.\
- * `payload` and `context` are passed through to Nitro's `runTask()` when the task starts.
+ * `payload` and `context` are forwarded to the task handler's `run()` method.
  */
 export interface ScheduleTaskOptions {
   /**
-   * Payload passed to Nitro's `runTask()` call.
+   * Payload forwarded to the task handler's `TaskEvent.payload`.
    */
   payload?: ScheduledTaskPayload
   /**
-   * Context passed to Nitro's `runTask()` call.
+   * Context forwarded to the task handler's `TaskEvent.context`.
    */
   context?: ScheduledTaskContext
   /**
@@ -110,7 +113,17 @@ async function executeScheduledTask(id: string): Promise<void> {
   scheduledTasks.delete(id)
   stopSchedulerIntervalIfIdle()
 
-  await runTask(record.taskName, {
+  const taskDef = nitroTasks[record.taskName]
+  if (!taskDef) {
+    throw new Error(`Task "${record.taskName}" is not available!`)
+  }
+  if (!taskDef.resolve) {
+    throw new Error(`Task "${record.taskName}" is not implemented!`)
+  }
+
+  const handler = await taskDef.resolve()
+  await handler.run({
+    name: record.taskName,
     payload: record.payload,
     context: record.context,
   })
@@ -162,11 +175,11 @@ function stopSchedulerIntervalIfIdle(): void {
 
 /**
  * Schedules a Nitro task to run once in the future.\
- * Uses Nitro's `runTask()` internally when the scheduled time is reached.\
+ * Resolves and calls the task handler directly from Nitro's virtual task registry\
  * Numbers are treated as seconds, strings are parsed as human-readable durations, and dates are used as exact run times.
  *
- * @param taskName - The Nitro task name to run
- * @param options - Nitro task options plus the schedule time
+ * @param taskName - The Nitro task name to run (from `tasks/*.ts`)
+ * @param options - Task payload, context, and the schedule time
  * @returns Information about the scheduled task
  *
  * @example
@@ -191,7 +204,11 @@ function stopSchedulerIntervalIfIdle(): void {
  * })
  */
 export async function scheduleTask(taskName: string, options: ScheduleTaskOptions): Promise<ScheduledTaskInfo> {
-  await schedulerReady
+  if (!import.meta._tasks) {
+    throw new Error(
+      'scheduleTask() requires tasks to be enabled. Set `experimental: { tasks: true }` in your nitro.config.ts.',
+    )
+  }
 
   if (!taskName) {
     throw new TypeError('taskName is required')
