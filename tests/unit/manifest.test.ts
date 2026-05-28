@@ -189,6 +189,94 @@ describe('manifest generation', () => {
         .toThrow('manifest.settings entries must define a non-empty defaultValue. Invalid keys: "credentials.secret"')
     })
 
+    describe('auto ROLE_OPTION_MANAGEMENT_READ injection', () => {
+      it('should add ROLE_OPTION_MANAGEMENT_READ when settings are defined and requiredRoles is empty', async () => {
+        mockPackageData.current = {
+          name: 'my-service',
+          version: '1.0.0',
+          author: 'Test Author',
+        }
+
+        const manifest = await createC8yManifest('/project', {
+          settings: [{ key: 'credentials.mySecret', defaultValue: 'default' }],
+        })
+
+        expect(manifest.requiredRoles).toContain('ROLE_OPTION_MANAGEMENT_READ')
+      })
+
+      it('should add ROLE_OPTION_MANAGEMENT_READ alongside existing requiredRoles', async () => {
+        mockPackageData.current = {
+          name: 'my-service',
+          version: '1.0.0',
+          author: 'Test Author',
+        }
+
+        const manifest = await createC8yManifest('/project', {
+          settings: [{ key: 'credentials.mySecret', defaultValue: 'default' }],
+          requiredRoles: ['ROLE_INVENTORY_READ'],
+        })
+
+        expect(manifest.requiredRoles).toEqual(['ROLE_INVENTORY_READ', 'ROLE_OPTION_MANAGEMENT_READ'])
+      })
+
+      it('should NOT add ROLE_OPTION_MANAGEMENT_READ when user already has it', async () => {
+        mockPackageData.current = {
+          name: 'my-service',
+          version: '1.0.0',
+          author: 'Test Author',
+        }
+
+        const manifest = await createC8yManifest('/project', {
+          settings: [{ key: 'credentials.mySecret', defaultValue: 'default' }],
+          requiredRoles: ['ROLE_OPTION_MANAGEMENT_READ'],
+        })
+
+        expect(manifest.requiredRoles?.filter((r) => r === 'ROLE_OPTION_MANAGEMENT_READ')).toHaveLength(1)
+      })
+
+      it('should NOT add ROLE_OPTION_MANAGEMENT_READ when user has ROLE_OPTION_MANAGEMENT_ADMIN', async () => {
+        mockPackageData.current = {
+          name: 'my-service',
+          version: '1.0.0',
+          author: 'Test Author',
+        }
+
+        const manifest = await createC8yManifest('/project', {
+          settings: [{ key: 'credentials.mySecret', defaultValue: 'default' }],
+          requiredRoles: ['ROLE_OPTION_MANAGEMENT_ADMIN'],
+        })
+
+        expect(manifest.requiredRoles).not.toContain('ROLE_OPTION_MANAGEMENT_READ')
+        expect(manifest.requiredRoles).toContain('ROLE_OPTION_MANAGEMENT_ADMIN')
+      })
+
+      it('should NOT add ROLE_OPTION_MANAGEMENT_READ when no settings are defined', async () => {
+        mockPackageData.current = {
+          name: 'my-service',
+          version: '1.0.0',
+          author: 'Test Author',
+        }
+
+        const manifest = await createC8yManifest('/project', {})
+
+        expect(manifest.requiredRoles).toBeUndefined()
+      })
+
+      it('should NOT add ROLE_OPTION_MANAGEMENT_READ when settings array is empty', async () => {
+        mockPackageData.current = {
+          name: 'my-service',
+          version: '1.0.0',
+          author: 'Test Author',
+        }
+
+        const manifest = await createC8yManifest('/project', {
+          settings: [],
+        })
+
+        expect(manifest.requiredRoles).toBeUndefined()
+      })
+    })
+
     it('should throw error when package.json is missing required fields', async () => {
       mockPackageData.current = {
         name: 'my-service',

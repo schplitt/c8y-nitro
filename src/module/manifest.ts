@@ -4,6 +4,9 @@ import { readPackage } from 'pkg-types'
 import { GENERATED_LIVENESS_ROUTE, GENERATED_READINESS_ROUTE } from './constants'
 import type { ConsolaInstance } from 'consola'
 
+const ROLE_OPTION_MANAGEMENT_READ = 'ROLE_OPTION_MANAGEMENT_READ'
+const ROLE_OPTION_MANAGEMENT_ADMIN = 'ROLE_OPTION_MANAGEMENT_ADMIN'
+
 interface PackageJsonFields {
   name: string
   version: string
@@ -107,10 +110,24 @@ export async function createC8yManifest(
 
   const key = `${name}-key`
 
+  // Auto-inject ROLE_OPTION_MANAGEMENT_READ when settings are defined, unless the
+  // user already has READ or ADMIN (admin implies read) in requiredRoles.
+  let requiredRoles = options.requiredRoles ? [...options.requiredRoles] : undefined
+  if (
+    options.settings
+    && options.settings.length > 0
+    && !requiredRoles?.includes(ROLE_OPTION_MANAGEMENT_READ)
+    && !requiredRoles?.includes(ROLE_OPTION_MANAGEMENT_ADMIN)
+  ) {
+    requiredRoles = [...(requiredRoles ?? []), ROLE_OPTION_MANAGEMENT_READ]
+    logger?.debug(`Auto-added ${ROLE_OPTION_MANAGEMENT_READ} to requiredRoles because manifest.settings are defined`)
+  }
+
   const manifest: C8YManifest = {
     ...restManifestFields,
     ...probeFields,
     ...options,
+    ...(requiredRoles !== undefined ? { requiredRoles } : {}),
     provider,
     name,
     version,
