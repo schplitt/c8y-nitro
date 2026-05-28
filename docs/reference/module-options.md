@@ -18,7 +18,7 @@ interface C8yNitroModuleOptions {
 
 ## `dev`
 
-```ts
+```json
 dev?: {
   injectUser?: boolean
 }
@@ -48,7 +48,7 @@ Fields such as `name`, `version`, `apiVersion`, `type`, and provider metadata ar
 
 ## `apiClient`
 
-```ts
+```json
 apiClient?: {
   dir: string
   contextPath?: string
@@ -60,7 +60,7 @@ apiClient?: {
 
 ## `zip`
 
-```ts
+```json
 zip?: {
   name?: string | ((packageName: string, version: string) => string)
   outputDir?: string
@@ -72,7 +72,7 @@ Use this when the build artifact itself needs different naming or placement.
 
 ## `cache`
 
-```ts
+```json
 cache?: {
   credentialsTTL?: number
   defaultTenantOptionsTTL?: number
