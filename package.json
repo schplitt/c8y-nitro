@@ -48,10 +48,12 @@
     "prerelease": "eslint && tsc --noEmit && tsdown && vitest run",
     "release": "bumpp",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
   },
   "dependencies": {
-    "@types/node": "catalog:",
     "c12": "catalog:",
     "citty": "catalog:",
     "consola": "catalog:",
@@ -61,19 +63,22 @@
     "pathe": "catalog:",
     "pkg-types": "catalog:",
     "spinnies": "catalog:",
-    "tinyexec": "catalog:",
-    "tsnapi": "catalog:"
+    "tinyexec": "catalog:"
   },
   "devDependencies": {
     "@schplitt/eslint-config": "catalog:",
+    "@types/node": "catalog:",
     "@types/spinnies": "catalog:",
     "bumpp": "catalog:",
     "changelogithub": "catalog:",
     "eslint": "catalog:",
     "memfs": "catalog:",
     "tsdown": "catalog:",
+    "tsnapi": "catalog:",
     "typescript": "catalog:",
+    "vitepress": "catalog:",
     "vitest": "catalog:"
+
   },
   "peerDependencies": {
     "@c8y/client": ">=1021",

@@ -37,7 +37,7 @@ function shouldEmitTenantCredentialsUpdated(prev: TenantCredentials | null, next
  * @returns Object mapping tenant IDs to their respective credentials
  * @config Cache TTL can be configured via:
  * - `c8y.cache.credentialsTTL` in the Nitro config (value in seconds)
- * - `NITRO_C8Y_CACHE_CREDENTIALS_TTL` environment variable
+ * - `NITRO_C8Y_CREDENTIALS_CACHE_TTL` environment variable
  * @example
  * // Get all subscribed tenant credentials:
  * const credentials = await useSubscribedTenantCredentials()
