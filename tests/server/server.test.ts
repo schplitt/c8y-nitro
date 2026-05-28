@@ -170,6 +170,83 @@ describe('Nitro Server', () => {
         consola.restoreAll()
       }
     })
+
+    it.sequential('should run same-named tasks in parallel when their execution windows overlap', async () => {
+      // Task 1 fires at +1 s, task 2 fires at +1.3 s — both sleep 700 ms so
+      // they overlap from 1.3 s to 2 s.  With Nitro's runTask() the second
+      // call would be silently deduplicated (name-only lock); our direct
+      // handler resolution must let both complete with their own payload.
+      const marker = `parallel-${Date.now()}`
+      const logs: string[] = []
+      const mockFn = vi.fn((context: unknown) => {
+        logs.push(String(context))
+      })
+
+      consola.mockTypes(() => mockFn)
+      consola.wrapAll()
+
+      try {
+        const res = await server.fetch(new Request(new URL(`/schedule-parallel?marker=${marker}`, server.url)))
+        expect(res.status).toEqual(200)
+
+        const json = await res.json() as Record<string, any>
+        expect(json.task1).toMatchObject({ task: 'scheduler:sleep-log' })
+        expect(json.task2).toMatchObject({ task: 'scheduler:sleep-log' })
+
+        // Neither marker logged yet
+        expect(logs.join('\n')).not.toContain(`sleep-log:${marker}-1`)
+        expect(logs.join('\n')).not.toContain(`sleep-log:${marker}-2`)
+
+        // Wait until both tasks have completed: 1.3 s schedule + 0.7 s sleep + 1 s buffer
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 3_000)
+        })
+
+        // Both markers must appear — if the old runTask() dedup were still in
+        // effect, task2 would have been silently dropped and only marker-1 would
+        // be present.
+        expect(logs.join('\n')).toContain(`sleep-log:${marker}-1`)
+        expect(logs.join('\n')).toContain(`sleep-log:${marker}-2`)
+      } finally {
+        consola.restoreAll()
+      }
+    }, 10_000)
+
+    it.sequential('should confirm Nitro runTask() silently drops same-named concurrent calls', async () => {
+      // This is a regression-guard that documents the Nitro behaviour we work
+      // around. runTask() deduplicates by task name: the second concurrent call
+      // returns the first call’s promise and never invokes the handler with its
+      // own payload. Only marker-1 must appear; marker-2 must NOT appear.
+      // See: https://github.com/nitrojs/nitro/issues/3448
+      const marker = `runtask-${Date.now()}`
+      const logs: string[] = []
+      const mockFn = vi.fn((context: unknown) => {
+        logs.push(String(context))
+      })
+
+      consola.mockTypes(() => mockFn)
+      consola.wrapAll()
+
+      try {
+        const res = await server.fetch(new Request(new URL(`/runtask-parallel?marker=${marker}`, server.url)))
+        expect(res.status).toEqual(200)
+
+        const json = await res.json() as Record<string, any>
+        // The route itself reports whether both promises resolved to the same object
+        expect(json.deduplicated).toBe(true)
+
+        // Wait for the (single) task to finish: 50 ms yield + 700 ms sleep + buffer
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 1_500)
+        })
+
+        // marker-1 ran; marker-2 was swallowed by the dedup lock
+        expect(logs.join('\n')).toContain(`sleep-log:${marker}-1`)
+        expect(logs.join('\n')).not.toContain(`sleep-log:${marker}-2`)
+      } finally {
+        consola.restoreAll()
+      }
+    }, 10_000)
   })
 
   describe('With dev user injection disabled', () => {
