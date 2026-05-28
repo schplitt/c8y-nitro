@@ -73,7 +73,7 @@ const cachedSubscribedTenantCredentials = defineCachedFunction(async () => {
   )
 
   if (shouldEmitTenantCredentialsUpdated(prevCredentials, newCredentials)) {
-    await useNitroHooks().callHook('c8y:tenantCredentialsUpdated', prevCredentials, newCredentials)
+    useNitroHooks().callHook('c8y:tenantCredentialsUpdated', prevCredentials, newCredentials)
   }
 
   prevCredentials = newCredentials
