@@ -27,6 +27,7 @@
     "bootstrap": "c8y-nitro bootstrap"
   },
   "devDependencies": {
+    "@c8y/client": "catalog:",
     "c8y-nitro": "workspace:*",
     "nitro": "catalog:"
   }
