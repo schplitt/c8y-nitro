@@ -43,9 +43,6 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Build docs
-        run: pnpm docs:build
-
       - name: Update npm
         run: npm install -g npm@latest
 
@@ -57,21 +54,11 @@ jobs:
       - name: Publish to NPM
         run: pnpm publish --access public --no-git-checks --provenance
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload docs artifact
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: docs/.vitepress/dist
-
   deploy-docs:
     needs: release
-    runs-on: ubuntu-latest
+    uses: ./.github/workflows/docs.yml
+    with:
+      ref: ${{ github.ref_name }}
     permissions:
       pages: write
       id-token: write
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4

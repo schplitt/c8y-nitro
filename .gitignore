@@ -3,7 +3,8 @@ node_modules
 .env
 .c8y
 *.zip
-.vitepress
+docs/.vitepress/cache
+docs/.vitepress/dist
 
 
 !tests/server/**/.env
