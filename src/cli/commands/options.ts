@@ -19,7 +19,7 @@ export default defineCommand({
   async run() {
     // Step 1: Load config and env
     consola.info('Loading configuration...')
-    const { env, c8yOptions, configDir } = await loadC8yConfig()
+    const { env, nitroConfig, configDir } = await loadC8yConfig()
 
     // Step 2: Validate required environment variables
     consola.info('Validating environment variables...')
@@ -27,7 +27,7 @@ export default defineCommand({
 
     // Step 3: Build manifest to get settings category and keys
     consola.info('Loading manifest...')
-    const manifest = await createC8yManifest(configDir, c8yOptions?.manifest)
+    const manifest = await createC8yManifest(configDir, nitroConfig)
     const category = manifest.settingsCategory || manifest.contextPath || manifest.name
 
     if (!manifest.settings || manifest.settings.length === 0) {

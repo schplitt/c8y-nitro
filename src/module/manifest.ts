@@ -1,11 +1,66 @@
 import type { Nitro } from 'nitro/types'
 import type { C8YManifest, C8YManifestOptions, Provider } from '../types/manifest'
+import type { C8yNitroModuleOptions } from '../types'
 import { readPackage } from 'pkg-types'
 import { GENERATED_LIVENESS_ROUTE, GENERATED_READINESS_ROUTE } from './constants'
 import type { ConsolaInstance } from 'consola'
 
+const DEFAULT_OPENAPI_ROUTE = '/_openapi.json'
 const ROLE_OPTION_MANAGEMENT_READ = 'ROLE_OPTION_MANAGEMENT_READ'
 const ROLE_OPTION_MANAGEMENT_ADMIN = 'ROLE_OPTION_MANAGEMENT_ADMIN'
+
+/**
+ * Subset of Nitro configuration consumed by manifest generation. Defined as a
+ * structural type so it works with `NitroConfig`, `NitroOptions`, and partial
+ * objects from CLI config loading or tests.
+ */
+export interface NitroConfigForManifest {
+  c8y?: C8yNitroModuleOptions
+  experimental?: { openAPI?: boolean }
+  openAPI?: { route?: string, production?: false | 'runtime' | 'prerender' }
+}
+
+/**
+ * Inputs to manifest generation that come from the surrounding Nitro config
+ * rather than from package.json. Computed by `extractManifestInputs`.
+ */
+export interface ManifestInputs {
+  /**
+   * User-supplied manifest options (from `nitroConfig.c8y.manifest`).
+   */
+  options: C8YManifestOptions
+  /**
+   * Auto-detected OpenAPI spec route, or undefined when OpenAPI is not
+   * exposed in production.
+   */
+  openApiSpec: string | undefined
+}
+
+/**
+ * Decide whether Nitro will expose an OpenAPI spec in the deployed build,
+ * and if so return the configured route (with leading slash).
+ * Returns null when OpenAPI is not enabled for production.
+ * @param config - Nitro config (or options) to inspect
+ */
+export function resolveNitroOpenApiRoute(config: NitroConfigForManifest): string | null {
+  if (!config.experimental?.openAPI)
+    return null
+  const production = config.openAPI?.production
+  if (!production)
+    return null
+  return config.openAPI?.route || DEFAULT_OPENAPI_ROUTE
+}
+
+/**
+ * Pull the parts of a Nitro config that feed manifest generation.
+ * @param config - Nitro config (or options) loaded from disk or from a Nitro instance
+ */
+export function extractManifestInputs(config: NitroConfigForManifest): ManifestInputs {
+  return {
+    options: config.c8y?.manifest ?? {},
+    openApiSpec: resolveNitroOpenApiRoute(config) ?? undefined,
+  }
+}
 
 interface PackageJsonFields {
   name: string
@@ -65,17 +120,23 @@ async function readPackageJsonFieldsForManifest(
 }
 
 /**
- * Creates a Cumulocity manifest from rootDir and options.
- * Standalone function that can be used by CLI or module.
- * @param rootDir - Directory containing package.json
- * @param options - Manifest options
+ * Create a Cumulocity manifest from a project root and its Nitro config.
+ * Reads `package.json` for identity fields, takes user manifest options from
+ * `nitroConfig.c8y.manifest`, and auto-injects `openApiSpec` when Nitro
+ * OpenAPI is enabled for production.
+ *
+ * Used by both the Nitro module and the CLI commands.
+ * @param rootDir - Directory containing the project's `package.json`
+ * @param nitroConfig - Nitro config (or options) for this project
  * @param logger - Optional logger for debug output
  */
 export async function createC8yManifest(
   rootDir: string,
-  options: C8YManifestOptions = {},
+  nitroConfig: NitroConfigForManifest = {},
   logger?: ConsolaInstance,
 ): Promise<C8YManifest> {
+  const { options, openApiSpec } = extractManifestInputs(nitroConfig)
+
   validateManifestSettings(options)
 
   const {
@@ -128,12 +189,16 @@ export async function createC8yManifest(
     ...probeFields,
     ...options,
     ...(requiredRoles !== undefined ? { requiredRoles } : {}),
+    ...(openApiSpec ? { openApiSpec } : {}),
     provider,
     name,
     version,
     apiVersion: 'v2',
     key,
     type: 'MICROSERVICE',
+  }
+  if (openApiSpec) {
+    logger?.debug(`Auto-added openApiSpec="${openApiSpec}" to manifest (Nitro OpenAPI is enabled)`)
   }
   logger?.debug(`Created Cumulocity manifest: ${JSON.stringify(manifest, null, 2)}`)
   return manifest
@@ -147,5 +212,5 @@ export async function createC8yManifest(
 export async function createC8yManifestFromNitro(
   nitro: Nitro,
 ): Promise<C8YManifest> {
-  return createC8yManifest(nitro.options.rootDir, nitro.options.c8y?.manifest, nitro.logger)
+  return createC8yManifest(nitro.options.rootDir, nitro.options, nitro.logger)
 }
