@@ -1,4 +1,4 @@
-export type C8YManifestOptions = Omit<C8YManifest, 'name' | 'version' | 'apiVersion' | 'key' | 'type' | 'provider'>
+export type C8YManifestOptions = Omit<C8YManifest, 'name' | 'version' | 'apiVersion' | 'key' | 'type' | 'provider' | 'openApiSpec'>
 
 export interface C8YManifest {
   /**
@@ -128,6 +128,17 @@ export interface C8YManifest {
    * Platform extensions (e.g., UI plugins).
    */
   extensions?: Extension[]
+
+  /**
+   * OpenAPI specification path exposed by this microservice. Auto-populated
+   * by c8y-nitro when Nitro's `experimental.openAPI` is enabled and
+   * `openAPI.production` is configured. Used by clients (e.g., mc8yp) to
+   * auto-discover the API.
+   *
+   * Path is relative to the microservice context path.
+   * @example "/_openapi.json"
+   */
+  openApiSpec?: string
 }
 
 /**

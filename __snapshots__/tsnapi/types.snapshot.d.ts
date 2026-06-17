@@ -35,6 +35,7 @@ export interface C8YManifest {
   livenessProbe?: Probe;
   readinessProbe?: Probe;
   extensions?: Extension[];
+  openApiSpec?: string;
 }
 export interface C8yNitroModuleOptions {
   dev?: C8yDevOptions;
@@ -54,7 +55,7 @@ export interface C8YZipOptions {
 // #endregion
 
 // #region Types
-export type C8YManifestOptions = Omit<C8YManifest, 'name' | 'version' | 'apiVersion' | 'key' | 'type' | 'provider'>;
+export type C8YManifestOptions = Omit<C8YManifest, 'name' | 'version' | 'apiVersion' | 'key' | 'type' | 'provider' | 'openApiSpec'>;
 export type C8YTenantOptionKey = string;
 export type C8YTenantOptionKeysCacheConfig = Partial<Record<C8YTenantOptionKey$1, number>>;
 export type TenantCredentials = Record<string, ICredentials>;

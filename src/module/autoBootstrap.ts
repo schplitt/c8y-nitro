@@ -48,7 +48,7 @@ export async function autoBootstrap(nitro: Nitro): Promise<void> {
     )
 
     // Build manifest
-    const manifest = await createC8yManifest(nitro.options.rootDir, nitro.options.c8y?.manifest, nitro.logger)
+    const manifest = await createC8yManifest(nitro.options.rootDir, nitro.options, nitro.logger)
 
     // Check if microservice exists
     const existingApp = await findMicroserviceByName(

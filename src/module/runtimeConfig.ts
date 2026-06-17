@@ -19,7 +19,7 @@ export async function setupRuntimeConfig(nitro: Nitro, options: C8yNitroModuleOp
   nitro.options.runtimeConfig.c8yTenantOptionsPerKeyTTL = options.cache?.tenantOptions ?? {}
 
   // Settings category (falls back to contextPath from manifest, then name from manifest)
-  const manifest = await createC8yManifest(nitro.options.rootDir, options.manifest, nitro.logger)
+  const manifest = await createC8yManifest(nitro.options.rootDir, nitro.options, nitro.logger)
   nitro.options.runtimeConfig.c8ySettingsCategory = options.manifest?.settingsCategory
     ?? manifest.contextPath
     ?? manifest.name

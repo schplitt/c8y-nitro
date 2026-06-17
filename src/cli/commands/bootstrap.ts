@@ -23,7 +23,7 @@ export default defineCommand({
 
     // Step 1: Load config and env
     consola.info('Loading configuration...')
-    const { env, c8yOptions, configDir } = await loadC8yConfig()
+    const { env, nitroConfig, configDir } = await loadC8yConfig()
 
     // Step 2: Validate required environment variables
     consola.info('Validating environment variables...')
@@ -31,7 +31,7 @@ export default defineCommand({
 
     // Step 3: Build manifest
     consola.info('Building manifest...')
-    const manifest = await createC8yManifest(configDir, c8yOptions?.manifest)
+    const manifest = await createC8yManifest(configDir, nitroConfig)
     consola.success(`Manifest created for: ${manifest.name} v${manifest.version}`)
 
     // Step 4: Create auth header
