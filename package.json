@@ -77,6 +77,7 @@
     "tsnapi": "catalog:",
     "typescript": "catalog:",
     "vitepress": "catalog:",
+    "vitepress-plugin-llms": "catalog:",
     "vitest": "catalog:"
 
   },

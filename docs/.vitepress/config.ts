@@ -1,6 +1,17 @@
 import { defineConfig } from 'vitepress'
+import llmstxt, { copyOrDownloadAsMarkdownButtons } from 'vitepress-plugin-llms'
 
 export default defineConfig({
+  vite: {
+    // @ts-expect-error - types mismatch
+    plugins: [llmstxt()],
+  },
+
+  markdown: {
+    config(md) {
+      md.use(copyOrDownloadAsMarkdownButtons)
+    },
+  },
   title: 'c8y-nitro',
   description: 'Nitro for Cumulocity IoT microservices',
   base: '/c8y-nitro/',

@@ -5,6 +5,6 @@ node_modules
 *.zip
 docs/.vitepress/cache
 docs/.vitepress/dist
-
+.DS_Store
 
 !tests/server/**/.env

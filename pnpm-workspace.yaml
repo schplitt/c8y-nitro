@@ -35,6 +35,7 @@ catalog:
   tsnapi: ^0.3.3
   typescript: ^6.0.3
   vitepress: 2.0.0-alpha.17
+  vitepress-plugin-llms: 1.13.3
   vitest: ^4.1.6
 onlyBuiltDependencies:
   - cpu-features
