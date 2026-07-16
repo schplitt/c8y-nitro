@@ -2,7 +2,7 @@
   "name": "c8y-nitro",
   "version": "0.6.0",
   "type": "module",
-  "packageManager": "pnpm@11.1.1",
+  "packageManager": "pnpm@11.11.0",
   "description": "Lightning fast Cumulocity IoT microservice development powered by Nitro",
   "keywords": [
     "cumulocity",
@@ -80,7 +80,6 @@
     "vitepress": "catalog:",
     "vitepress-plugin-llms": "catalog:",
     "vitest": "catalog:"
-
   },
   "peerDependencies": {
     "@c8y/client": ">=1021",
