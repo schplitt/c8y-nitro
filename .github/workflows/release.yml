@@ -60,5 +60,6 @@ jobs:
     with:
       ref: ${{ github.ref_name }}
     permissions:
+      contents: read
       pages: write
       id-token: write
