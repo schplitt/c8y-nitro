@@ -248,7 +248,7 @@ describe('manifest generation', () => {
         expect(manifest.requiredRoles?.filter((r) => r === 'ROLE_OPTION_MANAGEMENT_READ')).toHaveLength(1)
       })
 
-      it('should NOT add ROLE_OPTION_MANAGEMENT_READ when user has ROLE_OPTION_MANAGEMENT_ADMIN', async () => {
+      it('should add ROLE_OPTION_MANAGEMENT_READ even when user has ROLE_OPTION_MANAGEMENT_ADMIN', async () => {
         mockPackageData.current = {
           name: 'my-service',
           version: '1.0.0',
@@ -260,7 +260,7 @@ describe('manifest generation', () => {
           requiredRoles: ['ROLE_OPTION_MANAGEMENT_ADMIN'],
         }))
 
-        expect(manifest.requiredRoles).not.toContain('ROLE_OPTION_MANAGEMENT_READ')
+        expect(manifest.requiredRoles).toContain('ROLE_OPTION_MANAGEMENT_READ')
         expect(manifest.requiredRoles).toContain('ROLE_OPTION_MANAGEMENT_ADMIN')
       })
 
