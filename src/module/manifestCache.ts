@@ -29,10 +29,14 @@ export interface ManifestCacheTarget {
  */
 export interface ManifestCacheState {
   schemaVersion: number
-  /** sha256 over the manifest + target identity. */
+  /**
+   * sha256 over the manifest + target identity.
+   */
   manifestHash: string
   target: ManifestCacheTarget
-  /** ID of the application we last synced against. */
+  /**
+   * ID of the application we last synced against.
+   */
   appId: string
 }
 
@@ -45,33 +49,15 @@ function getCacheFile(rootDir: string): string {
 }
 
 /**
- * Deterministically serialize a value with object keys sorted, so structurally
- * equal manifests always produce the same string (and thus the same hash)
- * regardless of key insertion order.
- * @param value - The value to stringify
- */
-function stableStringify(value: unknown): string {
-  if (value === null || typeof value !== 'object') {
-    return JSON.stringify(value) ?? 'null'
-  }
-  if (Array.isArray(value)) {
-    return `[${value.map(stableStringify).join(',')}]`
-  }
-  const entries = Object.keys(value as Record<string, unknown>)
-    .sort()
-    .map((key) => `${JSON.stringify(key)}:${stableStringify((value as Record<string, unknown>)[key])}`)
-  return `{${entries.join(',')}}`
-}
-
-/**
- * Compute a stable hash over the manifest and the deployment target it will be
- * synced to. Folding the target in means switching tenant/baseURL invalidates
- * the cached hash even if the manifest itself is unchanged.
+ * Compute a hash over the manifest and the deployment target it will be synced
+ * to. Folding the target in means switching tenant/baseURL invalidates the
+ * cached hash even if the manifest itself is unchanged.
+ *
  * @param manifest - The generated Cumulocity manifest
  * @param target - The deployment target identity
  */
 export function hashManifest(manifest: C8YManifest, target: ManifestCacheTarget): string {
-  const payload = stableStringify({ manifest, target })
+  const payload = JSON.stringify({ manifest, target })
   return createHash('sha256').update(payload).digest('hex')
 }
 
