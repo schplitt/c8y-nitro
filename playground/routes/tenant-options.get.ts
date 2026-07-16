@@ -1,10 +1,11 @@
 import { defineEventHandler } from 'nitro/h3'
-import { useDeployedTenantClient, useTenantOption, useTenantOptions } from 'c8y-nitro/utils'
+import { useTenantOption, useTenantOptions, useUserTenantClient } from 'c8y-nitro/utils'
 
-export default defineEventHandler(async () => {
-  const client = await useDeployedTenantClient()
+export default defineEventHandler(async (event) => {
+  const client = await useUserTenantClient(event)
 
-  await useTenantOption(client, 'time right now').set(new Date().toISOString())
+  await useTenantOption(client, 'time right now').delete()
+  await useTenantOption(client, 'time.right.now').set(new Date().toISOString())
 
   const myOption = await useTenantOption(client, 'myOption').read()
   const secret = await useTenantOption(client, 'credentials.secret').read()
