@@ -3,7 +3,7 @@ import type { ICredentials } from '@c8y/client'
 import type { TenantCredentials } from '../types/credentials'
 import { defineCachedFunction } from 'nitro/cache'
 import type { H3Event } from 'nitro/h3'
-import { HTTPError } from 'nitro/h3'
+import { createError } from './logging'
 import type { ServerRequest } from 'nitro/types'
 import process from 'node:process'
 import { getCurrentUserTenantId } from './internal/tenant'
@@ -111,7 +111,7 @@ export const useSubscribedTenantCredentials: (() => Promise<TenantCredentials>) 
  * Uses the C8Y_BOOTSTRAP_TENANT environment variable to identify the deployed tenant.\
  * Returns credentials from the subscribed tenant credentials cache (cached based on configured TTL, default: 10 minutes).
  * @returns Credentials for the deployed tenant
- * @throws {HTTPError} If no credentials found for the deployed tenant
+ * @throws {EvlogError} If no credentials found for the deployed tenant
  * @example
  * // Get deployed tenant credentials:
  * const creds = await useDeployedTenantCredentials()
@@ -132,10 +132,9 @@ export const useDeployedTenantCredentials: (() => Promise<ICredentials>) & {
   const tenant = process.env.C8Y_BOOTSTRAP_TENANT!
   const allCredsPromise = await useSubscribedTenantCredentials()
   if (!allCredsPromise[tenant]) {
-    throw new HTTPError({
+    throw createError({
       message: `No credentials found for tenant deployed tenant '${tenant}'`,
       status: 500,
-      statusText: 'Internal Server Error',
     })
   }
   return allCredsPromise[tenant]
@@ -153,7 +152,7 @@ export const useDeployedTenantCredentials: (() => Promise<ICredentials>) & {
  * Results are cached in the request context for subsequent calls within the same request.
  * @param requestOrEvent - The H3Event or ServerRequest from the current request
  * @returns Credentials for the user's tenant
- * @throws {HTTPError} If no subscribed tenant credentials found for the user's tenant
+ * @throws {EvlogError} If no subscribed tenant credentials found for the user's tenant
  * @example
  * // In a request handler:
  * const userCreds = await useUserTenantCredentials(event)
@@ -175,10 +174,9 @@ export async function useUserTenantCredentials(requestOrEvent: ServerRequest | H
   const creds = await useSubscribedTenantCredentials()
   const userTenantCreds = creds[tenantId]
   if (!userTenantCreds) {
-    throw new HTTPError({
+    throw createError({
       message: `No subscribed tenant credentials found for user tenant '${tenantId}'`,
       status: 500,
-      statusText: 'Internal Server Error',
     })
   }
 

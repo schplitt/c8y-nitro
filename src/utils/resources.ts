@@ -1,7 +1,7 @@
 import type { ICurrentUser } from '@c8y/client'
 import type { H3Event } from 'nitro/h3'
-import { HTTPError } from 'nitro/h3'
 import type { ServerRequest } from 'nitro/types'
+import { createError } from './logging'
 import { useUserClient } from './client'
 
 /**
@@ -30,10 +30,9 @@ export async function useUser(requestOrEvent: ServerRequest | H3Event) {
   } = await client.user.currentWithEffectiveRoles()
 
   if (!res.ok) {
-    throw new HTTPError({
+    throw createError({
       message: `Failed to fetch current user`,
       status: res.status,
-      statusText: res.statusText,
     })
   }
 
