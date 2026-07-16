@@ -19,6 +19,12 @@ export interface C8yApplication {
   name: string
   key: string
   type: string
+  /**
+   * ID of the active (deployed) microservice version. Only present once an
+   * actual microservice image has been uploaded/deployed. Absent for
+   * placeholder applications created solely to obtain bootstrap credentials.
+   */
+  activeVersionId?: string
 }
 
 export interface C8yApplicationsResponse {

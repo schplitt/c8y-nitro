@@ -86,8 +86,11 @@ export function c8y(): NitroModule {
 
       await setupEvlog(nitro)
 
-      // Auto-bootstrap if needed (silent if already bootstrapped)
-      if (!options.skipBootstrap) {
+      // Auto-bootstrap and keep the dev tenant in sync with the local manifest.
+      // Dev-only: it writes bootstrap credentials to .env and mutates the tenant,
+      // which must not happen during a production build.
+      const isNitroDev = nitro.options.preset === 'nitro-dev'
+      if (isNitroDev && !options.skipBootstrap) {
         await autoBootstrap(nitro)
       }
 
@@ -98,6 +101,10 @@ export function c8y(): NitroModule {
       nitro.hooks.hook('dev:reload', async () => {
         manifest = await createC8yManifestFromNitro(nitro)
         setupRuntime(nitro, manifest)
+        // Re-sync the tenant on in-session manifest edits, not just full restarts.
+        if (!options.skipBootstrap) {
+          await autoBootstrap(nitro)
+        }
         if (options.apiClient) {
           nitro.logger.debug('Generating C8Y API client')
           await writeAPIClient(nitro, options)
