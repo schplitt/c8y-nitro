@@ -1,7 +1,8 @@
-import { defineHandler, HTTPError } from 'nitro/h3'
+import { defineHandler } from 'nitro/h3'
 import type { EventHandler } from 'nitro/h3'
 import type { C8YRoles } from 'c8y-nitro/types'
 import { c8yManifest } from 'c8y-nitro/runtime'
+import { createError } from './logging'
 import { useUserRoles } from './resources'
 import { getCurrentUserTenantId } from './internal/tenant'
 import process from 'node:process'
@@ -65,9 +66,8 @@ export function hasUserRequiredRole(roleOrRoles: UserRole | UserRole[]): EventHa
     const hasRole = requiredRoles.some((role) => userRoles.includes(role))
 
     if (!hasRole) {
-      throw new HTTPError({
+      throw createError({
         status: 403,
-        statusText: 'Forbidden',
         message: `User does not have required role(s) to access this resource: ${requiredRoles.join(', ')}`,
       })
     }
@@ -119,9 +119,8 @@ export function isUserFromAllowedTenant(tenantIdOrIds: string | string[]): Event
     const isAllowed = allowedTenants.includes(userTenantId)
 
     if (!isAllowed) {
-      throw new HTTPError({
+      throw createError({
         status: 403,
-        statusText: 'Forbidden',
         message: `User's tenant '${userTenantId}' is not allowed to access this resource. Allowed tenants: ${allowedTenants.join(', ')}`,
       })
     }
@@ -153,17 +152,12 @@ export function isUserFromDeployedTenant(): EventHandler {
     const deployedTenantId = process.env.C8Y_BOOTSTRAP_TENANT
 
     if (!deployedTenantId) {
-      throw new HTTPError({
-        status: 500,
-        statusText: 'Internal Server Error',
-        message: 'C8Y_BOOTSTRAP_TENANT environment variable is not set',
-      })
+      throw new Error('C8Y_BOOTSTRAP_TENANT environment variable is not set')
     }
 
     if (userTenantId !== deployedTenantId) {
-      throw new HTTPError({
+      throw createError({
         status: 403,
-        statusText: 'Forbidden',
         message: `Only users from tenant '${deployedTenantId}' can access this resource.`,
       })
     }

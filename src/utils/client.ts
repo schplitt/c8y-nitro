@@ -3,7 +3,7 @@ import { convertRequestHeadersToC8yFormat } from './internal/common'
 import { getCurrentUserTenantId } from './internal/tenant'
 import { useSubscribedTenantCredentials } from './credentials'
 import type { H3Event } from 'nitro/h3'
-import { HTTPError } from 'nitro/h3'
+import { createError } from './logging'
 import process from 'node:process'
 import type { ServerRequest } from 'nitro/types'
 
@@ -58,10 +58,9 @@ export async function useUserTenantClient(requestOrEvent: ServerRequest | H3Even
 
   const creds = await useSubscribedTenantCredentials()
   if (!creds[tenantId]) {
-    throw new HTTPError({
+    throw createError({
       message: `No subscribed tenant credentials found for user tenant '${tenantId}'`,
       status: 500,
-      statusText: 'Internal Server Error',
     })
   }
   const tenantClient = new Client(new BasicAuth(creds[tenantId]), process.env.C8Y_BASEURL)
@@ -113,10 +112,9 @@ export async function useDeployedTenantClient(): Promise<Client> {
   // C8Y_BOOTSTRAP_TENANT is enforced to be set
   const tenant = process.env.C8Y_BOOTSTRAP_TENANT!
   if (!creds[tenant]) {
-    throw new HTTPError({
+    throw createError({
       message: `No subscribed tenant credentials found for tenant '${tenant}'`,
       status: 500,
-      statusText: 'Internal Server Error',
     })
   }
   const client = new Client(new BasicAuth(creds[tenant]), process.env.C8Y_BASEURL!)
