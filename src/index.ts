@@ -41,12 +41,19 @@ export function c8y(): NitroModule {
       // set own library (pkgName) as noExternal to bundle it always
       // makes runtime nitro features available in c8y-nitro utilities
       // avoids esm issues with @c8y/client
+      //
+      // tslib must be inlined too: if left external, the file tracer copies
+      // tslib's `default` export condition (tslib.es6.mjs) while Node resolves
+      // the `node` condition (modules/index.js) at runtime → ERR_MODULE_NOT_FOUND.
+      // Inlining removes the runtime resolution step; the rolldown alias below
+      // pins the inlined build to the ESM tslib.es6.mjs.
       nitro.options.noExternals = nitro.options.noExternals === true
         ? true
         : [
             ...(Array.isArray(nitro.options.noExternals) ? nitro.options.noExternals : []),
             pkgName,
             '@c8y/client',
+            'tslib',
           ]
 
       // ensure correct tslib bundling
