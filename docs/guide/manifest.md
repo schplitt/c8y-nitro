@@ -61,4 +61,6 @@ export default defineNitroConfig({
 
 > **Note on Encrypted Options**: Keys prefixed with `credentials.` are stored encrypted by Cumulocity. See more details [here](https://cumulocity.com/api/core/#operation/postOptionCollectionResource).
 
-> **Auto-injected role**: When `settings` are defined, `ROLE_OPTION_MANAGEMENT_READ` is automatically added to `requiredRoles` so the microservice can read its own tenant options. You do not need to add it manually. If you have already added `ROLE_OPTION_MANAGEMENT_READ` or `ROLE_OPTION_MANAGEMENT_ADMIN`, no duplicate is inserted.
+> **Auto-injected role**: When `settings` are defined, `ROLE_OPTION_MANAGEMENT_READ` is automatically added to `requiredRoles` so the microservice can read its own tenant options. You do not need to add it manually. If you have already added `ROLE_OPTION_MANAGEMENT_READ`, no duplicate is inserted.
+>
+> Only the read role is auto-added. To **write or delete** tenant options at runtime you must add `ROLE_OPTION_MANAGEMENT_ADMIN` to `requiredRoles` yourself.

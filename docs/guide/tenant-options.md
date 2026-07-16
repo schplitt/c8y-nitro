@@ -11,8 +11,8 @@ export default defineNitroConfig({
   c8y: {
     manifest: {
       settingsCategory: 'my-service',
-      // ROLE_OPTION_MANAGEMENT_READ to read; add ROLE_OPTION_MANAGEMENT_ADMIN to write/delete.
-      requiredRoles: ['ROLE_OPTION_MANAGEMENT_READ', 'ROLE_OPTION_MANAGEMENT_ADMIN'],
+      // ROLE_OPTION_MANAGEMENT_READ is auto-added; add ROLE_OPTION_MANAGEMENT_ADMIN yourself to write/delete.
+      requiredRoles: ['ROLE_OPTION_MANAGEMENT_ADMIN'],
       settings: [
         { key: 'featureMode', defaultValue: 'standard', editable: true },
         { key: 'credentials.apiKey', defaultValue: 'change-me' },
@@ -24,6 +24,8 @@ export default defineNitroConfig({
 ```
 
 Each setting must have a non-empty `defaultValue`. Empty defaults are rejected while generating the manifest so bad settings fail early.
+
+> **Roles**: When `settings` are defined, `ROLE_OPTION_MANAGEMENT_READ` is added to the manifest automatically so the service can read its options. Writing or deleting options requires `ROLE_OPTION_MANAGEMENT_ADMIN`, which you must add to `requiredRoles` yourself.
 
 ## Which Tenant?
 
