@@ -95,6 +95,30 @@ The package has three entry points:
 - `c8y-nitro/types` — TypeScript types for configuration
 - `c8y-nitro/utils` — Runtime utilities for microservice handlers
 
+#### Importing types: module (`c8y-nitro/types`) vs relative path
+
+At runtime in a consumer, the module generates a `c8y-nitro.d.ts` containing
+`declare module 'c8y-nitro/types' { … }`. This **shadows** (does not merge with)
+the real `c8y-nitro/types` module, so a type is only visible through
+`c8y-nitro/types` if it is _regenerated_ into that ambient block (see
+`src/module/runtime.ts`). Everything else imported from `c8y-nitro/types`
+silently becomes `any` in consumers.
+
+Rule for imports inside `src/`:
+
+- Import from the **`c8y-nitro/types` module** ONLY for types we generate/override
+  per manifest — `C8YTenantOptionKey`, `C8YSettingsCategory`, `C8YRoles`,
+  `C8YTenantOptionKeysCacheConfig`. These must be the augmentable module type.
+- For **everything else, import by relative path** (e.g. `./tenantOptions`,
+  `../types/manifest`). Relative imports get inlined into the emitted `.d.ts`, so
+  they survive the shadowing.
+
+Public API types (e.g. `TenantOption`, `TenantOptionCategory`) are therefore
+**colocated with their API in `src/utils/*.ts`** and exported from
+`c8y-nitro/utils` via `export * from './<file>'` — the same way `schedule.ts`
+does it. Do NOT declare or export such types from `c8y-nitro/types`; a consumer
+importing them from there would get `any`.
+
 ### Module Flow
 
 1. **Setup Phase** (`src/index.ts`): Configures Nitro options, runs auto-bootstrap

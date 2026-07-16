@@ -10,6 +10,7 @@ export async function listScheduledTasks() {}
 export async function scheduleTask(_, _) {}
 export async function useDeployedTenantClient() {}
 export async function useSubscribedTenantClients() {}
+export function useTenantOption(_, _) {}
 export async function useUser(_) {}
 export function useUserClient(_) {}
 export async function useUserRoles(_) {}
@@ -20,7 +21,7 @@ export async function useUserTenantCredentials(_) {}
 // #region Variables
 export var useDeployedTenantCredentials /* const */
 export var useSubscribedTenantCredentials /* const */
-export var useTenantOption /* const */
+export var useTenantOptions /* const */
 // #endregion
 
 // #region Other

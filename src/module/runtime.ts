@@ -8,6 +8,9 @@ export function setupRuntime(nitro: Nitro, manifest: C8YManifest): void {
   const roles = manifest.roles ?? []
   const settings = manifest.settings ?? []
   const settingKeys = settings.map((s) => s.key)
+  // Mirror the runtime category resolution (see setupRuntimeConfig) so the
+  // generated literal matches what `useTenantOption*` uses at runtime.
+  const settingsCategory = manifest.settingsCategory ?? manifest.contextPath ?? manifest.name
 
   const completeTypesDir = join(nitro.options.rootDir, nitro.options.typescript.generatedTypesDir ?? 'node_modules/.nitro/types')
 
@@ -20,6 +23,7 @@ ${roles.map((role) => `    '${role}': '${role}';`).join('\n')}
   }
   type C8YTenantOptionKey = ${settingKeys.length > 0 ? `${settingKeys.map((k) => `'${k}'`).join(' | ')}` : 'never'}
   type C8YTenantOptionKeysCacheConfig = Partial<Record<C8YTenantOptionKey, number>>;
+  type C8YSettingsCategory = ${settingsCategory ? `'${settingsCategory}'` : 'string'};
 }
 
 declare module 'c8y-nitro/runtime' {

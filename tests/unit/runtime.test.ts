@@ -48,6 +48,8 @@ describe('setupRuntime', () => {
       expect(content).toContain('interface C8YRoles {')
       expect(content).toContain('type C8YTenantOptionKey = never')
       expect(content).toContain('type C8YTenantOptionKeysCacheConfig = Partial<Record<C8YTenantOptionKey, number>>')
+      // No category resolvable from an empty manifest — falls back to `string`
+      expect(content).toContain('type C8YSettingsCategory = string')
       expect(content).toContain('declare module \'c8y-nitro/runtime\'')
       expect(content).toContain('export const c8yRoles: C8YRoles')
       expect(content).toContain('export const c8yTenantOptionKeys: readonly []')
@@ -111,6 +113,38 @@ describe('setupRuntime', () => {
       // Check tenant option keys
       expect(content).toContain('type C8YTenantOptionKey = \'api.timeout\' | \'cache.ttl\'')
       expect(content).toContain('export const c8yTenantOptionKeys: readonly [\'api.timeout\', \'cache.ttl\']')
+    })
+
+    it('should generate the settings category literal, preferring settingsCategory', () => {
+      const nitro = createMockNitro()
+
+      setupRuntime(nitro, {
+        settingsCategory: 'my-service',
+        contextPath: 'my-context',
+        name: 'my-name',
+      } as C8YManifest)
+
+      const generatedFiles = vol.toJSON()
+      const content = generatedFiles['/project/node_modules/.nitro/types/c8y-nitro.d.ts'] as string
+
+      expect(content).toContain('type C8YSettingsCategory = \'my-service\'')
+    })
+
+    it('should fall back to contextPath then name for the settings category', () => {
+      const nitroContext = createMockNitro()
+      setupRuntime(nitroContext, {
+        contextPath: 'my-context',
+        name: 'my-name',
+      } as C8YManifest)
+      expect(vol.toJSON()['/project/node_modules/.nitro/types/c8y-nitro.d.ts'] as string)
+        .toContain('type C8YSettingsCategory = \'my-context\'')
+
+      vol.reset()
+
+      const nitroName = createMockNitro()
+      setupRuntime(nitroName, { name: 'my-name' } as C8YManifest)
+      expect(vol.toJSON()['/project/node_modules/.nitro/types/c8y-nitro.d.ts'] as string)
+        .toContain('type C8YSettingsCategory = \'my-name\'')
     })
 
     it('should respect custom generatedTypesDir', () => {

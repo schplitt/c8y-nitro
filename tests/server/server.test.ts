@@ -483,6 +483,44 @@ describe('Nitro Server', () => {
       expect(json.message).toBe('Fetched tenant options successfully')
     })
 
+    it('should set, getOrInsert and delete an option through the handle', async () => {
+      const res = await server.fetch(new Request(new URL('/tenant-option-crud?key=crudOption', server.url)))
+
+      expect(res.status).toEqual(200)
+
+      const json = await res.json() as Record<string, any>
+      // Option was unset, then set() wrote it and the read reflected the new value
+      expect(json.before).toBeNull()
+      expect(json.afterSet).toBe('crud-value')
+      // getOrInsert seeds on first call, returns the existing value on the second
+      expect(json.seeded).toBe('seeded-default')
+      expect(json.seededAgain).toBe('seeded-default')
+      // delete() removed it and the cache was invalidated
+      expect(json.afterDelete).toBeNull()
+    })
+
+    it('should support dynamic (non-manifest) keys', async () => {
+      const dynamicKey = 'encrypted.password.abc123'
+      const res = await server.fetch(new Request(new URL(`/tenant-option-crud?key=${encodeURIComponent(dynamicKey)}`, server.url)))
+
+      expect(res.status).toEqual(200)
+
+      const json = await res.json() as Record<string, any>
+      expect(json.key).toBe(dynamicKey)
+      expect(json.afterSet).toBe('crud-value')
+      expect(json.afterDelete).toBeNull()
+    })
+
+    it('should bulk set and list options of the own category', async () => {
+      const res = await server.fetch(new Request(new URL('/tenant-options-category', server.url)))
+
+      expect(res.status).toEqual(200)
+
+      const json = await res.json() as Record<string, any>
+      expect(json.listed).toMatchObject({ bulkA: 'value-a', bulkB: 'value-b' })
+      expect(json.message).toBe('Category options listed successfully')
+    })
+
     it('should invalidate a created tenant option cache by key', async () => {
       await server.fetch(new Request(new URL('/tenant-options', server.url)))
 
@@ -762,6 +800,56 @@ describe('Nitro Server', () => {
 
       const json = await res.json() as Record<string, any>
       expect(json.message).toContain('t12345')
+    })
+  })
+
+  describe('Foreign tenant option category', () => {
+    let nitro: Awaited<ReturnType<typeof createNitro>>
+    let devServer: ReturnType<typeof createDevServer>
+    let server: Awaited<ReturnType<ReturnType<typeof createDevServer>['listen']>>
+    let env: Record<string, string>
+
+    beforeAll(async () => {
+      const result = await createC8yNitroServer({
+        env: completeEnv,
+        mockData: {
+          subscriptions: [
+            { tenant: 't12345', user: 'serviceuser1', password: 'pass1' },
+          ],
+          tenantOptionsByCategory: {
+            'other-service': {
+              foreignKey: 'foreign-initial',
+              extraKey: 'extra-value',
+            },
+          },
+        },
+      })
+      nitro = result.nitro
+      devServer = result.devServer
+      server = result.server
+      env = result.env
+    })
+
+    afterAll(async () => {
+      for (const key of Object.keys(env)) {
+        delete process.env[key]
+      }
+      await devServer?.close()
+      await nitro?.close()
+    })
+
+    it('should read, write and list options from a foreign category', async () => {
+      const res = await server.fetch(new Request(new URL('/tenant-options-foreign?category=other-service', server.url)))
+
+      expect(res.status).toEqual(200)
+
+      const json = await res.json() as Record<string, any>
+      expect(json.category).toBe('other-service')
+      expect(json.initial).toBe('foreign-initial')
+      expect(json.afterSet).toBe('foreign-updated')
+      expect(json.listed).toMatchObject({ foreignKey: 'foreign-updated', extraKey: 'extra-value' })
+      // Single option in a foreign category via useTenantOptions(client, category).option(key)
+      expect(json.single).toBe('extra-value')
     })
   })
 

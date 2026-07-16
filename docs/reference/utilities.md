@@ -49,23 +49,61 @@ export default definePlugin((nitroApp) => {
 
 ## Tenant Options
 
-| Function            | Description                      | Request Context |
-| ------------------- | -------------------------------- | :-------------: |
-| `useTenantOption()` | Get a tenant option value by key |       ❌        |
+| Function             | Description                                   | Request Context |
+| -------------------- | --------------------------------------------- | :-------------: |
+| `useTenantOption()`  | Handle for a single option (one category+key) |       ❌        |
+| `useTenantOptions()` | Handle for a whole settings category          |       ❌        |
+
+Both take a Cumulocity `Client` as the first argument — the client determines which **tenant** is targeted (essential for multi-tenant microservices). Get one from `useDeployedTenantClient()` (owner tenant), `useUserTenantClient(event)` (current request's tenant), or `useSubscribedTenantClients()`.
 
 ```ts
-import { useTenantOption } from 'c8y-nitro/utils'
+import {
+  useTenantOption,
+  useTenantOptions,
+  useDeployedTenantClient,
+  useUserTenantClient,
+} from 'c8y-nitro/utils'
 
-const value = await useTenantOption('myOption')
-const secret = await useTenantOption('credentials.apiKey')
+const client = await useDeployedTenantClient() // or useUserTenantClient(event)
 
-await useTenantOption.invalidate('myOption')
-const fresh = await useTenantOption.refresh('myOption')
-await useTenantOption.invalidateAll()
-await useTenantOption.refreshAll()
+// Single option handle:
+const value = await useTenantOption(client, 'myOption').read()
+await useTenantOption(client, 'myOption').set('new-value')
+const token = await useTenantOption(client, `dynamic.${id}`).getOrInsert('')
+await useTenantOption(client, 'myOption').delete()
+
+// Category handle:
+const all = await useTenantOptions(client).list()
+await useTenantOptions(client).setAll({ a: '1', b: '2' })
+await useTenantOptions(client).option('myOption').read()
+
+// Foreign category — pass the key set for autocomplete; credentials.* is a compile error:
+await useTenantOptions<'someKey'>(client, 'other-service').option('someKey').read()
 ```
 
-If a tenant option is missing, `useTenantOption()` returns `undefined` for a 404 instead of throwing.
+Manifest-declared keys are suggested via autocomplete but any dynamic string is accepted.
+
+`read()` returns `undefined` for a missing option (404) instead of throwing. `delete()` is idempotent. `set()` is an upsert (create-or-update).
+
+### Cache invalidation
+
+Reads are cached per tenant (`${tenant}::${category}::${key}`). Invalidate at three levels:
+
+```ts
+// one option:
+await useTenantOption(client, 'myOption').invalidate()
+const fresh = await useTenantOption(client, 'myOption').refresh()
+
+// one tenant + category:
+await useTenantOptions(client).invalidateAll()
+await useTenantOptions(client).refreshAll()
+
+// everything, all tenants and categories:
+await useTenantOptions.invalidateAll()
+await useTenantOptions.refreshAll()
+```
+
+`invalidateAll()` / `refreshAll()` only touch keys already read in the current process.
 
 ## Scheduled Tasks
 
