@@ -68,6 +68,8 @@ async function buildDockerImage(nitro: Nitro, c8yDir: string): Promise<string> {
   try {
     const result = await x('docker', [
       'build',
+      '--platform',
+      'linux/amd64',
       '-t',
       imageName,
       '-f',
