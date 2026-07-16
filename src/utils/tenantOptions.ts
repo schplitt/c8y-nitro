@@ -207,20 +207,21 @@ const OPTION_ADMIN_ROLE = 'ROLE_OPTION_MANAGEMENT_ADMIN'
 /**
  * Builds a structured error for a failed Options API request.
  *
- * The exposed fields stay minimal (`message` + `status`). The operation detail —
- * upstream status, the internal endpoint/method, and the Cumulocity role it
- * needs — goes into `internal`, which is logged for debugging but never
- * serialized to the HTTP response (so it can't leak to the frontend). The raw
- * upstream response body is intentionally omitted; it is rarely useful.
- * @param status - The upstream HTTP status
- * @param message - A human-readable summary of the failed operation
+ * A failed options request is a microservice/config problem (e.g. a missing
+ * `ROLE_OPTION_MANAGEMENT_*` role), not something the frontend caller can act on
+ * — so the response is a **generic 500** that reveals nothing about tenant
+ * options. All the diagnostic detail (which operation, upstream status, internal
+ * endpoint/method, and the Cumulocity role it needs) goes into `internal`, which
+ * is logged for debugging but never serialized to the HTTP response.
+ * @param status - The upstream HTTP status (for `internal`)
+ * @param operation - A human-readable summary of the failed operation (for `internal`)
  * @param internal - Backend-only debugging context (endpoint, method, required role)
  */
-function optionRequestError(status: number, message: string, internal: Record<string, unknown>): Error {
+function optionRequestError(status: number, operation: string, internal: Record<string, unknown>): Error {
   return createError({
-    status: status || 500,
-    message,
-    internal: { upstreamStatus: status, ...internal },
+    status: 500,
+    message: 'Internal Server Error',
+    internal: { operation, upstreamStatus: status, ...internal },
   })
 }
 

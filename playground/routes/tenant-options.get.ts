@@ -4,6 +4,8 @@ import { useDeployedTenantClient, useTenantOption, useTenantOptions } from 'c8y-
 export default defineEventHandler(async () => {
   const client = await useDeployedTenantClient()
 
+  await useTenantOption(client, 'time right now').set(new Date().toISOString())
+
   const myOption = await useTenantOption(client, 'myOption').read()
   const secret = await useTenantOption(client, 'credentials.secret').read()
   const all = await useTenantOptions(client).list()

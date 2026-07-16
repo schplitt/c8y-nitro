@@ -123,7 +123,7 @@ Use an explicit `settingsCategory` when you want stable option storage independe
 
 ## Missing Options
 
-If Cumulocity returns 404 for an option, `read()` returns `undefined`. Other errors, such as missing permissions, are thrown.
+If Cumulocity returns 404 for an option, `read()` returns `undefined`. Other failures (e.g. a missing `ROLE_OPTION_MANAGEMENT_*` role) are thrown as a **generic 500** — the specifics (operation, upstream status, required role) are logged via the error's `internal` field and never included in the HTTP response, so nothing about tenant options leaks to the caller.
 
 ## Encrypted Options
 
