@@ -33,7 +33,7 @@ catalog:
   tinyexec: ^1.2.4
   tsdown: ^0.22.8
   tsnapi: ^1.0.0
-  typescript: ^7.0.2
+  typescript: ^6.0.3
   vitepress: 2.0.0-alpha.17
   vitepress-plugin-llms: 1.13.3
   vitest: ^4.1.10

@@ -29,6 +29,7 @@
   "devDependencies": {
     "@c8y/client": "catalog:",
     "c8y-nitro": "workspace:*",
-    "nitro": "catalog:"
+    "nitro": "catalog:",
+    "typescript": "catalog:"
   }
 }
