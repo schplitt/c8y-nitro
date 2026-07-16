@@ -7,7 +7,6 @@ import type { ConsolaInstance } from 'consola'
 
 const DEFAULT_OPENAPI_ROUTE = '/_openapi.json'
 const ROLE_OPTION_MANAGEMENT_READ = 'ROLE_OPTION_MANAGEMENT_READ'
-const ROLE_OPTION_MANAGEMENT_ADMIN = 'ROLE_OPTION_MANAGEMENT_ADMIN'
 
 /**
  * Subset of Nitro configuration consumed by manifest generation. Defined as a
@@ -178,7 +177,6 @@ export async function createC8yManifest(
     options.settings
     && options.settings.length > 0
     && !requiredRoles?.includes(ROLE_OPTION_MANAGEMENT_READ)
-    && !requiredRoles?.includes(ROLE_OPTION_MANAGEMENT_ADMIN)
   ) {
     requiredRoles = [...(requiredRoles ?? []), ROLE_OPTION_MANAGEMENT_READ]
     logger?.debug(`Auto-added ${ROLE_OPTION_MANAGEMENT_READ} to requiredRoles because manifest.settings are defined`)
