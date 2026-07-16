@@ -56,6 +56,7 @@ export interface C8YZipOptions {
 
 // #region Types
 export type C8YManifestOptions = Omit<C8YManifest, 'name' | 'version' | 'apiVersion' | 'key' | 'type' | 'provider' | 'openApiSpec'>;
+export type C8YSettingsCategory = string;
 export type C8YTenantOptionKey = string;
 export type C8YTenantOptionKeysCacheConfig = Partial<Record<C8YTenantOptionKey$1, number>>;
 export type TenantCredentials = Record<string, ICredentials>;

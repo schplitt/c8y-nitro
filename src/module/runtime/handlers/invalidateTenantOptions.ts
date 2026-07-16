@@ -1,16 +1,14 @@
 import { c8yTenantOptionKeys } from 'c8y-nitro/runtime'
-import type { C8YTenantOptionKey } from 'c8y-nitro/types'
 import { createError } from '../../../utils/logging'
-import { tenantOptionFetchers } from '../../../utils/internal/tenantOptionFetchers'
+import { useDeployedTenantClient } from '../../../utils/client'
+import { useTenantOption, useTenantOptions } from '../../../utils/tenantOptions'
 import { defineEventHandler, getQuery } from 'nitro/h3'
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
 
   if ('all' in query) {
-    await Promise.all(
-      Object.values(tenantOptionFetchers).map((fetcher) => fetcher?.invalidate()),
-    )
+    await useTenantOptions.invalidateAll()
 
     return {
       message: 'success',
@@ -37,10 +35,9 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const fetcher = tenantOptionFetchers[key as C8YTenantOptionKey]
-  if (fetcher) {
-    await fetcher.invalidate()
-  }
+  // Invalidate the deployed tenant's own-category cache entry for this key
+  // (no-op if it was never read).
+  await useTenantOption(await useDeployedTenantClient(), key).invalidate()
 
   return {
     message: 'success',

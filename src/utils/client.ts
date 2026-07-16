@@ -65,6 +65,9 @@ export async function useUserTenantClient(requestOrEvent: ServerRequest | H3Even
     })
   }
   const tenantClient = new Client(new BasicAuth(creds[tenantId]), process.env.C8Y_BASEURL)
+  // Stamp the known tenant so downstream helpers (e.g. tenant options caching)
+  // don't need a `/tenant/currentTenant` round-trip to identify it.
+  tenantClient.core.tenant = tenantId
 
   // cache client in request context for subsequent calls
   request.context ??= {}
@@ -89,7 +92,9 @@ export async function useSubscribedTenantClients(): Promise<Record<string, Clien
   const creds = await useSubscribedTenantCredentials()
   const clients: Record<string, Client> = {}
   for (const [tenant, tenantCreds] of Object.entries(creds)) {
-    clients[tenant] = new Client(new BasicAuth(tenantCreds), process.env.C8Y_BASEURL)
+    const client = new Client(new BasicAuth(tenantCreds), process.env.C8Y_BASEURL)
+    client.core.tenant = tenant
+    clients[tenant] = client
   }
   return clients
 }
@@ -114,5 +119,7 @@ export async function useDeployedTenantClient(): Promise<Client> {
       statusText: 'Internal Server Error',
     })
   }
-  return new Client(new BasicAuth(creds[tenant]), process.env.C8Y_BASEURL!)
+  const client = new Client(new BasicAuth(creds[tenant]), process.env.C8Y_BASEURL!)
+  client.core.tenant = tenant
+  return client
 }

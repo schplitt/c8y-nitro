@@ -66,6 +66,7 @@
     "tinyexec": "catalog:"
   },
   "devDependencies": {
+    "@c8y/client": "catalog:",
     "@schplitt/eslint-config": "catalog:",
     "@types/node": "catalog:",
     "@types/spinnies": "catalog:",
