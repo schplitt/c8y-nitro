@@ -50,6 +50,7 @@ export default defineConfig({
           { text: 'Scheduled Tasks', link: '/guide/scheduled-tasks' },
           { text: 'Zip Creation', link: '/guide/zip-creation' },
           { text: 'API Client Generation', link: '/guide/api-client' },
+          { text: 'Native Dependencies', link: '/guide/native-dependencies' },
           { text: 'Deployment', link: '/guide/deployment' },
         ],
       },

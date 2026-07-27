@@ -29,7 +29,7 @@ If you enable `experimental.asyncContext: true`, you can use Nitro's request con
 
 ## Structured Errors
 
-Prefer `createError` from `c8y-nitro/utils` over Nitro's built-in helper.
+Always prefer `createError` from `c8y-nitro/utils` (re-exported from evlog) over Nitro/h3's built-in `createError`. It produces an error that is both captured in the wide log event and serialized into a structured JSON response.
 
 ```ts
 import { defineEventHandler } from 'nitro/h3'
@@ -40,6 +40,7 @@ export default defineEventHandler(async (event) => {
   log.set({ action: 'payment', userId: 'user_123' })
 
   throw createError({
+    code: 'PAYMENT_DECLINED',
     message: 'Payment failed',
     status: 402,
     why: 'Card declined by issuer (insufficient funds)',
@@ -49,7 +50,45 @@ export default defineEventHandler(async (event) => {
 })
 ```
 
-This keeps `why`, `fix`, and `link` available both in the emitted log event and in the JSON response payload.
+### What is sent to the client vs kept on the server
+
+This is the field you most need to get right. **Everything except `internal` is serialized into the HTTP response** (under a `data` key) and is therefore visible to the caller. `internal` is stripped from the response and lives only in your logs.
+
+| Field      | In HTTP response? | Use it for                                                                 |
+| ---------- | :---------------: | -------------------------------------------------------------------------- |
+| `message`  |        ✅         | Short, safe summary of what went wrong.                                    |
+| `status`   |        ✅         | HTTP status code (default `500`).                                          |
+| `code`     |        ✅         | Stable, machine-readable id (e.g. `'PAYMENT_DECLINED'`) clients branch on. |
+| `why`      |        ✅         | Human-readable cause — **safe to expose**; do not put secrets here.        |
+| `fix`      |        ✅         | What the caller can do about it.                                           |
+| `link`     |        ✅         | Docs URL with more detail.                                                 |
+| `cause`    |    ❌ (logged)    | The original `Error` you caught.                                           |
+| `internal` |    ❌ (logged)    | **Backend-only** diagnostics: raw upstream payloads, stack context, ids.   |
+
+### Do not leak internal system errors
+
+The most common mistake is dumping an upstream/system failure into `message` or `why`, which sends it straight to the caller. Put anything sensitive or diagnostic — raw Cumulocity core responses, database errors, tokens, tenant internals — into `internal` instead. It is logged for you to debug with, but never reaches the client.
+
+```ts
+try {
+  await doUpstreamThing()
+}
+catch (cause) {
+  throw createError({
+    status: 502,
+    message: 'Upstream request failed', // safe, generic — this is what the caller sees
+    why: 'Cumulocity core did not respond successfully',
+    cause: cause as Error,
+    internal: {
+      // never exposed — only in the wide log event
+      upstreamStatus: (cause as any)?.res?.status,
+      upstreamBody: (cause as any)?.data,
+    },
+  })
+}
+```
+
+> `@c8y/client` rejects with plain `{ res, data }` objects rather than `Error` instances on HTTP failures. Normalize those into a `createError` at your boundary and keep the raw `{ res, data }` in `internal`.
 
 ## Standalone Logging
 

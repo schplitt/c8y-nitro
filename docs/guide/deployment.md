@@ -2,6 +2,8 @@
 
 This docs site is configured for a static VitePress build that can be published to GitHub Pages.
 
+> Looking for how the **microservice** itself is bundled and deployed? If your service uses a native (NAPI) dependency, see [Native Dependencies](/guide/native-dependencies) for the `traceDeps` / externals configuration required so the compiled binary ends up in the Cumulocity image.
+
 ## Local Checks
 
 Build the site locally:

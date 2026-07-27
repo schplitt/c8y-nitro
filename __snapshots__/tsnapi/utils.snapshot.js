@@ -19,13 +19,13 @@ export async function useUserTenantCredentials(_) {}
 // #endregion
 
 // #region Variables
+export var createError /* const */
 export var useDeployedTenantCredentials /* const */
 export var useSubscribedTenantCredentials /* const */
 export var useTenantOptions /* const */
 // #endregion
 
 // #region Other
-export { createError }
 export { createLogger }
 export { useLogger }
 // #endregion

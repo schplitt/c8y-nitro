@@ -68,6 +68,7 @@ export declare function useUserTenantCredentials(_: ServerRequest | H3Event): Pr
 // #endregion
 
 // #region Variables
+export declare const createError: typeof createError$1;
 export declare const useDeployedTenantCredentials: (() => Promise<ICredentials>) & {
   invalidate: () => Promise<void>;
   refresh: () => Promise<ICredentials>;
@@ -80,7 +81,6 @@ export declare const useTenantOptions: UseTenantOptions;
 // #endregion
 
 // #region Other
-export { createError }
 export { createLogger }
 export { useLogger }
 // #endregion

@@ -88,3 +88,4 @@ Adds a debug route that invalidates tenant option caches in development or troub
 - Read [Module Options](/reference/module-options) for the exact public configuration surface.
 - Read [Manifest & Probes](/guide/manifest) if you are shaping deployment behavior.
 - Read [Auto-Bootstrap](/guide/auto-bootstrap) if you are configuring development tenant onboarding.
+- Read [Native Dependencies](/guide/native-dependencies) if your service depends on a native (NAPI) module such as `@duckdb/node-api`.
