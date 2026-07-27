@@ -58,6 +58,7 @@ export declare function isUserFromDeployedTenant(): EventHandler;
 export declare function listScheduledTasks(): Promise<Record<string, ScheduledTaskInfo>>;
 export declare function scheduleTask(_: string, _: ScheduleTaskOptions): Promise<ScheduledTaskInfo>;
 export declare function useDeployedTenantClient(): Promise<Client>;
+export declare function useLogger<T extends object = Record<string, unknown>>(_: HTTPEvent | ServerRequest, _?: string): import("evlog").AuditableLogger<T>;
 export declare function useSubscribedTenantClients(): Promise<Record<string, Client>>;
 export declare function useTenantOption(_: Client, _: TenantOptionKeyInput): TenantOption;
 export declare function useUser(_: ServerRequest | H3Event): Promise<ICurrentUser>;
@@ -82,5 +83,4 @@ export declare const useTenantOptions: UseTenantOptions;
 
 // #region Other
 export { createLogger }
-export { useLogger }
 // #endregion

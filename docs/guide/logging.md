@@ -25,7 +25,17 @@ export default defineEventHandler(async (event) => {
 })
 ```
 
-If you enable `experimental.asyncContext: true`, you can use Nitro's request context to access the logger deeper in the call stack.
+`useLogger()` accepts **either** an `H3Event` (as received by a handler) **or** the `ServerRequest` returned by Nitro's `useRequest()` — both carry the same request context. With `experimental.asyncContext: true` you can therefore reach the logger deeper in the call stack without threading the event through every function:
+
+```ts
+import { useRequest } from 'nitro/context'
+import { useLogger } from 'c8y-nitro/utils'
+
+function deepHelper() {
+  const log = useLogger(useRequest())
+  log.set({ step: 'deep-helper' })
+}
+```
 
 ## Structured Errors
 

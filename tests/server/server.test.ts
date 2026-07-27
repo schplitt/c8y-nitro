@@ -909,6 +909,37 @@ describe('Nitro Server', () => {
       }
     })
 
+    it.sequential('should accept useRequest() ServerRequest in useLogger (no H3Event)', async () => {
+      const logs: string[] = []
+      const mockFn = vi.fn((context: unknown) => {
+        logs.push(String(context))
+      })
+
+      consola.mockTypes(() => mockFn)
+      consola.wrapAll()
+
+      try {
+        const res = await server.fetch(new Request(new URL('/logging/via-request', server.url)))
+
+        expect(res.status).toEqual(200)
+        const json = await res.json() as Record<string, any>
+        expect(json.message).toBe('ok')
+        expect(json.action).toBe('test-via-request')
+
+        // Wait for async logs to be written
+        await new Promise<void>((resolve) => {
+          setTimeout(() => resolve(), 100)
+        })
+
+        expect(mockFn).toHaveBeenCalled()
+        const logOutput = logs.join('\n')
+        expect(logOutput).toMatch(/GET \/logging\/via-request/)
+        expect(logOutput).toContain('user_789')
+      } finally {
+        consola.restoreAll()
+      }
+    })
+
     it.sequential('should log error wide event and return structured error JSON', async () => {
       const logs: string[] = []
       const mockFn = vi.fn((context: unknown) => {

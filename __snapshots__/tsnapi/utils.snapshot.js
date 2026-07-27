@@ -9,6 +9,7 @@ export function isUserFromDeployedTenant() {}
 export async function listScheduledTasks() {}
 export async function scheduleTask(_, _) {}
 export async function useDeployedTenantClient() {}
+export function useLogger(_, _) {}
 export async function useSubscribedTenantClients() {}
 export function useTenantOption(_, _) {}
 export async function useUser(_) {}
@@ -27,5 +28,4 @@ export var useTenantOptions /* const */
 
 // #region Other
 export { createLogger }
-export { useLogger }
 // #endregion

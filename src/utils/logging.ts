@@ -1,7 +1,42 @@
+import type { HTTPEvent } from 'nitro/h3'
+import type { ServerRequest } from 'nitro/types'
 import { createError as _createError } from 'evlog'
+import { useLogger as _useLogger } from 'evlog/nitro/v3'
 
-export { useLogger } from 'evlog/nitro/v3'
 export { createLogger } from 'evlog'
+
+/**
+ * Returns the request-scoped wide-event logger for the current request.
+ *
+ * Accepts **either** an `H3Event` (as received by a route handler) **or** the
+ * `ServerRequest` returned by Nitro's `useRequest()` — both carry the same
+ * request context, so `useLogger(event)` and `useLogger(useRequest())` are
+ * equivalent.
+ *
+ * evlog's own `useLogger` only accepts an `H3Event` and reads the logger from
+ * `event.req.context.log`; `useRequest()` returns that `ServerRequest` directly
+ * (no `.req`), which would throw. This wrapper normalizes both shapes to the
+ * `{ req }` event evlog expects, restoring the accept-both behavior.
+ *
+ * @param eventOrRequest - The current `H3Event` or `ServerRequest` (`useRequest()`).
+ * @param service - Optional service name to override the default.
+ * @example
+ * // In a route handler:
+ * const log = useLogger(event)
+ *
+ * // Deeper in the call stack with experimental.asyncContext enabled:
+ * import { useRequest } from 'nitro/context'
+ * const log = useLogger(useRequest())
+ */
+export function useLogger<T extends object = Record<string, unknown>>(
+  eventOrRequest: HTTPEvent | ServerRequest,
+  service?: string,
+) {
+  // `useRequest()` returns the ServerRequest (== `event.req`), which has no
+  // `.req` of its own. Wrap it so evlog's `event.req.context.log` lookup works.
+  const event = 'req' in eventOrRequest ? eventOrRequest : { req: eventOrRequest }
+  return _useLogger<T>(event as HTTPEvent, service)
+}
 
 /**
  * Create a structured error for a Cumulocity microservice. Always prefer this
