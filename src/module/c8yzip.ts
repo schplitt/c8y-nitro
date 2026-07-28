@@ -3,6 +3,7 @@ import { createDockerImage } from './docker'
 import { createC8yManifestFromNitro } from './manifest'
 import type { C8YManifest } from '../types/manifest'
 import type { C8YZipOptions } from '../types/zip'
+import type { C8yDockerOptions } from '../types/docker'
 import { join } from 'pathe'
 import { mkdir, readFile, stat, writeFile } from 'fs/promises'
 import JSZip from 'jszip'
@@ -39,7 +40,7 @@ export function resolveZipOutputPath(
   return join(outputDir, fileName)
 }
 
-export async function createC8yZip(nitro: Nitro, options: C8YZipOptions = {}) {
+export async function createC8yZip(nitro: Nitro, options: C8YZipOptions = {}, dockerOptions: C8yDockerOptions = {}) {
   const startTime = Date.now()
   const spinnerName = 'c8y-zip'
 
@@ -47,7 +48,7 @@ export async function createC8yZip(nitro: Nitro, options: C8YZipOptions = {}) {
 
   // Build Docker image
   spinnies.update(spinnerName, { text: 'Building Docker image...' })
-  const imageTarPath = await createDockerImage(nitro)
+  const imageTarPath = await createDockerImage(nitro, dockerOptions)
 
   spinnies.update(spinnerName, { text: 'Creating manifest...' })
   const manifest = await createC8yManifestFromNitro(nitro)

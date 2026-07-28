@@ -10,6 +10,7 @@ interface C8yNitroModuleOptions {
   manifest?: C8YManifestOptions
   apiClient?: C8YAPIClientOptions
   zip?: C8YZipOptions
+  docker?: C8yDockerOptions
   cache?: C8yCacheOptions
   openapi?: C8yOpenAPIOptions
   enableTenantOptionsInvalidationRoute?: boolean
@@ -70,6 +71,38 @@ zip?: {
 ```
 
 Use this when the build artifact itself needs different naming or placement.
+
+## `docker`
+
+```json
+docker?: {
+  baseImage?: string
+  extraInstructions?: string[]
+}
+```
+
+Customizes the Dockerfile generated for the microservice image.
+
+- `baseImage`: replaces the default `node:24-slim` base image.
+- `extraInstructions`: raw Dockerfile instructions (one per entry) inserted after `WORKDIR` and before the build output `COPY`, so their layers stay cached across rebuilds.
+
+The rest of the template is not configurable: `ENV NODE_ENV`/`PORT`, `EXPOSE 80` and the `CMD` entrypoint are the Cumulocity microservice contract and stay under module control.
+
+A common use case is installing CA certificates or native runtime libraries the slim image does not ship:
+
+```ts
+export default defineNitroConfig({
+  c8y: {
+    docker: {
+      extraInstructions: [
+        'RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*',
+      ],
+    },
+  },
+})
+```
+
+Note that `apt-get` assumes a Debian-based `baseImage` (the default is); adjust the instructions if you switch to a different distribution.
 
 ## `cache`
 

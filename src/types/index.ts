@@ -2,8 +2,10 @@ import type { C8YAPIClientOptions } from './apiClient'
 import type { C8YManifestOptions } from './manifest'
 import type { C8YZipOptions } from './zip'
 import type { C8yCacheOptions } from './cache'
+import type { C8yDockerOptions } from './docker'
 
 export type * from './zip'
+export type { C8yDockerOptions } from './docker'
 export type { C8YManifestOptions, C8YManifest } from './manifest'
 export * from './apiClient'
 export type { C8yCacheOptions } from './cache'
@@ -46,6 +48,11 @@ export interface C8yNitroModuleOptions {
   manifest?: C8YManifestOptions
   apiClient?: C8YAPIClientOptions
   zip?: C8YZipOptions
+  /**
+   * Controls the Dockerfile generated for the microservice image
+   * (base image, extra instructions).
+   */
+  docker?: C8yDockerOptions
   cache?: C8yCacheOptions
   /**
    * Controls how the OpenAPI document served by Nitro (`experimental.openAPI`)

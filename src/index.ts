@@ -130,7 +130,7 @@ export function c8y(): NitroModule {
       nitro.hooks.hook('close', async () => {
         // Build the Docker image when not in dev mode
         if (nitro.options.preset !== 'nitro-dev') {
-          await createC8yZip(nitro, options.zip)
+          await createC8yZip(nitro, options.zip, options.docker)
         }
       })
     },

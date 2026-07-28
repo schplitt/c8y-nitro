@@ -14,6 +14,10 @@ export interface C8yCacheOptions {
 export interface C8yDevOptions {
   injectUser?: boolean;
 }
+export interface C8yDockerOptions {
+  baseImage?: string;
+  extraInstructions?: string[];
+}
 export interface C8YManifest {
   apiVersion: string;
   key: string;
@@ -42,6 +46,7 @@ export interface C8yNitroModuleOptions {
   manifest?: C8YManifestOptions;
   apiClient?: C8YAPIClientOptions;
   zip?: C8YZipOptions;
+  docker?: C8yDockerOptions;
   cache?: C8yCacheOptions;
   openapi?: C8yOpenAPIOptions;
   enableTenantOptionsInvalidationRoute?: boolean;
