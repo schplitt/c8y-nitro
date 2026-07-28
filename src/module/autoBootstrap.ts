@@ -1,4 +1,5 @@
 import type { Nitro } from 'nitro/types'
+import type { C8YManifest } from '../types/manifest'
 import type { ManifestCacheTarget } from './manifestCache'
 import { createC8yManifest } from './manifest'
 import {
@@ -9,6 +10,7 @@ import {
   subscribeToApplication,
   updateMicroservice,
 } from '../cli/utils/c8y-api'
+import type { C8yBootstrapCredentials } from '../cli/utils/c8y-api'
 import { writeBootstrapCredentials } from '../cli/utils/env-file'
 import { hashManifest, readManifestCache, writeManifestCache } from './manifestCache'
 import process from 'node:process'
@@ -17,25 +19,161 @@ const BOOTSTRAP_ENV_VARS = ['C8Y_BOOTSTRAP_TENANT', 'C8Y_BOOTSTRAP_USER', 'C8Y_B
 const DEV_ENV_VARS = ['C8Y_BASEURL', 'C8Y_DEVELOPMENT_TENANT', 'C8Y_DEVELOPMENT_USER', 'C8Y_DEVELOPMENT_PASSWORD'] as const
 
 /**
+ * Minimal logger contract for {@link syncBootstrappedMicroservice}. Satisfied by
+ * both `nitro.logger` and the CLI's `consola` instance.
+ */
+export interface BootstrapSyncLogger {
+  debug: (message: string) => void
+  success: (message: string) => void
+  warn: (message: string) => void
+}
+
+/**
+ * Reads bootstrap credentials from an env object (e.g. a loaded `.env` file or
+ * `process.env`). Returns `undefined` unless all three variables are present.
+ * @param env - Environment variables object
+ */
+export function readBootstrapCredentialsFromEnv(
+  env: Record<string, string | undefined>,
+): C8yBootstrapCredentials | undefined {
+  const tenant = env.C8Y_BOOTSTRAP_TENANT
+  const name = env.C8Y_BOOTSTRAP_USER
+  const password = env.C8Y_BOOTSTRAP_PASSWORD
+
+  if (!tenant || !name || !password) {
+    return undefined
+  }
+
+  return { tenant, name, password }
+}
+
+export interface SyncBootstrappedMicroserviceOptions {
+  /**
+   * Project root directory (containing `node_modules` and the env files).
+   */
+  rootDir: string
+  /**
+   * Cumulocity base URL without trailing slash.
+   */
+  baseUrl: string
+  /**
+   * The development tenant id.
+   */
+  developmentTenant: string
+  /**
+   * Basic Auth header of the development user.
+   */
+  authHeader: string
+  /**
+   * The locally generated manifest to sync against the tenant.
+   */
+  manifest: C8YManifest
+  logger: BootstrapSyncLogger
+  /**
+   * Env vars used to detect already-present bootstrap credentials.
+   * Defaults to `process.env` (the CLI passes its loaded `.env` instead).
+   */
+  env?: Record<string, string | undefined>
+}
+
+/**
  * Verifies the microservice on the development tenant and keeps it in sync with
  * the local manifest, bootstrapping (or re-bootstrapping) when needed.
  *
- * Unlike a purely env-var-based check, this always verifies against the tenant
- * when development credentials are available, so it also handles:
- * - the manifest changing between dev restarts (auto-updates a placeholder), and
+ * Unlike a purely env-var-based check, this always verifies against the tenant,
+ * so it also handles:
+ * - the manifest changing between runs (auto-updates a placeholder), and
  * - the application being deleted on the tenant while stale bootstrap env vars
  *   still linger locally (re-creates it).
  *
  * A previously *deployed* microservice (one with an active version) is never
  * overwritten automatically - we only warn about the drift.
  *
+ * @param options - See {@link SyncBootstrappedMicroserviceOptions}
+ * @returns The bootstrap credentials for the microservice (freshly fetched when
+ * they were refreshed, otherwise the ones already present in `env`)
+ */
+export async function syncBootstrappedMicroservice(
+  options: SyncBootstrappedMicroserviceOptions,
+): Promise<C8yBootstrapCredentials | undefined> {
+  const { rootDir, baseUrl, developmentTenant, authHeader, manifest, logger } = options
+  const env = options.env ?? process.env
+
+  // Derive the identity/hash used for change detection.
+  const target: ManifestCacheTarget = { baseUrl, developmentTenant, name: manifest.name }
+  const currentHash = hashManifest(manifest, target)
+
+  // Always verify against the tenant - this catches remote deletion even when
+  // bootstrap env vars are still present locally.
+  const existingApp = await findMicroserviceByName(baseUrl, manifest.name, authHeader)
+
+  if (!existingApp) {
+    // Either never bootstrapped, or the application was removed on the tenant
+    // while stale bootstrap env vars linger. Either way, (re-)bootstrap.
+    const createdApp = await createMicroservice(baseUrl, manifest, authHeader)
+    logger.debug(`Microservice "${manifest.name}" created (ID: ${createdApp.id})`)
+    const credentials = await finalizeBootstrap({
+      rootDir,
+      logger,
+      baseUrl,
+      developmentTenant,
+      appId: createdApp.id,
+      authHeader,
+      target,
+      manifestHash: currentHash,
+      // Freshly created: always (re)write credentials so stale env vars are replaced.
+      forceCredentials: true,
+    })
+    logger.success(`Microservice "${manifest.name}" created on the development tenant.`)
+    return credentials
+  }
+
+  const appId = existingApp.id
+  const isRealService = Boolean(existingApp.activeVersionId)
+  const cache = await readManifestCache(rootDir)
+  const changed = !cache || cache.manifestHash !== currentHash || cache.appId !== appId
+
+  if (changed) {
+    if (isRealService) {
+      // A real microservice image is deployed - never silently overwrite it.
+      logger.warn(
+        `Local manifest for "${manifest.name}" differs from the deployed microservice on the development tenant. `
+        + `The running service was left untouched. Redeploy or run \`npx c8y-nitro bootstrap\` to update it explicitly.`,
+      )
+    } else {
+      // Placeholder application - safe to overwrite with the new manifest.
+      await updateMicroservice(baseUrl, appId, manifest, authHeader)
+      logger.success(`Updated microservice "${manifest.name}" with changed manifest.`)
+    }
+  }
+
+  // Ensure we hold valid bootstrap credentials for this application. Refresh
+  // them when they're missing locally or when the application ID changed
+  // (e.g. it was recreated since we last cached).
+  const hasBootstrapCreds = BOOTSTRAP_ENV_VARS.every((v) => env[v])
+  const appChanged = cache?.appId !== appId
+  const refreshedCredentials = await finalizeBootstrap({
+    rootDir,
+    logger,
+    baseUrl,
+    developmentTenant,
+    appId,
+    authHeader,
+    target,
+    manifestHash: currentHash,
+    forceCredentials: !hasBootstrapCreds || appChanged,
+  })
+
+  return refreshedCredentials ?? readBootstrapCredentialsFromEnv(env)
+}
+
+/**
+ * Verifies the microservice on the development tenant during dev startup.
  * Runs silently unless a bootstrap/sync was performed or an error occurs.
  * @param nitro - Nitro instance
  */
 export async function autoBootstrap(nitro: Nitro): Promise<void> {
   try {
-    const rootDir = nitro.options.rootDir
-
     // Without development credentials we can neither verify nor create anything.
     // The dev plugin already informs the user about missing credentials.
     const missingDevVars = DEV_ENV_VARS.filter((v) => !process.env[v])
@@ -46,74 +184,22 @@ export async function autoBootstrap(nitro: Nitro): Promise<void> {
     const baseUrl = process.env.C8Y_BASEURL!.endsWith('/')
       ? process.env.C8Y_BASEURL!.slice(0, -1)
       : process.env.C8Y_BASEURL!
-    const developmentTenant = process.env.C8Y_DEVELOPMENT_TENANT!
 
     const authHeader = createBasicAuthHeader(
-      developmentTenant,
+      process.env.C8Y_DEVELOPMENT_TENANT!,
       process.env.C8Y_DEVELOPMENT_USER!,
       process.env.C8Y_DEVELOPMENT_PASSWORD!,
     )
 
-    // Build manifest and derive the identity/hash used for change detection.
-    const manifest = await createC8yManifest(rootDir, nitro.options, nitro.logger)
-    const target: ManifestCacheTarget = { baseUrl, developmentTenant, name: manifest.name }
-    const currentHash = hashManifest(manifest, target)
+    const manifest = await createC8yManifest(nitro.options.rootDir, nitro.options, nitro.logger)
 
-    // Always verify against the tenant - this catches remote deletion even when
-    // bootstrap env vars are still present locally.
-    const existingApp = await findMicroserviceByName(baseUrl, manifest.name, authHeader)
-
-    if (!existingApp) {
-      // Either never bootstrapped, or the application was removed on the tenant
-      // while stale bootstrap env vars linger. Either way, (re-)bootstrap.
-      const createdApp = await createMicroservice(baseUrl, manifest, authHeader)
-      nitro.logger.debug(`Microservice "${manifest.name}" created (ID: ${createdApp.id})`)
-      await finalizeBootstrap(nitro, {
-        baseUrl,
-        developmentTenant,
-        appId: createdApp.id,
-        authHeader,
-        target,
-        manifestHash: currentHash,
-        // Freshly created: always (re)write credentials so stale env vars are replaced.
-        forceCredentials: true,
-      })
-      nitro.logger.success(`Auto-bootstrap complete! Microservice "${manifest.name}" created on tenant.`)
-      return
-    }
-
-    const appId = existingApp.id
-    const isRealService = Boolean(existingApp.activeVersionId)
-    const cache = await readManifestCache(rootDir)
-    const changed = !cache || cache.manifestHash !== currentHash || cache.appId !== appId
-
-    if (changed) {
-      if (isRealService) {
-        // A real microservice image is deployed - never silently overwrite it.
-        nitro.logger.warn(
-          `Local manifest for "${manifest.name}" differs from the deployed microservice on the development tenant. `
-          + `The running service was left untouched. Redeploy or run \`npx c8y-nitro bootstrap\` to update it explicitly.`,
-        )
-      } else {
-        // Placeholder application - safe to overwrite with the new manifest.
-        await updateMicroservice(baseUrl, appId, manifest, authHeader)
-        nitro.logger.success(`Auto-bootstrap: updated microservice "${manifest.name}" with changed manifest.`)
-      }
-    }
-
-    // Ensure we hold valid bootstrap credentials for this application. Refresh
-    // them when they're missing locally or when the application ID changed
-    // (e.g. it was recreated since we last cached).
-    const hasBootstrapCreds = BOOTSTRAP_ENV_VARS.every((v) => process.env[v])
-    const appChanged = cache?.appId !== appId
-    await finalizeBootstrap(nitro, {
+    await syncBootstrappedMicroservice({
+      rootDir: nitro.options.rootDir,
       baseUrl,
-      developmentTenant,
-      appId,
+      developmentTenant: process.env.C8Y_DEVELOPMENT_TENANT!,
       authHeader,
-      target,
-      manifestHash: currentHash,
-      forceCredentials: !hasBootstrapCreds || appChanged,
+      manifest,
+      logger: nitro.logger,
     })
   } catch (error) {
     // Just warn if something fails, don't crash.
@@ -122,6 +208,8 @@ export async function autoBootstrap(nitro: Nitro): Promise<void> {
 }
 
 interface FinalizeBootstrapOptions {
+  rootDir: string
+  logger: BootstrapSyncLogger
   baseUrl: string
   developmentTenant: string
   appId: string
@@ -137,17 +225,19 @@ interface FinalizeBootstrapOptions {
 /**
  * Subscribe the tenant, optionally (re)write bootstrap credentials, and persist
  * the synced state to the local cache.
- * @param nitro
- * @param opts
+ * @param opts - Bootstrap finalization inputs
+ * @returns The freshly fetched credentials when `forceCredentials` was set
  */
-async function finalizeBootstrap(nitro: Nitro, opts: FinalizeBootstrapOptions): Promise<void> {
+async function finalizeBootstrap(opts: FinalizeBootstrapOptions): Promise<C8yBootstrapCredentials | undefined> {
   // Subscribe tenant to application (409 if already subscribed is handled).
   await subscribeToApplication(opts.baseUrl, opts.developmentTenant, opts.appId, opts.authHeader)
 
-  if (opts.forceCredentials) {
-    const credentials = await getBootstrapCredentials(opts.baseUrl, opts.appId, opts.authHeader)
+  let credentials: C8yBootstrapCredentials | undefined
 
-    const envFileName = await writeBootstrapCredentials(nitro.options.rootDir, {
+  if (opts.forceCredentials) {
+    credentials = await getBootstrapCredentials(opts.baseUrl, opts.appId, opts.authHeader)
+
+    const envFileName = await writeBootstrapCredentials(opts.rootDir, {
       C8Y_BOOTSTRAP_TENANT: credentials.tenant,
       C8Y_BOOTSTRAP_USER: credentials.name,
       C8Y_BOOTSTRAP_PASSWORD: credentials.password,
@@ -158,12 +248,14 @@ async function finalizeBootstrap(nitro: Nitro, opts: FinalizeBootstrapOptions): 
     process.env.C8Y_BOOTSTRAP_USER = credentials.name
     process.env.C8Y_BOOTSTRAP_PASSWORD = credentials.password
 
-    nitro.logger.debug(`Bootstrap credentials written to ${envFileName}`)
+    opts.logger.debug(`Bootstrap credentials written to ${envFileName}`)
   }
 
-  await writeManifestCache(nitro.options.rootDir, {
+  await writeManifestCache(opts.rootDir, {
     manifestHash: opts.manifestHash,
     target: opts.target,
     appId: opts.appId,
   })
+
+  return credentials
 }

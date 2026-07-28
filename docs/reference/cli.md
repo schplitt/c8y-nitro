@@ -41,3 +41,12 @@ Manage tenant options on the configured development tenant.
 ```sh
 pnpm dlx c8y-nitro options
 ```
+
+Before touching any options, the command syncs the microservice on the development tenant with your local manifest (the same check as [automatic bootstrap](/guide/auto-bootstrap)): a missing application is (re-)created, a changed placeholder manifest is updated, and missing or stale bootstrap credentials are refreshed in your env file.
+
+Reads and writes then use different users:
+
+- **Reads** use the **bootstrap user**. Encrypted `credentials.*` options are only returned decrypted to the microservice's own user — the development user gets `<<Encrypted>>` back.
+- **Writes and deletes** use the **development user** (the bootstrap user is not allowed to modify tenant options).
+
+When no bootstrap credentials are available (e.g. the sync failed and none are in your env file), reads fall back to the development user and `credentials.*` values stay encrypted.

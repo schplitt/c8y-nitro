@@ -345,6 +345,43 @@ export async function unassignUserRole(
 }
 
 /**
+ * Fetches the current application's settings (the tenant options of the
+ * microservice's own settings category) via
+ * `GET /application/currentApplication/settings`.
+ *
+ * Must be called with microservice credentials (bootstrap or service user).
+ * Unlike the Options API — which returns `credentials.*` values encrypted for
+ * regular users and rejects the bootstrap user with `403` — this endpoint
+ * returns encrypted `credentials.*` options **decrypted**.
+ * @param baseUrl - The Cumulocity base URL
+ * @param authHeader - Basic Auth header of the bootstrap (or service) user
+ * @returns Flat key-value map of the microservice's settings
+ */
+export async function getCurrentApplicationSettings(
+  baseUrl: string,
+  authHeader: string,
+): Promise<Record<string, string>> {
+  const url = `${baseUrl}/application/currentApplication/settings`
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Authorization: authHeader,
+      Accept: 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Failed to get current application settings: ${response.status} ${response.statusText}\n${errorText}`, {
+      cause: response,
+    })
+  }
+
+  return (await response.json()) as Record<string, string>
+}
+
+/**
  * Gets all tenant options for a specific category.
  * @param baseUrl - The Cumulocity base URL
  * @param category - The category to fetch options for
