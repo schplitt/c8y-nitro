@@ -109,6 +109,24 @@ supportedArchitectures:
 
 Native packages that need a build step (rather than shipping a prebuilt binary) must also be allowed to run their install scripts under pnpm — see pnpm's `onlyBuiltDependencies` / build-approval settings.
 
+## Runtime system libraries
+
+Some native modules also need **system packages inside the image** at runtime — for example CA certificates for native-code TLS (libcurl), or shared libraries the `.node` binary links against. The default `node:24-slim` image is minimal and may not ship them.
+
+Use the [`docker` module option](/reference/module-options#docker) to install them into the generated image:
+
+```ts
+export default defineNitroConfig({
+  c8y: {
+    docker: {
+      extraInstructions: [
+        'RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*',
+      ],
+    },
+  },
+})
+```
+
 ## Verifying it worked
 
 After a build, confirm the package and its binary are present in the traced output:

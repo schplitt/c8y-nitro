@@ -2,18 +2,27 @@ import { x } from 'tinyexec'
 import { writeFile, mkdir } from 'node:fs/promises'
 import { join, basename } from 'node:path'
 import type { Nitro } from 'nitro/types'
+import type { C8yDockerOptions } from '../types/docker'
 
 /**
  * Generate the Dockerfile content for a Nitro build
  * @param outputDirName - Name of the output directory (e.g., '.output')
+ * @param options - Dockerfile customization (base image, extra instructions)
  * @returns Dockerfile content as a string
  */
-export function getDockerfileContent(outputDirName: string): string {
-  return `FROM node:24-slim AS runtime
+export function getDockerfileContent(outputDirName: string, options: C8yDockerOptions = {}): string {
+  const baseImage = options.baseImage ?? 'node:24-slim'
+  // Extra instructions go before the COPY so their layers stay cached across
+  // rebuilds of the (always-changing) build output.
+  const extraInstructions = options.extraInstructions?.length
+    ? `${options.extraInstructions.join('\n')}\n\n`
+    : ''
+
+  return `FROM ${baseImage} AS runtime
 
 WORKDIR /app
 
-# Copy the Nitro build output
+${extraInstructions}# Copy the Nitro build output
 COPY ${outputDirName}/ ${outputDirName}/
 
 ENV NODE_ENV=production
@@ -40,7 +49,7 @@ async function checkDockerInstalled(): Promise<boolean> {
   }
 }
 
-async function writeDockerfile(outputDir: string): Promise<string> {
+async function writeDockerfile(outputDir: string, options: C8yDockerOptions): Promise<string> {
   const outputDirName = basename(outputDir)
   const c8yDir = join(outputDir, '../.c8y')
   const dockerfilePath = join(c8yDir, 'Dockerfile')
@@ -49,7 +58,7 @@ async function writeDockerfile(outputDir: string): Promise<string> {
   await mkdir(c8yDir, { recursive: true })
 
   // Generate Dockerfile with dynamic output directory name
-  const dockerfileContent = getDockerfileContent(outputDirName)
+  const dockerfileContent = getDockerfileContent(outputDirName, options)
 
   // Write Dockerfile
   await writeFile(dockerfilePath, dockerfileContent, 'utf-8')
@@ -127,9 +136,10 @@ async function saveDockerImageToTar(nitro: Nitro, c8yDir: string, imageName: str
 /**
  * Create a Docker image from the Nitro build output
  * @param nitro Nitro instance
+ * @param options Dockerfile customization (base image, extra instructions)
  * @returns Path to the saved Docker image tar file
  */
-export async function createDockerImage(nitro: Nitro): Promise<string> {
+export async function createDockerImage(nitro: Nitro, options: C8yDockerOptions = {}): Promise<string> {
   // Check if Docker is installed
   const isDockerInstalled = await checkDockerInstalled()
 
@@ -140,7 +150,7 @@ export async function createDockerImage(nitro: Nitro): Promise<string> {
   nitro.logger.debug('Creating Docker image...')
 
   // Write Dockerfile
-  const c8yDir = await writeDockerfile(nitro.options.output.dir)
+  const c8yDir = await writeDockerfile(nitro.options.output.dir, options)
 
   // Build Docker image
   const imageName = await buildDockerImage(nitro, c8yDir)
