@@ -64,7 +64,7 @@ export default defineEventHandler(async (event) => {
 
 This is the field you most need to get right. **Everything except `internal` is serialized into the HTTP response** (under a `data` key) and is therefore visible to the caller. `internal` is stripped from the response and lives only in your logs.
 
-| Field      | In HTTP response? | Use it for                                                                 |
+| Field      | In HTTP Response? | Use It For                                                                 |
 | ---------- | :---------------: | -------------------------------------------------------------------------- |
 | `message`  |        ✅         | Short, safe summary of what went wrong.                                    |
 | `status`   |        ✅         | HTTP status code (default `500`).                                          |
@@ -82,8 +82,7 @@ The most common mistake is dumping an upstream/system failure into `message` or 
 ```ts
 try {
   await doUpstreamThing()
-}
-catch (cause) {
+} catch (cause) {
   throw createError({
     status: 502,
     message: 'Upstream request failed', // safe, generic — this is what the caller sees

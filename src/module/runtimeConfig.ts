@@ -23,4 +23,15 @@ export async function setupRuntimeConfig(nitro: Nitro, options: C8yNitroModuleOp
   nitro.options.runtimeConfig.c8ySettingsCategory = options.manifest?.settingsCategory
     ?? manifest.contextPath
     ?? manifest.name
+
+  // OpenAPI document transformation (consumed by the runtime/handlers/openapi middleware)
+  const excludeInternalRoutes = options.openapi?.excludeInternalRoutes ?? true
+  const probePaths = [
+    options.manifest?.livenessProbe?.httpGet?.path,
+    options.manifest?.readinessProbe?.httpGet?.path,
+  ].filter((path): path is string => Boolean(path))
+  nitro.options.runtimeConfig.c8yOpenApiExcludeRoutes = [
+    ...(excludeInternalRoutes ? ['/_', ...probePaths] : []),
+    ...(options.openapi?.excludeRoutes ?? []),
+  ]
 }

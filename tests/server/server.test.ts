@@ -76,13 +76,16 @@ describe('Nitro Server', () => {
 
     })
     const devServer = createDevServer(nitro)
-    const server = devServer.listen({})
+    // port 0 → ephemeral port, so tests don't collide with local dev servers
+    const server = devServer.listen({ port: 0 })
     await prepare(nitro)
     const ready = new Promise<void>((resolve) => {
       nitro.hooks.hook('dev:reload', () => resolve())
     })
     await build(nitro)
     await ready
+    // srvx only exposes `server.url` once the listener is actually bound
+    await server.ready()
     return { nitro, devServer, server, env: inputEnv }
   }
 
@@ -1035,6 +1038,89 @@ describe('Nitro Server', () => {
     it('should throw when scheduleTask() is called with tasks disabled', async () => {
       const res = await server.fetch(new Request(new URL('/schedule-task?marker=probe&schedule=1', server.url)))
       expect(res.status).toEqual(500)
+    })
+  })
+
+  describe('OpenAPI transformation', () => {
+    let nitro: Awaited<ReturnType<typeof createNitro>>
+    let devServer: ReturnType<typeof createDevServer>
+    let server: Awaited<ReturnType<ReturnType<typeof createDevServer>['listen']>>
+    let env: Record<string, string>
+
+    beforeAll(async () => {
+      const result = await createC8yNitroServer({
+        env: completeEnv,
+        nitroConfig: {
+          experimental: { openAPI: true },
+          c8y: {
+            skipBootstrap: true,
+            enableTenantOptionsInvalidationRoute: true,
+            openapi: {
+              excludeRoutes: ['/mock-tenant-option'],
+            },
+          },
+        },
+      })
+      nitro = result.nitro
+      devServer = result.devServer
+      server = result.server
+      env = result.env
+    })
+
+    afterAll(async () => {
+      for (const key of Object.keys(env)) {
+        delete process.env[key]
+      }
+      await devServer?.close()
+      await nitro?.close()
+    })
+
+    it('should strip internal and excluded routes from the OpenAPI document', async () => {
+      const res = await server.fetch(new Request(new URL('/_openapi.json', server.url)))
+      expect(res.status).toEqual(200)
+
+      const spec = await res.json() as Record<string, any>
+      const paths = Object.keys(spec.paths ?? {})
+
+      expect(paths.length).toBeGreaterThan(0)
+      // internal routes (probes, invalidation route, spec/UI routes) are gone
+      expect(paths.filter((path) => path.startsWith('/_'))).toEqual([])
+      // user-configured excludeRoutes are gone
+      expect(paths.filter((path) => path.startsWith('/mock-tenant-option'))).toEqual([])
+      // regular routes stay
+      expect(paths).toContain('/hello')
+    })
+
+    it('should not transform other routes', async () => {
+      const res = await server.fetch(new Request(new URL('/hello', server.url)))
+      expect(res.status).toEqual(200)
+    })
+
+    it('should advertise the request origin in dev', async () => {
+      const res = await server.fetch(new Request(new URL('/_openapi.json', server.url)))
+      const spec = await res.json() as Record<string, any>
+
+      // The nitro dev proxy forwards to the worker on its own socket, so only
+      // assert the shape: a plain origin without the /service/<contextPath>
+      // prefix. (The exact host differs between listener and worker.)
+      expect(spec.servers).toHaveLength(1)
+      expect(spec.servers[0].description).toBe('Direct server endpoint')
+      expect(spec.servers[0].url).toMatch(/^http:\/\/[^/]+$/)
+    })
+
+    it('should derive the server URL from forwarding headers when proxied', async () => {
+      const res = await server.fetch(new Request(new URL('/_openapi.json', server.url), {
+        headers: {
+          'x-forwarded-host': 'proxied.example.cumulocity.com',
+          'x-forwarded-proto': 'https',
+        },
+      }))
+      const spec = await res.json() as Record<string, any>
+
+      expect(spec.servers).toEqual([{
+        url: 'https://proxied.example.cumulocity.com/service/c8y-nitro',
+        description: 'Cumulocity microservice endpoint',
+      }])
     })
   })
 })

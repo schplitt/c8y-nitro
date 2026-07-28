@@ -11,6 +11,7 @@ interface C8yNitroModuleOptions {
   apiClient?: C8YAPIClientOptions
   zip?: C8YZipOptions
   cache?: C8yCacheOptions
+  openapi?: C8yOpenAPIOptions
   enableTenantOptionsInvalidationRoute?: boolean
   skipBootstrap?: boolean
 }
@@ -83,6 +84,20 @@ cache?: {
 - `credentialsTTL`: TTL for subscribed tenant credentials.
 - `defaultTenantOptionsTTL`: base TTL for tenant options.
 - `tenantOptions`: per-key tenant option TTL overrides.
+
+## `openapi`
+
+```json
+openapi?: {
+  excludeInternalRoutes?: boolean
+  excludeRoutes?: string[]
+}
+```
+
+Controls how the OpenAPI document served by Nitro is transformed. See the [OpenAPI guide](/guide/openapi) for details.
+
+- `excludeInternalRoutes`: strips routes starting with `/_` and probe paths from the document. Defaults to `true`.
+- `excludeRoutes`: additional path prefixes to strip.
 
 ## `enableTenantOptionsInvalidationRoute`
 

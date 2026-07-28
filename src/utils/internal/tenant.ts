@@ -88,3 +88,27 @@ export const getCurrentUserTenantId = defineCachedFunction(
     shouldBypassCache: (requestOrEvent) => !getCurrentUserTenantCacheKeyMaterial(requestOrEvent),
   },
 )
+
+// Tenant domains rarely change: cached per tenant ID for 24 hours.
+const cachedTenantDomain = defineCachedFunction(
+  async (requestOrEvent: ServerRequest | H3Event, _tenantId: string): Promise<string> => {
+    return (await useUserClient(requestOrEvent).tenant.current()).data.domainName
+  },
+  {
+    maxAge: 86400,
+    name: '_c8y_nitro_get_user_tenant_domain',
+    group: 'c8y_nitro',
+    swr: false,
+    getKey: (_requestOrEvent, tenantId) => tenantId,
+  },
+)
+
+/**
+ * Resolves the public domain of the current user's tenant (e.g. `tenant.cumulocity.com`)
+ * via `/tenant/currentTenant` with the user's credentials from the current request.
+ * @param requestOrEvent - The H3Event or ServerRequest from the current request
+ */
+export async function getUserTenantDomain(requestOrEvent: ServerRequest | H3Event): Promise<string> {
+  const tenantId = await getCurrentUserTenantId(requestOrEvent)
+  return cachedTenantDomain(requestOrEvent, tenantId)
+}

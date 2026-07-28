@@ -12,7 +12,9 @@ The wrong instinct — and the one agents reach for first — is to force everyt
 
 ```ts
 // ❌ WRONG for native modules — a .node binary cannot be inlined into JS
-noExternals: true
+export default defineNitroConfig({
+  noExternals: true
+})
 ```
 
 Leave Nitro's default (external + trace) in place. Your only job is to make sure the tracer copies the native package **and** its platform binaries. The rest of this page is how.
@@ -74,15 +76,18 @@ Add or remove platforms in the exclude list to match what you build for and deve
 If a package resolves its platform binaries in a way `traceDeps` exclusions cannot express cleanly, drop down to the node-file-trace `ignore` hook, which decides per resolved path:
 
 ```ts
-traceOpts: {
-  nft: {
-    // Keep only the two platform packages we ship; drop every other
-    // @duckdb/node-bindings-<platform> the loader references.
-    ignore: (path: string) =>
-      /@duckdb[/\\]node-bindings-/.test(path)
-      && !/@duckdb[/\\]node-bindings-(?:linux-x64|darwin-arm64)[/\\]/.test(path),
+export default defineNitroConfig({
+  // ...
+  traceOpts: {
+    nft: {
+      // Keep only the two platform packages we ship; drop every other
+      // @duckdb/node-bindings-<platform> the loader references.
+      ignore: (path: string) =>
+        /@duckdb[/\\]node-bindings-/.test(path)
+        && !/@duckdb[/\\]node-bindings-(?:linux-x64|darwin-arm64)[/\\]/.test(path),
+    },
   },
-},
+})
 ```
 
 Prefer the `traceDeps` `!pkg` form; reach for `traceOpts.nft.ignore` only when path-level filtering is genuinely needed.

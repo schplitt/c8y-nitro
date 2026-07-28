@@ -24,12 +24,34 @@ export interface C8yDevOptions {
 export * from './roles'
 export * from './tenantOptions'
 
+export interface C8yOpenAPIOptions {
+  /**
+   * Strip internal routes from the served OpenAPI document.
+   * Removes every route starting with `/_` (generated probes, `/_c8y_nitro/**`
+   * and the OpenAPI/Scalar/Swagger routes themselves) as well as user-defined
+   * probe `httpGet` paths.
+   * @default true
+   */
+  excludeInternalRoutes?: boolean
+  /**
+   * Additional route prefixes to strip from the served OpenAPI document.
+   * Entries are matched as path prefixes (e.g. `/internal` also removes `/internal/status`).
+   * @default []
+   */
+  excludeRoutes?: string[]
+}
+
 export interface C8yNitroModuleOptions {
   dev?: C8yDevOptions
   manifest?: C8YManifestOptions
   apiClient?: C8YAPIClientOptions
   zip?: C8YZipOptions
   cache?: C8yCacheOptions
+  /**
+   * Controls how the OpenAPI document served by Nitro (`experimental.openAPI`)
+   * is transformed for Cumulocity microservices.
+   */
+  openapi?: C8yOpenAPIOptions
   /**
    * Adds a debug route for invalidating already-created tenant option caches.
    * Exposes `GET /_c8y_nitro/invalidate-tenant-options`.

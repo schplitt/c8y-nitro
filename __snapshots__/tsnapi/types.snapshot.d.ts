@@ -43,8 +43,13 @@ export interface C8yNitroModuleOptions {
   apiClient?: C8YAPIClientOptions;
   zip?: C8YZipOptions;
   cache?: C8yCacheOptions;
+  openapi?: C8yOpenAPIOptions;
   enableTenantOptionsInvalidationRoute?: boolean;
   skipBootstrap?: boolean;
+}
+export interface C8yOpenAPIOptions {
+  excludeInternalRoutes?: boolean;
+  excludeRoutes?: string[];
 }
 export interface C8YRoles {}
 export interface C8YZipOptions {

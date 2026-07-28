@@ -59,9 +59,33 @@ export function registerRuntime(nitro: Nitro, options: C8yNitroModuleOptions = {
   })))
 
   /**
+   * OpenAPI transform middleware (scoped to the OpenAPI JSON route)
+   * Strips internal routes and rewrites the server URL to the requesting origin.
+   */
+  const openApiEnabled = Boolean(nitro.options.experimental?.openAPI
+    && (isNitroDev || nitro.options.openAPI?.production))
+  if (openApiEnabled) {
+    if (!isNitroDev && nitro.options.openAPI?.production === 'prerender') {
+      // Prerendered specs are served as static assets before routed middleware
+      // runs, so they can neither hide internal routes nor reflect the
+      // per-request server URL (it is baked in at build time).
+      nitro.logger.warn('c8y-nitro cannot transform a prerendered OpenAPI document (internal routes stay listed and the server URL is baked in at build time). Use `openAPI: { production: true }` to serve the document at runtime instead.')
+    } else {
+      // Registered globally (the middleware exits early on other paths): nitro
+      // currently pushes route-scoped middleware entries into the h3 chain
+      // without unwrapping their handler, which crashes the request.
+      nitro.options.handlers.push({
+        route: '/**',
+        handler: join(thisFilePath, './runtime/handlers/openapi'),
+        middleware: true,
+      })
+      nitro.logger.debug(`Registered OpenAPI transform middleware for ${nitro.options.openAPI?.route || '/_openapi.json'}`)
+    }
+  }
+
+  /**
    * Handlers (can't be auto scanned as they need methods etc)
    */
-  // TODO: investigate nitro currently only shows the last registered handler in swagger/scalar -> openapi json can be intercepted and modified with middleware if needed
   const handlers: NitroEventHandler[] = []
   const probeHandlerPath = join(thisFilePath, './runtime/handlers/liveness-readiness')
   // Generate liveness probe if user hasn't defined httpGet
