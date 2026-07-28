@@ -16,6 +16,11 @@ export interface MockC8yClientData {
    * Options keyed by explicit category — use this to seed foreign categories.
    */
   tenantOptionsByCategory?: Record<string, Record<string, string>>
+  /**
+   * Public tenant domains keyed by tenant ID, served via `client.tenant.current()`.
+   * Tenants without an entry make `tenant.current()` reject.
+   */
+  tenantDomains?: Record<string, string>
 }
 
 /**
@@ -49,6 +54,10 @@ export function generateMockClientCode(data: MockC8yClientData = {}): string {
     ? JSON.stringify(data.tenantOptionsByCategory, null, 2)
     : '{}'
 
+  const tenantDomainsCode = data.tenantDomains
+    ? JSON.stringify(data.tenantDomains, null, 2)
+    : '{}'
+
   return `
 /**
  * Virtual mock @c8y/client with static test data
@@ -58,6 +67,7 @@ export function generateMockClientCode(data: MockC8yClientData = {}): string {
 // Mock data defined at build time
 const mockCurrentUser = ${currentUserCode}
 const mockSubscriptions = ${subscriptionsCode}
+const mockTenantDomains = ${tenantDomainsCode}
 
 // Own-category options live under a wildcard bucket; foreign categories are keyed explicitly.
 const WILDCARD = '*'
@@ -246,6 +256,19 @@ export class Client {
           data: { value },
         }
       },
+    },
+  }
+
+  tenant = {
+    current: async () => {
+      const domainName = mockTenantDomains[this.core.tenant]
+      if (!domainName) {
+        throw new Error('No mock tenant domain configured for tenant ' + this.core.tenant)
+      }
+      return {
+        res: { ok: true, status: 200, statusText: 'OK' },
+        data: { name: this.core.tenant, domainName },
+      }
     },
   }
 
