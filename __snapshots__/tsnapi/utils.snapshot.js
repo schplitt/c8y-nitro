@@ -17,6 +17,7 @@ export function useUserClient(_) {}
 export async function useUserRoles(_) {}
 export async function useUserTenantClient(_) {}
 export async function useUserTenantCredentials(_) {}
+export async function useUserTenantDomain(_) {}
 // #endregion
 
 // #region Variables

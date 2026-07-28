@@ -9,6 +9,7 @@ export interface C8YAPIClientOptions {
 export interface C8yCacheOptions {
   credentialsTTL?: number;
   defaultTenantOptionsTTL?: number;
+  tenantDomainTTL?: number;
   tenantOptions?: C8YTenantOptionKeysCacheConfig;
 }
 export interface C8yDevOptions {
@@ -43,8 +44,13 @@ export interface C8yNitroModuleOptions {
   apiClient?: C8YAPIClientOptions;
   zip?: C8YZipOptions;
   cache?: C8yCacheOptions;
+  openapi?: C8yOpenAPIOptions;
   enableTenantOptionsInvalidationRoute?: boolean;
   skipBootstrap?: boolean;
+}
+export interface C8yOpenAPIOptions {
+  excludeInternalRoutes?: boolean;
+  excludeRoutes?: string[];
 }
 export interface C8YRoles {}
 export interface C8YZipOptions {

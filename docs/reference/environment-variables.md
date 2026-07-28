@@ -33,6 +33,7 @@ Nitro runtime config values can be overridden through environment variables.
 | -------------------------------------- | --------------------------------------------- |
 | `NITRO_C8Y_CREDENTIALS_CACHE_TTL`      | Overrides `c8y.cache.credentialsTTL`          |
 | `NITRO_C8Y_DEFAULT_TENANT_OPTIONS_TTL` | Overrides `c8y.cache.defaultTenantOptionsTTL` |
+| `NITRO_C8Y_TENANT_DOMAIN_CACHE_TTL`    | Overrides `c8y.cache.tenantDomainTTL`         |
 
 Values are in seconds.
 
