@@ -58,7 +58,7 @@ export default defineHandler({
 
 The helpers above are middleware: they run before the handler and **throw** on failure. That is the right tool when access is a simple "has one of these roles / tenants" gate.
 
-Sometimes authorization is a condition you have to evaluate *inside* the handler — for example "either the caller has a read role **OR** they own this specific resource". For those cases, do **not** re-implement role fetching, the 403 shape, or probe handling from scratch. Compose from the same building blocks the middleware use:
+Sometimes authorization is a condition you have to evaluate _inside_ the handler — for example "either the caller has a read role **OR** they own this specific resource". For those cases, do **not** re-implement role fetching, the 403 shape, or probe handling from scratch. Compose from the same building blocks the middleware use:
 
 - `useUserRoles(event)` — the caller's effective roles (cached per request).
 - `useUserClient(event)` — a Cumulocity client authenticated **as the caller**, so you can defer a per-resource decision to core: if core lets the user read it, so do you.
@@ -74,10 +74,12 @@ const READ_ROLES = ['ROLE_MEASUREMENT_READ', 'ROLE_MEASUREMENT_ADMIN']
  * Allow if the caller has a global read role — OR — core lets *them* read the
  * source (owner / inventory-role permission). We do not re-implement the
  * per-source check: we probe core as the caller and mirror its answer.
+ * @param event
+ * @param source
  */
 export async function assertMeasurementRead(event: H3Event, source: string): Promise<void> {
   const roles = await useUserRoles(event)
-  if (roles.some(role => READ_ROLES.includes(role)))
+  if (roles.some((role) => READ_ROLES.includes(role)))
     return
 
   const client = useUserClient(event)
