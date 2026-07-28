@@ -59,6 +59,23 @@ export function registerRuntime(nitro: Nitro, options: C8yNitroModuleOptions = {
   })))
 
   /**
+   * Request URL rewrite middleware (always on in production builds).
+   * Rewrites `event.url` to the public tenant endpoint so handlers that build
+   * absolute URLs from the request don't leak internal cluster URLs.
+   * Registered after the scanned middlewares (which observe the original
+   * cluster-local URL) and before the OpenAPI transform, which reuses the
+   * resolved tenant domain from its cache.
+   */
+  if (!isNitroDev) {
+    nitro.options.handlers.push({
+      route: '/**',
+      handler: join(thisFilePath, './runtime/handlers/rewriteRequestUrl'),
+      middleware: true,
+    })
+    nitro.logger.debug('Registered public request URL rewrite middleware')
+  }
+
+  /**
    * OpenAPI transform middleware (scoped to the OpenAPI JSON route)
    * Strips internal routes and rewrites the server URL to the requesting origin.
    */

@@ -3,7 +3,7 @@ import { defineMiddleware } from 'nitro'
 import { getRequestURL } from 'nitro/h3'
 import { useRuntimeConfig } from 'nitro/runtime-config'
 import type { H3Event } from 'nitro/h3'
-import { getUserTenantDomain } from '../../../utils/internal/tenant'
+import { tryGetUserTenantDomainFast } from '../../../utils/internal/tenant'
 
 interface OpenAPIServer {
   url: string
@@ -39,17 +39,16 @@ async function resolveServer(event: H3Event): Promise<OpenAPIServer> {
   // prefix, so the service itself only sees internal cluster URLs). Resolve the
   // public domain through the requesting user's tenant.
   if (!import.meta.dev) {
-    try {
-      const domain = await getUserTenantDomain(event)
-      if (domain) {
-        return {
-          url: joinURLSegments(`https://${domain}`, 'service', contextPath, baseURL),
-          description: 'Cumulocity microservice endpoint',
-        }
+    // The request URL rewrite middleware ran before this one and resolved the
+    // same lookup, so this is served from its in-process cache. Falls back to
+    // request-based resolution below for unauthenticated requests or lookup
+    // failures rather than failing the document.
+    const domain = await tryGetUserTenantDomainFast(event)
+    if (domain) {
+      return {
+        url: joinURLSegments(`https://${domain}`, 'service', contextPath, baseURL),
+        description: 'Cumulocity microservice endpoint',
       }
-    } catch {
-      // Unauthenticated request or domain lookup failure: fall back to
-      // request-based resolution below rather than failing the document.
     }
   }
 
@@ -82,7 +81,12 @@ export default defineMiddleware(async (event, next) => {
   // for everything that isn't the OpenAPI document route.
   const specRoute = (runtimeConfig as { nitro?: { openAPI?: { route?: string } } }).nitro?.openAPI?.route || '/_openapi.json'
   const baseURL = ((runtimeConfig.app as { baseURL?: string } | undefined)?.baseURL ?? '/').replace(/\/+$/, '')
-  if (event.url.pathname !== `${baseURL}${specRoute}`) {
+  const specPath = `${baseURL}${specRoute}`
+  // The request URL rewrite middleware runs before this one and prefixes
+  // authenticated request URLs with the public /service/<contextPath> path,
+  // so the spec route has to be matched in both forms.
+  const rewrittenSpecPath = `/service/${c8yManifest.contextPath ?? c8yManifest.name}${specPath}`
+  if (event.url.pathname !== specPath && event.url.pathname !== rewrittenSpecPath) {
     return next()
   }
 

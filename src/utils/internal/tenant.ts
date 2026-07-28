@@ -112,3 +112,87 @@ export async function getUserTenantDomain(requestOrEvent: ServerRequest | H3Even
   const tenantId = await getCurrentUserTenantId(requestOrEvent)
   return cachedTenantDomain(requestOrEvent, tenantId)
 }
+
+interface FastDomainCacheEntry {
+  domain: string | undefined
+  expiresAt: number
+}
+
+const FAST_DOMAIN_SUCCESS_TTL = 60_000
+const FAST_DOMAIN_FAILURE_TTL = 10_000
+const FAST_DOMAIN_MAX_ENTRIES = 1000
+
+// Hot-path cache in front of the nitro cache layers: a plain Map keyed by the
+// salted auth-material hash, so per-request cost after the first resolution is
+// one hash + one Map lookup with no async storage round-trip.
+const fastDomainCache = new Map<string, FastDomainCacheEntry>()
+
+/**
+ * Clears the in-process tenant domain cache. Exposed for tests.
+ * @internal
+ */
+export function clearFastUserTenantDomainCache(): void {
+  fastDomainCache.clear()
+}
+
+/**
+ * Best-effort variant of {@link getUserTenantDomain} for per-request hot paths:
+ * never throws (returns `undefined` for unauthenticated requests or failed
+ * lookups) and memoizes results in-process per auth material. Failures are
+ * cached briefly so requests with unresolvable credentials don't trigger a
+ * platform call each time.
+ * @param requestOrEvent - The H3Event or ServerRequest from the current request
+ * @param resolveDomain - Domain resolver, only overridden in tests
+ */
+export async function tryGetUserTenantDomainFast(
+  requestOrEvent: ServerRequest | H3Event,
+  resolveDomain: (requestOrEvent: ServerRequest | H3Event) => Promise<string> = getUserTenantDomain,
+): Promise<string | undefined> {
+  if (!getCurrentUserTenantCacheKeyMaterial(requestOrEvent)) {
+    return undefined
+  }
+
+  const key = createCurrentUserTenantCacheKey(requestOrEvent)
+  const now = Date.now()
+
+  const cached = fastDomainCache.get(key)
+  if (cached && cached.expiresAt > now) {
+    return cached.domain
+  }
+
+  let domain: string | undefined
+  try {
+    domain = await resolveDomain(requestOrEvent)
+  } catch {
+    domain = undefined
+  }
+
+  if (!fastDomainCache.has(key) && fastDomainCache.size >= FAST_DOMAIN_MAX_ENTRIES) {
+    // Maps iterate in insertion order: dropping the first key evicts the
+    // oldest entry without any bookkeeping.
+    fastDomainCache.delete(fastDomainCache.keys().next().value!)
+  }
+  fastDomainCache.set(key, {
+    domain,
+    expiresAt: now + (domain ? FAST_DOMAIN_SUCCESS_TTL : FAST_DOMAIN_FAILURE_TTL),
+  })
+
+  return domain
+}
+
+/**
+ * Builds the public URL a request is reachable at through the platform proxy:
+ * `https://<tenant domain>/service/<contextPath><pathname><search>`.
+ * The proxy strips the `/service/<contextPath>` prefix before the request
+ * reaches the microservice, so it is re-added here.
+ * @param tenantDomain - Public domain of the tenant (e.g. `tenant.cumulocity.com`)
+ * @param contextPath - Context path of the microservice
+ * @param url - URL the request was received with (only pathname and search are used)
+ */
+export function buildPublicRequestUrl(
+  tenantDomain: string,
+  contextPath: string,
+  url: Pick<URL, 'pathname' | 'search'>,
+): URL {
+  return new URL(`https://${tenantDomain}/service/${contextPath}${url.pathname}${url.search}`)
+}
