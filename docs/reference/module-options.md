@@ -78,14 +78,12 @@ cache?: {
   credentialsTTL?: number
   defaultTenantOptionsTTL?: number
   tenantOptions?: Record<string, number>
-  tenantDomainTTL?: number
 }
 ```
 
 - `credentialsTTL`: TTL for subscribed tenant credentials.
 - `defaultTenantOptionsTTL`: base TTL for tenant options.
 - `tenantOptions`: per-key tenant option TTL overrides.
-- `tenantDomainTTL`: TTL for resolved tenant domains (per tenant ID), used by `useUserTenantDomain()` and the OpenAPI server URL. Defaults to 24 hours.
 
 ## `openapi`
 

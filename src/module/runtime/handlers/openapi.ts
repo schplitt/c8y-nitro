@@ -1,8 +1,9 @@
+import { c8yManifest } from 'c8y-nitro/runtime'
 import { defineMiddleware } from 'nitro'
 import { getRequestURL } from 'nitro/h3'
 import { useRuntimeConfig } from 'nitro/runtime-config'
 import type { H3Event } from 'nitro/h3'
-import { useUserTenantDomain } from '../../../utils/tenant'
+import { getUserTenantDomain } from '../../../utils/internal/tenant'
 
 interface OpenAPIServer {
   url: string
@@ -30,18 +31,16 @@ function joinURLSegments(origin: string, ...segments: (string | undefined)[]): s
 }
 
 async function resolveServer(event: H3Event): Promise<OpenAPIServer> {
-  const runtimeConfig = useRuntimeConfig()
-  const baseURL = (runtimeConfig.app as { baseURL?: string } | undefined)?.baseURL
-  const contextPath = runtimeConfig.c8yContextPath as string | undefined
+  const baseURL = (useRuntimeConfig().app as { baseURL?: string } | undefined)?.baseURL
+  const contextPath = c8yManifest.contextPath ?? c8yManifest.name
 
   // When deployed, the service is reached through the platform proxy under the
   // tenant's public domain at /service/<contextPath> (the proxy strips that
   // prefix, so the service itself only sees internal cluster URLs). Resolve the
-  // public domain through the requesting user's tenant; deployed platform
-  // domains are always served via https.
-  if (runtimeConfig.c8yOpenApiUseTenantDomain && contextPath) {
+  // public domain through the requesting user's tenant.
+  if (!import.meta.dev) {
     try {
-      const domain = await useUserTenantDomain(event)
+      const domain = await getUserTenantDomain(event)
       if (domain) {
         return {
           url: joinURLSegments(`https://${domain}`, 'service', contextPath, baseURL),
@@ -57,7 +56,7 @@ async function resolveServer(event: H3Event): Promise<OpenAPIServer> {
   const requestUrl = getRequestURL(event, { xForwardedHost: true, xForwardedProto: true })
 
   // Fallback for proxied requests that carry forwarding headers.
-  if (event.req.headers.has('x-forwarded-host') && contextPath) {
+  if (event.req.headers.has('x-forwarded-host')) {
     return {
       url: joinURLSegments(requestUrl.origin, 'service', contextPath, baseURL),
       description: 'Cumulocity microservice endpoint',
@@ -81,7 +80,7 @@ export default defineMiddleware(async (event, next) => {
 
   // Registered globally (nitro can't route-scope middleware yet), so bail out
   // for everything that isn't the OpenAPI document route.
-  const specRoute = (runtimeConfig.c8yOpenApiRoute ?? '/_openapi.json') as string
+  const specRoute = (runtimeConfig as { nitro?: { openAPI?: { route?: string } } }).nitro?.openAPI?.route || '/_openapi.json'
   const baseURL = ((runtimeConfig.app as { baseURL?: string } | undefined)?.baseURL ?? '/').replace(/\/+$/, '')
   if (event.url.pathname !== `${baseURL}${specRoute}`) {
     return next()
@@ -94,7 +93,6 @@ export default defineMiddleware(async (event, next) => {
   }
 
   const excludedPrefixes = (runtimeConfig.c8yOpenApiExcludeRoutes ?? []) as string[]
-
   if (body.paths && excludedPrefixes.length > 0) {
     body.paths = Object.fromEntries(
       Object.entries(body.paths).filter(([path]) => !excludedPrefixes.some((prefix) => path.startsWith(prefix))),

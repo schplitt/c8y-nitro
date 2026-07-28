@@ -15,13 +15,6 @@ export interface C8yCacheOptions {
   defaultTenantOptionsTTL?: number
 
   /**
-   * Cache TTL for resolved tenant domains in seconds (per tenant ID).
-   * Tenant domains rarely change, so a long TTL is safe.
-   * @default 86400 (24 hours)
-   */
-  tenantDomainTTL?: number
-
-  /**
    * Per-key cache TTL overrides for tenant options in seconds.
    * Keys should match those defined in `manifest.settings[].key`.
    * @example

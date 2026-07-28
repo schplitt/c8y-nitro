@@ -69,7 +69,7 @@ The middleware rewrites `servers` to the public endpoint of the requesting user'
 }
 ```
 
-The tenant domain is resolved through the requesting user's client via `/tenant/currentTenant` (see [`useUserTenantDomain()`](/reference/utilities#tenant)) and cached per tenant ID for 24 hours by default (configurable via [`cache.tenantDomainTTL`](/reference/module-options#cache)). Because the lookup uses the requesting user's credentials, subscribed tenants each see their own domain.
+The tenant domain is resolved through the requesting user's client via `/tenant/currentTenant` and cached per tenant ID for 24 hours. Because the lookup uses the requesting user's credentials, subscribed tenants each see their own domain. The context path comes from the manifest (`contextPath`, falling back to the package name).
 
 If the domain cannot be resolved (for example an unauthenticated request), the middleware falls back to deriving the URL from `X-Forwarded-Proto`/`X-Forwarded-Host` headers, and finally to the plain request origin.
 

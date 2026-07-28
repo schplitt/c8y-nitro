@@ -66,7 +66,6 @@ export declare function useUserClient(_: ServerRequest | H3Event): Client;
 export declare function useUserRoles(_: ServerRequest | H3Event): Promise<string[]>;
 export declare function useUserTenantClient(_: ServerRequest | H3Event): Promise<Client>;
 export declare function useUserTenantCredentials(_: ServerRequest | H3Event): Promise<ICredentials>;
-export declare function useUserTenantDomain(_: ServerRequest | H3Event): Promise<string>;
 // #endregion
 
 // #region Variables

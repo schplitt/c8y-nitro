@@ -135,14 +135,6 @@ These are the usual entry points when your route logic needs to know who is call
 
 These helpers are useful when you want the raw platform client but do not want to rebuild authentication context resolution by hand.
 
-## Tenant
-
-| Function                | Description                                            | Request Context |
-| ----------------------- | ------------------------------------------------------ | :-------------: |
-| `useUserTenantDomain()` | Resolve the public domain of the current user's tenant |       ✅        |
-
-The domain is resolved via `/tenant/currentTenant` with the requesting user's credentials and cached per tenant ID (default: 24 hours, configurable via `cache.tenantDomainTTL` or `NITRO_C8Y_TENANT_DOMAIN_CACHE_TTL`). It is also used to build the public server URL of the served [OpenAPI document](/guide/openapi).
-
 ## Middleware
 
 | Function                                   | Description                                           | Request Context |

@@ -17,7 +17,6 @@ export default defineNitroConfig({
         'myOption': 300, // Per-key override: 5 minutes
         'credentials.secret': 60, // Per-key override: 1 minute
       },
-      tenantDomainTTL: 86400, // Cache resolved tenant domains for 24 hours (in seconds)
     }
   },
   modules: [c8y()],
@@ -41,7 +40,6 @@ You can also override these at runtime using environment variables:
 ```sh
 NITRO_C8Y_CREDENTIALS_CACHE_TTL=300
 NITRO_C8Y_DEFAULT_TENANT_OPTIONS_TTL=300
-NITRO_C8Y_TENANT_DOMAIN_CACHE_TTL=86400
 ```
 
 > **Note**: The credentials cache is used by `useSubscribedTenantCredentials()` and `useDeployedTenantCredentials()` utilities. Both share the same cache.

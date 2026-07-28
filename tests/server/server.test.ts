@@ -1041,7 +1041,7 @@ describe('Nitro Server', () => {
     })
   })
 
-  describe('OpenAPI transformation (tenant domain)', () => {
+  describe('OpenAPI transformation', () => {
     let nitro: Awaited<ReturnType<typeof createNitro>>
     let devServer: ReturnType<typeof createDevServer>
     let server: Awaited<ReturnType<ReturnType<typeof createDevServer>['listen']>>
@@ -1052,9 +1052,6 @@ describe('Nitro Server', () => {
         env: completeEnv,
         nitroConfig: {
           experimental: { openAPI: true },
-          // Force the deployed behavior (tenant domain lookup); in dev it
-          // defaults to request-origin resolution.
-          runtimeConfig: { c8yOpenApiUseTenantDomain: true },
           c8y: {
             skipBootstrap: true,
             enableTenantOptionsInvalidationRoute: true,
@@ -1062,10 +1059,6 @@ describe('Nitro Server', () => {
               excludeRoutes: ['/mock-tenant-option'],
             },
           },
-        },
-        mockData: {
-          subscriptions: [{ tenant: completeEnv.C8Y_DEVELOPMENT_TENANT, user: 'serviceUser', password: 'servicePassword' }],
-          tenantDomains: { [completeEnv.C8Y_DEVELOPMENT_TENANT]: 'tenant.example.cumulocity.com' },
         },
       })
       nitro = result.nitro
@@ -1098,43 +1091,9 @@ describe('Nitro Server', () => {
       expect(paths).toContain('/hello')
     })
 
-    it('should advertise the public tenant domain as server URL', async () => {
-      const res = await server.fetch(new Request(new URL('/_openapi.json', server.url)))
-      const spec = await res.json() as Record<string, any>
-
-      // contextPath resolves to the repo package name (fixture has no own package.json)
-      expect(spec.servers).toEqual([{
-        url: 'https://tenant.example.cumulocity.com/service/c8y-nitro',
-        description: 'Cumulocity microservice endpoint',
-      }])
-    })
-  })
-
-  describe('OpenAPI transformation (request origin fallback)', () => {
-    let nitro: Awaited<ReturnType<typeof createNitro>>
-    let devServer: ReturnType<typeof createDevServer>
-    let server: Awaited<ReturnType<ReturnType<typeof createDevServer>['listen']>>
-    let env: Record<string, string>
-
-    beforeAll(async () => {
-      const result = await createC8yNitroServer({
-        env: completeEnv,
-        nitroConfig: {
-          experimental: { openAPI: true },
-        },
-      })
-      nitro = result.nitro
-      devServer = result.devServer
-      server = result.server
-      env = result.env
-    })
-
-    afterAll(async () => {
-      for (const key of Object.keys(env)) {
-        delete process.env[key]
-      }
-      await devServer?.close()
-      await nitro?.close()
+    it('should not transform other routes', async () => {
+      const res = await server.fetch(new Request(new URL('/hello', server.url)))
+      expect(res.status).toEqual(200)
     })
 
     it('should advertise the request origin in dev', async () => {
