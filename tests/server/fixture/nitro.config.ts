@@ -9,7 +9,6 @@ export default defineNitroConfig({
 
   experimental: {
     asyncContext: true,
-    tasks: true,
   },
 
   c8y: {

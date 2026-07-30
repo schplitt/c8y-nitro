@@ -134,7 +134,7 @@ describe('Nitro Server', () => {
       expect(res2.status).toEqual(200)
     })
 
-    it.sequential('should run a scheduled task after its delay', async () => {
+    it.sequential('should run a one-shot job after its delay', async () => {
       const marker = `marker-${Date.now()}`
       const logs: string[] = []
       const mockFn = vi.fn((context: unknown) => {
@@ -145,28 +145,33 @@ describe('Nitro Server', () => {
       consola.wrapAll()
 
       try {
-        const res = await server.fetch(new Request(new URL(`/schedule-task?marker=${marker}&schedule=0.2`, server.url)))
+        const res = await server.fetch(new Request(new URL(`/schedule-job?marker=${marker}&schedule=0.2`, server.url)))
 
         expect(res.status).toEqual(200)
 
         const json = await res.json() as Record<string, any>
-        expect(json.scheduled).toEqual({
-          id: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/),
-          task: 'scheduler:log',
-          runAt: expect.any(String),
+        expect(json.job).toEqual({
+          name: `log-${marker}`,
+          task: 'log',
+          kind: 'once',
+          concurrency: 'single',
+          cron: null,
+          nextRun: expect.any(String),
+          running: false,
         })
-        expect(json.pending[json.scheduled.id]).toEqual(json.scheduled)
+        expect(json.jobs).toContainEqual(json.job)
         expect(logs.join('\n')).not.toContain(`scheduled-task:${marker}`)
 
-        const waitMs = Math.max(new Date(json.scheduled.runAt).getTime() - Date.now(), 0) + 2_000
+        const waitMs = Math.max(new Date(json.job.nextRun).getTime() - Date.now(), 0) + 2_000
         await new Promise<void>((resolve) => {
           setTimeout(() => resolve(), waitMs)
         })
-        const listRes = await server.fetch(new Request(new URL('/scheduled-tasks', server.url)))
+        const listRes = await server.fetch(new Request(new URL('/jobs', server.url)))
         expect(listRes.status).toEqual(200)
 
         const listJson = await listRes.json() as Record<string, any>
-        expect(listJson.pending).not.toHaveProperty(json.scheduled.id)
+        // One-shot jobs remove themselves after running.
+        expect(listJson.jobs.map((job: Record<string, any>) => job.name)).not.toContain(`log-${marker}`)
 
         expect(logs.join('\n')).toContain(`scheduled-task:${marker}`)
       } finally {
@@ -174,11 +179,11 @@ describe('Nitro Server', () => {
       }
     })
 
-    it.sequential('should run same-named tasks in parallel when their execution windows overlap', async () => {
-      // Task 1 fires at +1 s, task 2 fires at +1.3 s — both sleep 700 ms so
-      // they overlap from 1.3 s to 2 s.  With Nitro's runTask() the second
-      // call would be silently deduplicated (name-only lock); our direct
-      // handler resolution must let both complete with their own payload.
+    it.sequential('should run distinct jobs of the same task in parallel when their windows overlap', async () => {
+      // Job 1 fires at +1 s, job 2 at +1.3 s — both run the same `sleep-log`
+      // task with different payloads and overlap from 1.3 s to 2 s. Distinct
+      // jobs are always independent, so both must complete with their own
+      // marker (Nitro's name-only runTask() dedup could not do this).
       const marker = `parallel-${Date.now()}`
       const logs: string[] = []
       const mockFn = vi.fn((context: unknown) => {
@@ -193,21 +198,18 @@ describe('Nitro Server', () => {
         expect(res.status).toEqual(200)
 
         const json = await res.json() as Record<string, any>
-        expect(json.task1).toMatchObject({ task: 'scheduler:sleep-log' })
-        expect(json.task2).toMatchObject({ task: 'scheduler:sleep-log' })
+        expect(json.job1).toMatchObject({ name: `sleep-${marker}-1`, task: 'sleep-log' })
+        expect(json.job2).toMatchObject({ name: `sleep-${marker}-2`, task: 'sleep-log' })
 
         // Neither marker logged yet
         expect(logs.join('\n')).not.toContain(`sleep-log:${marker}-1`)
         expect(logs.join('\n')).not.toContain(`sleep-log:${marker}-2`)
 
-        // Wait until both tasks have completed: 1.3 s schedule + 0.7 s sleep + 1 s buffer
+        // Wait until both jobs have completed: 1.3 s schedule + 0.7 s sleep + 1 s buffer
         await new Promise<void>((resolve) => {
           setTimeout(resolve, 3_000)
         })
 
-        // Both markers must appear — if the old runTask() dedup were still in
-        // effect, task2 would have been silently dropped and only marker-1 would
-        // be present.
         expect(logs.join('\n')).toContain(`sleep-log:${marker}-1`)
         expect(logs.join('\n')).toContain(`sleep-log:${marker}-2`)
       } finally {
@@ -215,13 +217,8 @@ describe('Nitro Server', () => {
       }
     }, 10_000)
 
-    it.sequential('should confirm Nitro runTask() silently drops same-named concurrent calls', async () => {
-      // This is a regression-guard that documents the Nitro behaviour we work
-      // around. runTask() deduplicates by task name: the second concurrent call
-      // returns the first call’s promise and never invokes the handler with its
-      // own payload. Only marker-1 must appear; marker-2 must NOT appear.
-      // See: https://github.com/nitrojs/nitro/issues/3448
-      const marker = `runtask-${Date.now()}`
+    it.sequential('should not run a cancelled job', async () => {
+      const marker = `cancel-${Date.now()}`
       const logs: string[] = []
       const mockFn = vi.fn((context: unknown) => {
         logs.push(String(context))
@@ -231,25 +228,22 @@ describe('Nitro Server', () => {
       consola.wrapAll()
 
       try {
-        const res = await server.fetch(new Request(new URL(`/runtask-parallel?marker=${marker}`, server.url)))
+        const res = await server.fetch(new Request(new URL(`/cancel-job?marker=${marker}`, server.url)))
         expect(res.status).toEqual(200)
 
         const json = await res.json() as Record<string, any>
-        // The route itself reports whether both promises resolved to the same object
-        expect(json.deduplicated).toBe(true)
+        expect(json.cancelled).toBe(true)
+        expect(json.jobs.map((job: Record<string, any>) => job.name)).not.toContain(`cancel-${marker}`)
 
-        // Wait for the (single) task to finish: 50 ms yield + 700 ms sleep + buffer
         await new Promise<void>((resolve) => {
-          setTimeout(resolve, 1_500)
+          setTimeout(resolve, 2_000)
         })
 
-        // marker-1 ran; marker-2 was swallowed by the dedup lock
-        expect(logs.join('\n')).toContain(`sleep-log:${marker}-1`)
-        expect(logs.join('\n')).not.toContain(`sleep-log:${marker}-2`)
+        expect(logs.join('\n')).not.toContain(`scheduled-task:${marker}`)
       } finally {
         consola.restoreAll()
       }
-    }, 10_000)
+    })
   })
 
   describe('With dev user injection disabled', () => {
@@ -1005,39 +999,6 @@ describe('Nitro Server', () => {
       } finally {
         consola.restoreAll()
       }
-    })
-  })
-
-  describe('With tasks disabled', () => {
-    let nitro: Awaited<ReturnType<typeof createNitro>>
-    let devServer: ReturnType<typeof createDevServer>
-    let server: Awaited<ReturnType<ReturnType<typeof createDevServer>['listen']>>
-    let env: Record<string, string>
-
-    beforeAll(async () => {
-      const result = await createC8yNitroServer({
-        env: completeEnv,
-        nitroConfig: {
-          experimental: { tasks: false },
-        },
-      })
-      nitro = result.nitro
-      devServer = result.devServer
-      server = result.server
-      env = result.env
-    })
-
-    afterAll(async () => {
-      for (const key of Object.keys(env)) {
-        delete process.env[key]
-      }
-      await devServer?.close()
-      await nitro?.close()
-    })
-
-    it('should throw when scheduleTask() is called with tasks disabled', async () => {
-      const res = await server.fetch(new Request(new URL('/schedule-task?marker=probe&schedule=1', server.url)))
-      expect(res.status).toEqual(500)
     })
   })
 
