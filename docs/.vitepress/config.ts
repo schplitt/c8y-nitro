@@ -47,7 +47,7 @@ export default defineConfig({
           { text: 'Auth Middleware', link: '/guide/auth-middleware' },
           { text: 'Tenant Options', link: '/guide/tenant-options' },
           { text: 'Cache Configuration', link: '/guide/cache' },
-          { text: 'Scheduled Tasks', link: '/guide/scheduled-tasks' },
+          { text: 'Tasks & Scheduling', link: '/guide/scheduled-tasks' },
           { text: 'Zip Creation', link: '/guide/zip-creation' },
           { text: 'API Client Generation', link: '/guide/api-client' },
           { text: 'OpenAPI', link: '/guide/openapi' },

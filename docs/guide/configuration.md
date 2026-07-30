@@ -81,7 +81,7 @@ Adds a debug route that invalidates tenant option caches in development or troub
 - Use a Node preset such as `node-server` or `node-cluster`.
 - Prefer `builder: 'rolldown'` for faster builds.
 - Enable `experimental.asyncContext` if you want to avoid threading the request through deep helper stacks.
-- Enable `experimental.tasks` if you want to use the task scheduling utilities.
+- Task scheduling is self-contained — the `c8yTasks()` registry needs no `experimental.tasks` flag.
 
 ## Where To Go Next
 

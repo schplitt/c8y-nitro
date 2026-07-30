@@ -55,7 +55,7 @@ On build, it can generate the manifest, build the Docker image, and emit the dep
 
 ### Runtime utilities
 
-At runtime, it gives you helpers for user context, credentials, tenant options, authorization checks, structured logging, and one-shot task scheduling.
+At runtime, it gives you helpers for user context, credentials, tenant options, authorization checks, structured logging, and runtime task scheduling (one-shot and recurring).
 
 ### Typed surface
 

@@ -15,9 +15,9 @@ Most helpers that depend on request context accept either an `H3Event` or `Serve
 - Start with `Resources` and `Client` if you are writing route handlers.
 - Use `Credentials` and `Tenant Options` for cross-tenant or configuration-aware logic.
 - Use `Middleware` when you want route-level access control.
-- Use `Scheduled Tasks` when work should happen later instead of inline with a request.
+- Use `Tasks & Scheduling` when work should happen later instead of inline with a request.
 
-For longer examples, see [Tenant Options](/guide/tenant-options), [Auth Middleware](/guide/auth-middleware), and [Scheduled Tasks](/guide/scheduled-tasks).
+For longer examples, see [Tenant Options](/guide/tenant-options), [Auth Middleware](/guide/auth-middleware), and [Tasks & Scheduling](/guide/scheduled-tasks).
 
 ## Credentials
 
@@ -105,15 +105,19 @@ await useTenantOptions.refreshAll()
 
 `invalidateAll()` / `refreshAll()` only touch keys already read in the current process.
 
-## Scheduled Tasks
+## Tasks & Scheduling
 
-| Function                | Description                              |
-| ----------------------- | ---------------------------------------- |
-| `scheduleTask()`        | Schedule a Nitro task once in the future |
-| `listScheduledTasks()`  | List pending scheduled tasks by UUID     |
-| `cancelScheduledTask()` | Cancel a pending scheduled task          |
+| Function                           | Description                                                      |
+| ---------------------------------- | ---------------------------------------------------------------- |
+| `c8yTasks()`                       | Create a type-charged task registry                              |
+| `registry.createTask()`            | Register a task (function) under a compile-time name             |
+| `registry.run()`                   | Run a task immediately, ad-hoc                                   |
+| `registry.scheduleJob()`           | Schedule a named job (once via `{ in }`/`{ at }`, or `{ cron }`) |
+| `registry.triggerJob()`            | Run an existing job now, respecting its concurrency              |
+| `registry.listJobs()` / `getJob()` | Inspect registered jobs                                          |
+| `registry.cancelJob()`             | Cancel a job by name                                             |
 
-The scheduler is built on Nitro tasks and supports `number`, `string`, or `Date` schedules.
+Scheduling is runtime-only and self-contained (no Nitro tasks required). See [Tasks & Scheduling](/guide/scheduled-tasks) for the full model, concurrency, and cron details.
 
 ## Resources
 
