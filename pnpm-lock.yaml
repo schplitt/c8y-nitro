@@ -42,6 +42,9 @@ catalogs:
     evlog:
       specifier: ^2.21.0
       version: 2.21.0
+    itty-time:
+      specifier: ^2.0.2
+      version: 2.0.2
     jszip:
       specifier: ^3.10.1
       version: 3.10.1
@@ -101,6 +104,9 @@ importers:
       evlog:
         specifier: 'catalog:'
         version: 2.21.0(express@5.2.1)(hono@4.12.8)(nitro@3.0.260429-beta(chokidar@5.0.0)(dotenv@17.3.1)(giget@2.0.0)(jiti@2.6.1)(lru-cache@11.2.7)(rollup@4.60.4)(vite@8.0.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@24.12.3)(esbuild@0.27.7)(jiti@2.6.1)(yaml@2.9.0)))(ofetch@1.5.1)(vite@8.0.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@24.12.3)(esbuild@0.27.7)(jiti@2.6.1)(yaml@2.9.0))
+      itty-time:
+        specifier: 'catalog:'
+        version: 2.0.2
       jszip:
         specifier: 'catalog:'
         version: 3.10.1
@@ -3340,6 +3346,9 @@ packages:
     peerDependencies:
       cometd: '>= 3.1.4'
       cometd-nodejs-client: '>= 1.0.2'
+
+  itty-time@2.0.2:
+    resolution: {integrity: sha512-95U9Xo3Qggz/e82ewZQJw8x76HgiMvbrijzoPy6nCTae4FZEwbcVJgrB57Kvddf8Q5pQdgJKTX6euFJpDr6Low==}
 
   jiti@1.21.7:
     resolution: {integrity: sha512-/imKNG4EbWNrVjoNC/1H5/9GFy+tqjGBHCaSsN+P2RnPqjsLmv6UD3Ej+Kj8nBWaRAwyk7kK5ZUc+OEatnTR3A==}
@@ -8060,6 +8069,8 @@ snapshots:
     dependencies:
       cometd: 4.0.8
       cometd-nodejs-client: 1.0.2
+
+  itty-time@2.0.2: {}
 
   jiti@1.21.7: {}
 

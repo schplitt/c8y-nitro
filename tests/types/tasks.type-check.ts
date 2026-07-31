@@ -21,11 +21,13 @@ export function taskRegistryTypeChecks() {
   // Known task names are accepted.
   const recurring = tasks.scheduleJob({ name: 'sync-abc', task: 'sync', payload: { configId: 'abc' }, schedule: { cron: '*/5 * * * *' } })
   const once = tasks.scheduleJob({ name: 'sync-later', task: 'sync', payload: { configId: 'abc' }, schedule: { in: 30 } })
+  const onceIn = tasks.scheduleJob({ name: 'sync-in', task: 'sync', payload: { configId: 'abc' }, schedule: { in: '5 minutes' } })
   const onceAt = tasks.scheduleJob({ name: 'sync-at', task: 'sync', payload: { configId: 'abc' }, schedule: { at: '2026-01-01T00:00:00Z' } })
 
   // Return type is inferred from the schedule shape.
   const _recurringIsRecurring: Expect<typeof recurring, RecurringJobInfo> = true
   const _onceIsOnce: Expect<typeof once, OnceJobInfo> = true
+  const _onceInIsOnce: Expect<typeof onceIn, OnceJobInfo> = true
   const _onceAtIsOnce: Expect<typeof onceAt, OnceJobInfo> = true
 
   // A recurring job exposes cron/timezone/nextRuns; a one-shot job's cron is null.
@@ -51,5 +53,5 @@ export function taskRegistryTypeChecks() {
   // @ts-expect-error 'sync' is already registered
   tasks.createTask('sync', () => 1)
 
-  return { recurring, once, onceAt, result, _recurringIsRecurring, _onceIsOnce, _onceAtIsOnce, _cron, _timezone, _nextRuns, _noCron }
+  return { recurring, once, onceIn, onceAt, result, _recurringIsRecurring, _onceIsOnce, _onceInIsOnce, _onceAtIsOnce, _cron, _timezone, _nextRuns, _noCron }
 }

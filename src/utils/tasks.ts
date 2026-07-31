@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-empty-object-type */
 import type { TaskContext, TaskPayload } from 'nitro/types'
 import { Cron } from 'croner'
+import { ms } from 'itty-time'
 
 /**
  * Concurrency policy for a single job.
@@ -47,14 +48,15 @@ export type TaskHandler<TPayload = TaskRegistryPayload, TResult = unknown>
  * When a job should run.
  * - `{ cron }`: recurring on a cron expression. 5- or 6-field (with seconds) is
  *   supported. Evaluated in UTC by default, or in the job's `timezone` if set.
- * - `{ in }`: one-shot, `in` seconds from now.
+ * - `{ in }`: one-shot, from now — either a number of seconds (`{ in: 30 }`) or a
+ *   human duration string (`{ in: '5 minutes' }`, `{ in: '1 hour' }`).
  * - `{ at }`: one-shot, at an exact instant given as a `Date` or ISO 8601 string,
  *   taken literally (never re-projected to another timezone). Times in the past
  *   fire almost immediately.
  */
 export type JobSchedule
   = | { cron: string }
-    | { in: number }
+    | { in: number | string }
     | { at: Date | string }
 
 /**
@@ -283,8 +285,16 @@ export interface TaskRegistry<TTasks extends TaskMap = {}> {
   hasTask: (name: string) => boolean
 }
 
-function resolveOnceDate(schedule: { in: number } | { at: Date | string }): Date {
+function resolveOnceDate(schedule: { in: number | string } | { at: Date | string }): Date {
   if ('in' in schedule) {
+    // String → human duration (e.g. "5 minutes"); number → seconds from now.
+    if (typeof schedule.in === 'string') {
+      const delay = ms(schedule.in)
+      if (!Number.isFinite(delay) || delay < 0) {
+        throw new TypeError(`schedule.in must be a valid duration string (e.g. "5 minutes"), got "${schedule.in}"`)
+      }
+      return new Date(Date.now() + delay)
+    }
     if (!Number.isFinite(schedule.in) || schedule.in < 0) {
       throw new TypeError('schedule.in must be a non-negative number of seconds')
     }

@@ -53,6 +53,7 @@ await tasks.run('sync', { payload: { configId: 'abc' } })
 | Schedule              | Meaning                                                             |
 | --------------------- | ------------------------------------------------------------------- |
 | `{ in: 30 }`          | Once, 30 seconds from now                                           |
+| `{ in: '5 minutes' }` | Once, after a human duration from now (e.g. `'1 hour'`, `'2 days'`) |
 | `{ at: Date \| ISO }` | Once, at an exact instant (taken literally, no timezone conversion) |
 | `{ cron: '...' }`     | Recurring on a 5- or 6-field cron expression                        |
 
@@ -67,12 +68,20 @@ tasks.scheduleJob({
   schedule: { cron: '*/5 * * * *' },
 })
 
-// run once, later
+// run once, later — seconds…
 tasks.scheduleJob({
   name: 'cleanup-run',
   task: 'sync',
   payload: { configId: 'def' },
   schedule: { in: 300 },
+})
+
+// …or a human duration
+tasks.scheduleJob({
+  name: 'reminder',
+  task: 'sync',
+  payload: { configId: 'def' },
+  schedule: { in: '5 minutes' },
 })
 ```
 
