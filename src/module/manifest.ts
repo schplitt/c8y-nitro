@@ -9,6 +9,14 @@ const DEFAULT_OPENAPI_ROUTE = '/_openapi.json'
 const ROLE_OPTION_MANAGEMENT_READ = 'ROLE_OPTION_MANAGEMENT_READ'
 
 /**
+ * Cumulocity microservice name constraints: lowercase letters, digits and
+ * hyphens only, 1-23 characters. Enforced by the platform on upload, so we
+ * fail early with a clear message instead of a cryptic API rejection.
+ * @see https://github.com/schplitt/c8y-nitro/issues/75
+ */
+const MICROSERVICE_NAME_REGEX = /^[a-z0-9-]{1,23}$/
+
+/**
  * Subset of Nitro configuration consumed by manifest generation. Defined as a
  * structural type so it works with `NitroConfig`, `NitroOptions`, and partial
  * objects from CLI config loading or tests.
@@ -99,6 +107,14 @@ async function readPackageJsonFieldsForManifest(
 
   if (!name || !version || !authorName) {
     throw new Error('package.json must contain name, version, and author name fields')
+  }
+
+  if (!MICROSERVICE_NAME_REGEX.test(name)) {
+    throw new Error(
+      `Invalid microservice name "${name}". Cumulocity requires the name to match ${MICROSERVICE_NAME_REGEX.source} `
+      + '(lowercase letters, digits and hyphens only, 1-23 characters). '
+      + 'Adjust the "name" field in package.json accordingly (scope like "@org/" is stripped and does not count).',
+    )
   }
 
   const support = typeof pkg.bugs === 'string' ? pkg.bugs : pkg.bugs?.url ?? pkg.bugs?.email
