@@ -373,6 +373,69 @@ describe('manifest generation', () => {
         .toThrow('package.json must contain name, version, and author name fields')
     })
 
+    describe('microservice name validation', () => {
+      it('should throw when the name is longer than 23 characters', async () => {
+        mockPackageData.current = {
+          name: 'this-microservice-name-is-way-too-long',
+          version: '1.0.0',
+          author: 'Test Author',
+        }
+
+        await expect(createC8yManifest('/project'))
+          .rejects
+          .toThrow(/Invalid microservice name "this-microservice-name-is-way-too-long"/)
+      })
+
+      it('should throw when the name contains uppercase letters', async () => {
+        mockPackageData.current = {
+          name: 'My-Service',
+          version: '1.0.0',
+          author: 'Test Author',
+        }
+
+        await expect(createC8yManifest('/project'))
+          .rejects
+          .toThrow(/Invalid microservice name "My-Service"/)
+      })
+
+      it('should throw when the name contains invalid characters', async () => {
+        mockPackageData.current = {
+          name: 'my_service!',
+          version: '1.0.0',
+          author: 'Test Author',
+        }
+
+        await expect(createC8yManifest('/project'))
+          .rejects
+          .toThrow(/Invalid microservice name "my_service!"/)
+      })
+
+      it('should validate the scope-stripped name, not the full package name', async () => {
+        mockPackageData.current = {
+          // Full name > 23 chars, but the stripped name "my-service" is valid.
+          name: '@a-very-long-organization-scope/my-service',
+          version: '1.0.0',
+          author: 'Test Author',
+        }
+
+        const manifest = await createC8yManifest('/project')
+
+        expect(manifest.name).toBe('my-service')
+      })
+
+      it('should accept a name at the 23-character boundary', async () => {
+        mockPackageData.current = {
+          name: 'a2345678901234567890123',
+          version: '1.0.0',
+          author: 'Test Author',
+        }
+
+        const manifest = await createC8yManifest('/project')
+
+        expect(manifest.name).toBe('a2345678901234567890123')
+      })
+    })
+
     it('should produce complete manifest structure', async () => {
       mockPackageData.current = {
         name: '@scope/test-microservice',
