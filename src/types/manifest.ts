@@ -1,3 +1,5 @@
+import type { C8YRole } from './roles'
+
 export type C8YManifestOptions = Omit<C8YManifest, 'name' | 'version' | 'apiVersion' | 'key' | 'type' | 'provider' | 'openApiSpec'>
 
 export interface C8YManifest {
@@ -103,7 +105,7 @@ export interface C8YManifest {
    * Needed to access Cumulocity APIs (inventory, alarms, etc.).
    * @example ["ROLE_ALARM_READ", "ROLE_INVENTORY_ADMIN"]
    */
-  requiredRoles?: string[]
+  requiredRoles?: C8YRole[]
 
   /**
    * New permissions provided by this microservice.

@@ -40,6 +40,7 @@
   ],
   "scripts": {
     "dev": "tsdown --watch",
+    "gen:roles": "node scripts/generate-roles.ts",
     "build": "tsdown",
     "build:update": "tsdown --update-snapshot",
     "lint": "eslint",
