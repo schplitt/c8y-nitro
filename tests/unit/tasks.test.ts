@@ -158,9 +158,24 @@ describe('c8yTasks registry', () => {
     })
   })
 
+  it('accepts a human duration string for `in`', () => {
+    const tasks = c8yTasks().createTask('a', () => 1)
+
+    const before = Date.now()
+    const info = tasks.scheduleJob({ name: 'j', task: 'a', schedule: { in: '2 hours' } })
+    expect(info.kind).toBe('once')
+    // Fires ~2h out, so it stays safely pending and inspectable.
+    const delta = new Date(info.nextRun as string).getTime() - before
+    expect(delta).toBeGreaterThan(2 * 60 * 60 * 1000 - 60_000)
+    expect(delta).toBeLessThan(2 * 60 * 60 * 1000 + 60_000)
+
+    tasks.cancelJob('j')
+  })
+
   it('validates one-shot schedule inputs', () => {
     const tasks = c8yTasks().createTask('a', () => 1)
     expect(() => tasks.scheduleJob({ name: 'j1', task: 'a', schedule: { in: -1 } })).toThrow(/non-negative/)
     expect(() => tasks.scheduleJob({ name: 'j2', task: 'a', schedule: { at: 'not-a-date' } })).toThrow(/valid Date or ISO/)
+    expect(() => tasks.scheduleJob({ name: 'j3', task: 'a', schedule: { in: 'soon' } })).toThrow(/valid duration string/)
   })
 })

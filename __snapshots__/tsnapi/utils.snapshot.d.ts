@@ -95,7 +95,7 @@ export type JobInfoFor<TSchedule extends JobSchedule> = TSchedule extends {
 export type JobSchedule = {
   cron: string;
 } | {
-  in: number;
+  in: number | string;
 } | {
   at: Date | string;
 };
