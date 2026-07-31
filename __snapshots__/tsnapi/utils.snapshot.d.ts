@@ -20,6 +20,10 @@ export interface OnceJobInfo extends BaseJobInfo {
   kind: 'once';
   cron: null;
 }
+export interface PagingOptions {
+  maxPages?: number;
+  maxItems?: number;
+}
 export interface RecurringJobInfo extends BaseJobInfo {
   kind: 'recurring';
   cron: string;
@@ -99,6 +103,7 @@ export type JobSchedule = {
 } | {
   at: Date | string;
 };
+export type PageSource<T> = IResultList<T> | Promise<IResultList<T>> | (() => IResultList<T> | Promise<IResultList<T>>);
 export type TaskHandler<TPayload = TaskRegistryPayload, TResult = unknown> = (_: TaskEvent<TPayload>) => TResult | Promise<TResult>;
 export type TaskMap = Record<string, TaskShape>;
 export type TaskRegistryContext = TaskContext;
@@ -108,11 +113,14 @@ export type TenantOptionKeyInput = C8YTenantOptionKey | (string & {});
 
 // #region Functions
 export declare function c8yTasks(): TaskRegistry;
+export declare function fetchAllPages<T>(_: PageSource<T>, _?: PagingOptions): Promise<T[]>;
 export declare function hasUserRequiredRole(_: UserRole): EventHandler;
 export declare function hasUserRequiredRole(_: UserRole[]): EventHandler;
 export declare function isUserFromAllowedTenant(_: string): EventHandler;
 export declare function isUserFromAllowedTenant(_: string[]): EventHandler;
 export declare function isUserFromDeployedTenant(): EventHandler;
+export declare function paginate<T>(_: PageSource<T>, _?: PagingOptions): AsyncGenerator<T>;
+export declare function paginatePages<T>(_: PageSource<T>, _?: PagingOptions): AsyncGenerator<T[]>;
 export declare function useDeployedTenantClient(): Promise<Client>;
 export declare function useLogger<T extends object = Record<string, unknown>>(_: HTTPEvent | ServerRequest, _?: string): import("evlog").AuditableLogger<T>;
 export declare function useSubscribedTenantClients(): Promise<Record<string, Client>>;
