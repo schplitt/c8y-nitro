@@ -1,14 +1,16 @@
 import { defineHandler } from 'nitro/h3'
 import type { EventHandler } from 'nitro/h3'
-import type { C8YRoles } from 'c8y-nitro/types'
+import type { C8YRole, C8YRoles } from 'c8y-nitro/types'
 import { c8yManifest } from 'c8y-nitro/runtime'
 import { createError } from './logging'
 import { useUserRoles } from './resources'
 import { getCurrentUserTenantId } from './internal/tenant'
 import process from 'node:process'
 
-// allow any string as role for extensibility
-type UserRole = keyof C8YRoles | (string & {})
+// A role the calling user may hold: a role this microservice defines
+// (`keyof C8YRoles`), a known platform role from the c8y spec (`C8YKnownRole`,
+// via `C8YRole`), or — as an escape hatch — any other string.
+type UserRole = keyof C8YRoles | C8YRole
 
 const probePaths = [
   c8yManifest.livenessProbe?.httpGet?.path,

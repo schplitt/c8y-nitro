@@ -137,7 +137,29 @@ pnpm test:run      # Run tests once (non-watch mode)
 pnpm lint          # Lint with ESLint
 pnpm lint:fix      # Lint and auto-fix
 pnpm typecheck     # TypeScript type checking
+pnpm gen:roles     # Regenerate the known-role type from the c8y OpenAPI spec
 ```
+
+### Generating role types (`gen:roles`)
+
+`src/types/roles.generated.ts` holds `C8YKnownRole` — a union of the Cumulocity
+platform roles (`ROLE_*`) parsed from the public core OpenAPI spec. It powers
+autocomplete for `manifest.requiredRoles` and for `hasUserRequiredRole(...)` in
+the middleware, while `(string & {})` still allows any unknown role.
+
+This file is **generated, not hand-edited** — that's easy to miss when starting
+out. To refresh it after the platform adds/removes roles:
+
+```sh
+pnpm gen:roles                          # fetch the live spec
+pnpm gen:roles -- --file ./c8y-oas.json # or parse a local spec (offline)
+```
+
+The script lives at `scripts/generate-roles.ts` and runs directly on Node
+(no build step). A scheduled GitHub workflow (`.github/workflows/generate-roles.yml`)
+runs it weekly and opens a PR when the roles change, so manual runs are only
+needed when you want an update sooner. Regenerating changes the public API, so
+run `pnpm build` afterwards to refresh the tsnapi snapshot.
 
 ### Testing the Playground
 
