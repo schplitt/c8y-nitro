@@ -60,6 +60,7 @@ src/
 └── utils/
     ├── index.ts                # Utility exports
     ├── client.ts               # Cumulocity client utilities (useUserClient, etc.)
+    ├── paging.ts               # Paging utilities (fetchAllPages, paginate, paginatePages)
     ├── credentials.ts          # Credential management (useSubscribedTenantCredentials)
     ├── logging.ts              # Logging utilities (useLogger, createError) re-exported from evlog
     ├── middleware.ts           # Auth middlewares (hasUserRequiredRole, etc.)

@@ -139,6 +139,35 @@ These are the usual entry points when your route logic needs to know who is call
 
 These helpers are useful when you want the raw platform client but do not want to rebuild authentication context resolution by hand.
 
+## Paging
+
+Cumulocity list endpoints are paged. These helpers walk every page for you, stopping when a page comes back shorter than the requested page size (Cumulocity's end-of-data signal).
+
+| Function                       | Description                                          | Request Context |
+| ------------------------------ | ---------------------------------------------------- | :-------------: |
+| `fetchAllPages(source, opts?)` | Collect every item across all pages into one array   |       ❌        |
+| `paginate(source, opts?)`      | Async-iterate every item one at a time (`for await`) |       ❌        |
+| `paginatePages(source, opts?)` | Async-iterate whole pages (`T[]`) for batch work     |       ❌        |
+
+`source` is the **first page** in whichever shape you have on hand — an awaited `IResultList`, the pending `list()` promise, or a thunk `() => client.x.list(...)`. Every subsequent page is fetched via the result's own `paging.next()`, which reuses the exact client, auth, and filter that produced the first page — so you never pass a client and there is no ambiguity between user, tenant, or microservice clients.
+
+`opts` accepts optional safety guards: `maxPages` (stop after N pages) and `maxItems` (stop after N items, truncating the crossing page).
+
+```ts
+import { fetchAllPages, paginate } from 'c8y-nitro/utils'
+
+// Collect everything (await until done):
+const client = useUserClient(event)
+const all = await fetchAllPages(client.inventory.list({ pageSize: 2000, fragmentType: 'c8y_Sensor' }))
+
+// Stream one entry at a time (low memory):
+for await (const alarm of paginate(() => client.alarm.list({ pageSize: 2000, status: 'ACTIVE' }))) {
+  await handleAlarm(alarm)
+}
+```
+
+See [Paging](/guide/pagination) for the full guide.
+
 ## Middleware
 
 | Function                                   | Description                                           | Request Context |

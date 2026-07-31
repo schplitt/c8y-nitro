@@ -46,6 +46,7 @@ export default defineConfig({
           { text: 'Logging', link: '/guide/logging' },
           { text: 'Auth Middleware', link: '/guide/auth-middleware' },
           { text: 'Tenant Options', link: '/guide/tenant-options' },
+          { text: 'Paging', link: '/guide/pagination' },
           { text: 'Cache Configuration', link: '/guide/cache' },
           { text: 'Tasks & Scheduling', link: '/guide/scheduled-tasks' },
           { text: 'Zip Creation', link: '/guide/zip-creation' },

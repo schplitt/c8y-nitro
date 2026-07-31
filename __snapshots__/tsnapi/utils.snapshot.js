@@ -3,9 +3,12 @@
  */
 // #region Functions
 export function c8yTasks() {}
+export async function fetchAllPages(_, _) {}
 export function hasUserRequiredRole(_) {}
 export function isUserFromAllowedTenant(_) {}
 export function isUserFromDeployedTenant() {}
+export async function* paginate(_, _) {}
+export async function* paginatePages(_, _) {}
 export async function useDeployedTenantClient() {}
 export function useLogger(_, _) {}
 export async function useSubscribedTenantClients() {}

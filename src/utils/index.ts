@@ -1,4 +1,5 @@
 export * from './client'
+export * from './paging'
 export * from './middleware'
 export * from './resources'
 export * from './credentials'
