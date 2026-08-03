@@ -13,6 +13,7 @@ export async function useDeployedTenantClient() {}
 export function useLogger(_, _) {}
 export async function useSubscribedTenantClients() {}
 export function useTenantOption(_, _) {}
+export async function useTenantRealtimeClient(_) {}
 export async function useUser(_) {}
 export function useUserClient(_) {}
 export async function useUserRoles(_) {}

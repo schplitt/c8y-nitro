@@ -12,6 +12,7 @@ interface C8yNitroModuleOptions {
   zip?: C8YZipOptions
   docker?: C8yDockerOptions
   cache?: C8yCacheOptions
+  realtime?: C8yRealtimeOptions
   openapi?: C8yOpenAPIOptions
   enableTenantOptionsInvalidationRoute?: boolean
   skipBootstrap?: boolean
@@ -131,6 +132,32 @@ Controls how the OpenAPI document served by Nitro is transformed. See the [OpenA
 
 - `excludeInternalRoutes`: strips routes starting with `/_` and probe paths from the document. Defaults to `true`.
 - `excludeRoutes`: additional path prefixes to strip.
+
+## `realtime`
+
+```json
+realtime?: {
+  name?: string
+  deleteSubscriptionsOnClose?: boolean
+  deleteSubscriptionOnEmpty?: boolean
+  autoAck?: boolean
+  dedupe?: boolean
+  autoStart?: boolean
+  subscription?: { apis?: string[], nonPersistent?: boolean }
+  resilience?: ConsumerResilienceOptions
+}
+```
+
+Options for the Notification 2.0 realtime clients (backed by `c8y-realtime`), applied identically to every subscribed tenant's pooled client. See the [Realtime guide](/guide/realtime).
+
+- `name`: base name for this app's realtime topics/consumers (alphanumeric). Derived from the microservice `contextPath` if unset — stable across restarts and unique per service. It is a permanent identity; changing it orphans existing subscriptions.
+- `deleteSubscriptionsOnClose`: delete every remote subscription this service created on shutdown. Defaults to `false` so persistent backlogs survive a redeploy.
+- `deleteSubscriptionOnEmpty`: delete a `(type, device)` remote subscription once its last handler is removed. Defaults to `true`. This is the only path that deletes a remote subscription — tenant churn never does.
+- `autoAck`: acknowledge each notification after its handlers resolve. Defaults to `true`.
+- `dedupe`: drop duplicate notifications redelivered on the same stream. Defaults to `true`.
+- `autoStart`: connect automatically as handlers are registered. Defaults to `true`.
+- `subscription`: delivery mode — `apis` for the `onAny` firehose topic, and `nonPersistent` (no server-side backlog; cheaper but a disconnect loses messages).
+- `resilience`: reconnect/backoff behaviour.
 
 ## `enableTenantOptionsInvalidationRoute`
 

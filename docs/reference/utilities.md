@@ -31,7 +31,7 @@ For longer examples, see [Tenant Options](/guide/tenant-options), [Auth Middlewa
 
 ### Tenant Credentials Lifecycle Hook
 
-`c8y-nitro` emits `c8y:tenantCredentialsUpdated` when the subscribed credentials cache is populated for the first time or refreshed with a changed tenant set.
+`c8y-nitro` emits `c8y:tenantCredentialsUpdated` when the subscribed credentials cache is populated for the first time, refreshed with a changed tenant set, or refreshed with changed credentials for an existing tenant (e.g. a service-user password rotation).
 
 ```ts
 import type { TenantCredentials } from 'c8y-nitro/types'
@@ -167,6 +167,24 @@ for await (const alarm of paginate(() => client.alarm.list({ pageSize: 2000, sta
 ```
 
 See [Paging](/guide/pagination) for the full guide.
+
+## Realtime
+
+| Function                         | Description                                                  | Request Context |
+| -------------------------------- | ------------------------------------------------------------ | :-------------: |
+| `useTenantRealtimeClient(input)` | Get the pooled Notification 2.0 realtime client for a tenant |    optional     |
+
+`input` is whatever identifies the tenant — a tenant id, that tenant's `ICredentials`, a `@c8y/client` `Client`, or the current request (`H3Event`/`ServerRequest`). It always connects with the tenant's **service** credentials. Register handlers on the returned client:
+
+```ts
+import { useTenantRealtimeClient } from 'c8y-nitro/utils'
+
+const rt = await useTenantRealtimeClient(event)
+rt.alarms.onCreate('*', (alarm) => log.info(alarm.severity, alarm.text))
+rt.measurements.onCreate('device42', (m) => log.info(m.type, m.time))
+```
+
+Clients are pooled per tenant and kept healthy across credential rotation and unsubscribe → resubscribe. See [Realtime](/guide/realtime).
 
 ## Middleware
 

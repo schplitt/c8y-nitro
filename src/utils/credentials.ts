@@ -7,6 +7,7 @@ import { createError } from './logging'
 import type { ServerRequest } from 'nitro/types'
 import process from 'node:process'
 import { getCurrentUserTenantId } from './internal/tenant'
+import { credsEqual } from './internal/common'
 import { useRuntimeConfig } from 'nitro/runtime-config'
 import { useNitroHooks } from 'nitro/app'
 
@@ -17,17 +18,18 @@ function shouldEmitTenantCredentialsUpdated(prev: TenantCredentials | null, next
     return true
   }
 
-  const prevTenantIds = Object.keys(prev)
-  const nextTenantIds = Object.keys(next)
-
-  if (prevTenantIds.length !== nextTenantIds.length) {
-    return true
+  // Compare per tenant across the union of ids, by VALUE. This fires not only
+  // when a tenant is added or removed, but also when an existing tenant's
+  // service-user credentials rotate (same id, new password) — which a set-only
+  // comparison would miss, leaving long-lived consumers (e.g. pooled realtime
+  // clients) with stale auth.
+  const tenantIds = new Set([...Object.keys(prev), ...Object.keys(next)])
+  for (const tenantId of tenantIds) {
+    if (!credsEqual(prev[tenantId], next[tenantId])) {
+      return true
+    }
   }
-
-  // new set with ids that are exclusive to either prev or next
-  const changedTenantIds = new Set(nextTenantIds).symmetricDifference(new Set(prevTenantIds))
-  // if there are any tenant ids that are new or removed, we should emit the update
-  return changedTenantIds.size > 0
+  return false
 }
 
 /**

@@ -24,6 +24,9 @@ catalogs:
     c12:
       specifier: ^4.0.0-beta.5
       version: 4.0.0-beta.5
+    c8y-realtime:
+      specifier: ^0.2.2
+      version: 0.2.2
     changelogithub:
       specifier: ^14.0.0
       version: 14.0.0
@@ -92,6 +95,9 @@ importers:
       c12:
         specifier: 'catalog:'
         version: 4.0.0-beta.5(chokidar@5.0.0)(dotenv@17.3.1)(giget@2.0.0)(jiti@2.6.1)
+      c8y-realtime:
+        specifier: 'catalog:'
+        version: 0.2.2
       citty:
         specifier: 'catalog:'
         version: 0.2.2
@@ -2269,6 +2275,10 @@ packages:
         optional: true
       magicast:
         optional: true
+
+  c8y-realtime@0.2.2:
+    resolution: {integrity: sha512-7GHDGu75MsRobkXnoFJKA9VzoCSz2ufOLYiLDAooRa+5u/x+NSXqQG5Y/PrT4tNF4FdVOGG0dGabSnsLvNGfcA==}
+    engines: {node: '>=22.0.0'}
 
   cac@6.7.14:
     resolution: {integrity: sha512-b6Ilus+c3RrdDk+JhLKUAQfzzgLEPy6wcXqS7f/xe1EETvsDP6GORG7SFuOs6cID5YkqchW/LXZbX5bc8j7ZcQ==}
@@ -7040,6 +7050,10 @@ snapshots:
       dotenv: 17.3.1
       giget: 2.0.0
       jiti: 2.6.1
+
+  c8y-realtime@0.2.2:
+    dependencies:
+      hookable: 6.1.1
 
   cac@6.7.14: {}
 
