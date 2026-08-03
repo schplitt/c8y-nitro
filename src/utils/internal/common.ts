@@ -1,4 +1,19 @@
-import type { IMicroserviceClientRequestHeaders } from '@c8y/client'
+import type { ICredentials, IMicroserviceClientRequestHeaders } from '@c8y/client'
+
+/**
+ * Whether two sets of tenant credentials are equivalent for the purposes of
+ * change detection: same tenant, user, and password. Used to detect a
+ * service-user password rotation (which keeps the tenant id but changes the
+ * secret), not just tenants entering/leaving the subscription set.
+ * @param a - First credentials, or `undefined` when the tenant is absent
+ * @param b - Second credentials, or `undefined` when the tenant is absent
+ */
+export function credsEqual(a?: ICredentials, b?: ICredentials): boolean {
+  if (!a || !b) {
+    return a === b
+  }
+  return a.tenant === b.tenant && a.user === b.user && a.password === b.password
+}
 
 /**
  * Converts undici Request headers to the format expected by MicroserviceClientRequestAuth.\

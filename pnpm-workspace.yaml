@@ -1,4 +1,6 @@
 catalogMode: prefer
+minimumReleaseAgeExclude:
+  - c8y-realtime@0.2.2
 shellEmulator: true
 
 trustPolicy: no-downgrade
@@ -18,6 +20,7 @@ catalog:
   '@types/spinnies': ^0.5.3
   bumpp: ^11.1.0
   c12: ^4.0.0-beta.5
+  c8y-realtime: ^0.2.2
   changelogithub: ^14.0.0
   citty: ^0.2.2
   consola: ^3.4.2

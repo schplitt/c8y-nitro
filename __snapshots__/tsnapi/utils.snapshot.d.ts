@@ -109,6 +109,7 @@ export type TaskMap = Record<string, TaskShape>;
 export type TaskRegistryContext = TaskContext;
 export type TaskRegistryPayload = TaskPayload;
 export type TenantOptionKeyInput = C8YTenantOptionKey | (string & {});
+export type TenantRealtimeInput = string | ICredentials | Client | H3Event | ServerRequest;
 // #endregion
 
 // #region Functions
@@ -125,6 +126,7 @@ export declare function useDeployedTenantClient(): Promise<Client>;
 export declare function useLogger<T extends object = Record<string, unknown>>(_: HTTPEvent | ServerRequest, _?: string): import("evlog").AuditableLogger<T>;
 export declare function useSubscribedTenantClients(): Promise<Record<string, Client>>;
 export declare function useTenantOption(_: Client, _: TenantOptionKeyInput): TenantOption;
+export declare function useTenantRealtimeClient(_: TenantRealtimeInput): Promise<RealtimeClient>;
 export declare function useUser(_: ServerRequest | H3Event): Promise<ICurrentUser>;
 export declare function useUserClient(_: ServerRequest | H3Event): Client;
 export declare function useUserRoles(_: ServerRequest | H3Event): Promise<string[]>;

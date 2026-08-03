@@ -48,6 +48,7 @@ export interface C8yNitroModuleOptions {
   zip?: C8YZipOptions;
   docker?: C8yDockerOptions;
   cache?: C8yCacheOptions;
+  realtime?: C8yRealtimeOptions;
   openapi?: C8yOpenAPIOptions;
   enableTenantOptionsInvalidationRoute?: boolean;
   skipBootstrap?: boolean;
@@ -55,6 +56,19 @@ export interface C8yNitroModuleOptions {
 export interface C8yOpenAPIOptions {
   excludeInternalRoutes?: boolean;
   excludeRoutes?: string[];
+}
+export interface C8yRealtimeOptions {
+  name?: string;
+  deleteSubscriptionsOnClose?: boolean;
+  deleteSubscriptionOnEmpty?: boolean;
+  autoAck?: boolean;
+  dedupe?: boolean;
+  autoStart?: boolean;
+  subscription?: {
+    apis?: SubscriptionApi[];
+    nonPersistent?: boolean;
+  };
+  resilience?: ConsumerResilienceOptions;
 }
 export interface C8YRoles {}
 export interface C8YZipOptions {

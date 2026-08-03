@@ -3,12 +3,14 @@ import type { C8YManifestOptions } from './manifest'
 import type { C8YZipOptions } from './zip'
 import type { C8yCacheOptions } from './cache'
 import type { C8yDockerOptions } from './docker'
+import type { C8yRealtimeOptions } from './realtime'
 
 export type * from './zip'
 export type { C8yDockerOptions } from './docker'
 export type { C8YManifestOptions, C8YManifest } from './manifest'
 export * from './apiClient'
 export type { C8yCacheOptions } from './cache'
+export type { C8yRealtimeOptions } from './realtime'
 export type { TenantCredentials } from './credentials'
 
 export interface C8yDevOptions {
@@ -54,6 +56,11 @@ export interface C8yNitroModuleOptions {
    */
   docker?: C8yDockerOptions
   cache?: C8yCacheOptions
+  /**
+   * Options for the Notification 2.0 realtime clients (backed by `c8y-realtime`),
+   * shared by every subscribed tenant's pooled client.
+   */
+  realtime?: C8yRealtimeOptions
   /**
    * Controls how the OpenAPI document served by Nitro (`experimental.openAPI`)
    * is transformed for Cumulocity microservices.
