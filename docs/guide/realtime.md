@@ -73,4 +73,12 @@ See [Module Options](/reference/module-options#realtime) for the full list.
 
 ## Requirements
 
-Notification 2.0 uses the runtime's global `WebSocket` (Node 22+); `c8y-nitro` already targets a newer Node, so there is nothing to install.
+Nothing to install — `ws` ships with `c8y-nitro` and is used for the consumer sockets.
+
+### Why `ws` and not the built-in `WebSocket`
+
+Node has had a global `WebSocket` since v22, and `c8y-realtime` uses it by default so it can also run on Deno, Bun and in the browser. It is the wrong choice for a long-lived server socket, though: it implements the WHATWG web API, which never exposed the protocol's ping/pong frames, so it has no `ping()`.
+
+That matters because `c8y-realtime` only starts its keep-alive when the socket can send a ping. On the built-in socket the heartbeat is silently skipped — `resilience.pingIntervalMs` and `pongTimeoutMs` do nothing, an idle consumer socket is never kept warm, and a half-open one is never noticed. A service listening to a quiet tenant then sees its socket dropped every couple of minutes by an idle timeout somewhere between the container and the platform, reconnecting each time. Nothing is lost if the subscription is persistent, but it is churn you do not want and cannot see except at `debug`.
+
+`ws` implements the full protocol, so the heartbeat runs. It has no browser build, which costs nothing here: `c8y-nitro` is Node-only. There is no opt-out — for a long-lived server socket the built-in one is strictly worse.
