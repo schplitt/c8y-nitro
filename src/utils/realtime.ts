@@ -1,7 +1,8 @@
 import { Client } from '@c8y/client'
 import type { ICredentials } from '@c8y/client'
 import { createRealtimeClient } from 'c8y-realtime'
-import type { ConsumerResilienceOptions, RealtimeClient, SubscriptionApi } from 'c8y-realtime'
+import type { ConsumerResilienceOptions, RealtimeClient, SubscriptionApi, WebSocketFactory } from 'c8y-realtime'
+import { WebSocket } from 'ws'
 import { useSubscribedTenantCredentials } from './credentials'
 import { getCurrentUserTenantId } from './internal/tenant'
 import { createError } from './logging'
@@ -33,6 +34,22 @@ interface ResolvedRealtimeConfig {
   subscription?: { apis?: SubscriptionApi[], nonPersistent?: boolean }
   resilience?: ConsumerResilienceOptions
 }
+
+/**
+ * `ws` as the factory type c8y-realtime asks for.
+ *
+ * The cast is needed, and it is safe. TypeScript only compares the *first*
+ * overload of an overloaded member, and `ws` is overloaded twice over:
+ * `@types/ws` declares `constructor(address: null)` first (the socket
+ * `WebSocketServer` builds for an incoming connection), and its `on` is declared
+ * per event (`on('close', …)`, `on('error', …)`). So TS never looks at the
+ * signatures we actually use.
+ *
+ * At runtime `ws` has all seven methods `WebSocketInstanceLike` lists. The global
+ * WebSocket, which assigns with no cast at all, has four — it lacks `ping`,
+ * `terminate` and `removeAllListeners`.
+ */
+const wsWebSocketImpl = WebSocket as unknown as WebSocketFactory
 
 // How often to sweep for pooled clients that have gone unhealthy (a consumer
 // stopped because its credentials ran out) and try to repair them.
@@ -82,6 +99,22 @@ function createRealtimeClientForTenant(tenantId: string, creds: ICredentials): R
   return createRealtimeClient({
     ...realtimeConfig(),
     ...toLibCredentials(tenantId, creds),
+    // Always `ws`, never the runtime's global WebSocket.
+    //
+    // c8y-realtime defaults to the global one so it can also run on Deno, Bun and
+    // in the browser. But that is the WHATWG WebSocket, and the web API never
+    // exposed the protocol's ping/pong frames — so it has no `ping()`.
+    // c8y-realtime guards its keep-alive with `typeof socket.ping === 'function'`,
+    // which means on the global socket the heartbeat silently never runs:
+    // `resilience.pingIntervalMs`/`pongTimeoutMs` do nothing, an idle consumer
+    // socket is never kept warm, and a half-open one is never noticed. On a quiet
+    // tenant the socket then gets dropped every ~100s by an idle timeout somewhere
+    // between the container and the platform, and reconnects, forever.
+    //
+    // `ws` implements the whole protocol, so the heartbeat works. It has no browser
+    // build, which costs nothing here: c8y-nitro is Node-only. There is no opt-out —
+    // the global socket is strictly worse for a long-lived server connection.
+    webSocketImpl: wsWebSocketImpl,
     // Background lifecycle runs outside a request, so the request-scoped
     // `useLogger` is unavailable here; `console` matches the lib's Logger shape.
     logger: console,

@@ -66,13 +66,15 @@
     "pathe": "catalog:",
     "pkg-types": "catalog:",
     "spinnies": "catalog:",
-    "tinyexec": "catalog:"
+    "tinyexec": "catalog:",
+    "ws": "catalog:"
   },
   "devDependencies": {
     "@c8y/client": "catalog:",
     "@schplitt/eslint-config": "catalog:",
     "@types/node": "catalog:",
     "@types/spinnies": "catalog:",
+    "@types/ws": "catalog:",
     "bumpp": "catalog:",
     "changelogithub": "catalog:",
     "eslint": "catalog:",
