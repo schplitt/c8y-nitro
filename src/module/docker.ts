@@ -1,6 +1,6 @@
 import { x } from 'tinyexec'
-import { writeFile, mkdir } from 'node:fs/promises'
-import { join, basename } from 'node:path'
+import { writeFile, mkdir, copyFile } from 'node:fs/promises'
+import { join, basename, resolve } from 'node:path'
 import type { Nitro } from 'nitro/types'
 import type { C8yDockerOptions } from '../types/docker'
 
@@ -49,19 +49,24 @@ async function checkDockerInstalled(): Promise<boolean> {
   }
 }
 
-async function writeDockerfile(outputDir: string, options: C8yDockerOptions): Promise<string> {
-  const outputDirName = basename(outputDir)
+export async function writeDockerfile(outputDir: string, rootDir: string, options: C8yDockerOptions): Promise<string> {
   const c8yDir = join(outputDir, '../.c8y')
   const dockerfilePath = join(c8yDir, 'Dockerfile')
 
   // Create .c8y directory if it doesn't exist
   await mkdir(c8yDir, { recursive: true })
 
-  // Generate Dockerfile with dynamic output directory name
-  const dockerfileContent = getDockerfileContent(outputDirName, options)
-
-  // Write Dockerfile
-  await writeFile(dockerfilePath, dockerfileContent, 'utf-8')
+  if (options.dockerfile) {
+    // Use the user-specified Dockerfile — resolve relative to rootDir
+    const customDockerfilePath = resolve(rootDir, options.dockerfile)
+    await copyFile(customDockerfilePath, dockerfilePath)
+  }
+  else {
+    // Generate Dockerfile with dynamic output directory name
+    const outputDirName = basename(outputDir)
+    const dockerfileContent = getDockerfileContent(outputDirName, options)
+    await writeFile(dockerfilePath, dockerfileContent, 'utf-8')
+  }
 
   return c8yDir
 }
@@ -150,7 +155,7 @@ export async function createDockerImage(nitro: Nitro, options: C8yDockerOptions 
   nitro.logger.debug('Creating Docker image...')
 
   // Write Dockerfile
-  const c8yDir = await writeDockerfile(nitro.options.output.dir, options)
+  const c8yDir = await writeDockerfile(nitro.options.output.dir, nitro.options.rootDir, options)
 
   // Build Docker image
   const imageName = await buildDockerImage(nitro, c8yDir)
