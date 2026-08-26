@@ -60,8 +60,7 @@ export async function writeDockerfile(outputDir: string, rootDir: string, option
     // Use the user-specified Dockerfile — resolve relative to rootDir
     const customDockerfilePath = resolve(rootDir, options.dockerfile)
     await copyFile(customDockerfilePath, dockerfilePath)
-  }
-  else {
+  } else {
     // Generate Dockerfile with dynamic output directory name
     const outputDirName = basename(outputDir)
     const dockerfileContent = getDockerfileContent(outputDirName, options)
