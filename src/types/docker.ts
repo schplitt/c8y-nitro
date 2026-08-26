@@ -1,5 +1,18 @@
 export interface C8yDockerOptions {
   /**
+   * Path to a custom Dockerfile, relative to the Nitro config file location
+   * (`rootDir`).
+   *
+   * When set, the built-in Dockerfile template is **not** generated. The file
+   * at this path is copied into the build context and used as-is for the Docker
+   * build. The `baseImage` and `extraInstructions` options are ignored when a
+   * custom Dockerfile is provided.
+   *
+   * @example 'docker/Dockerfile'
+   */
+  dockerfile?: string
+
+  /**
    * Base image for the generated Dockerfile.
    *
    * Use this when the default slim image is missing something the service

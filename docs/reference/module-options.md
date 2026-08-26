@@ -77,17 +77,37 @@ Use this when the build artifact itself needs different naming or placement.
 
 ```json
 docker?: {
+  dockerfile?: string
   baseImage?: string
   extraInstructions?: string[]
 }
 ```
 
-Customizes the Dockerfile generated for the microservice image.
+Customizes the Dockerfile used for the microservice image.
 
+- `dockerfile`: path to a custom Dockerfile, **relative to the Nitro config file location** (`rootDir`). When set, the built-in Dockerfile template is **not** generated and `baseImage`/`extraInstructions` are ignored. The file is copied into the build context and used as-is.
 - `baseImage`: replaces the default `node:24-slim` base image.
 - `extraInstructions`: raw Dockerfile instructions (one per entry) inserted after `WORKDIR` and before the build output `COPY`, so their layers stay cached across rebuilds.
 
 The rest of the template is not configurable: `ENV NODE_ENV`/`PORT`, `EXPOSE 80` and the `CMD` entrypoint are the Cumulocity microservice contract and stay under module control.
+
+### Full Dockerfile override
+
+Use `dockerfile` when you need complete control over the image definition:
+
+```ts
+export default defineNitroConfig({
+  c8y: {
+    docker: {
+      dockerfile: 'docker/Dockerfile',
+    },
+  },
+})
+```
+
+The path `docker/Dockerfile` is resolved relative to `rootDir` (the directory containing `nitro.config.ts`).
+
+### Partial customisation (base image / extra instructions)
 
 A common use case is installing CA certificates or native runtime libraries the slim image does not ship:
 
