@@ -15,6 +15,7 @@ export interface C8yDevOptions {
   injectUser?: boolean;
 }
 export interface C8yDockerOptions {
+  dockerfile?: string;
   baseImage?: string;
   extraInstructions?: string[];
 }
