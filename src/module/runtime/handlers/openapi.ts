@@ -77,8 +77,8 @@ async function resolveServer(event: H3Event): Promise<OpenAPIServer> {
 export default defineMiddleware(async (event, next) => {
   const runtimeConfig = useRuntimeConfig()
 
-  // Registered globally (nitro can't route-scope middleware yet), so bail out
-  // for everything that isn't the OpenAPI document route.
+  // Registered globally (see registerRuntime), so bail out for everything that
+  // isn't the OpenAPI document route.
   const specRoute = (runtimeConfig as { nitro?: { openAPI?: { route?: string } } }).nitro?.openAPI?.route || '/_openapi.json'
   const baseURL = ((runtimeConfig.app as { baseURL?: string } | undefined)?.baseURL ?? '/').replace(/\/+$/, '')
   const specPath = `${baseURL}${specRoute}`
