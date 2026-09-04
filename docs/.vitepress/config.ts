@@ -35,6 +35,7 @@ export default defineConfig({
           { text: 'What is c8y-nitro?', link: '/guide/what-is-c8y-nitro' },
           { text: 'Quickstart', link: '/quickstart' },
           { text: 'Configuration', link: '/guide/configuration' },
+          { text: 'Migration', link: '/migration' },
         ],
       },
       {
