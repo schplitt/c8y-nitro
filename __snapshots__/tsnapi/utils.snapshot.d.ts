@@ -147,6 +147,17 @@ export declare const useSubscribedTenantCredentials: (() => Promise<TenantCreden
 export declare const useTenantOptions: UseTenantOptions;
 // #endregion
 
+// #region Referenced (internal)
+type UserRole = keyof C8YRoles | C8YRole;
+interface UseTenantOptions {
+  (_: Client): TenantOptionCategory;
+  (_: Client, _: C8YSettingsCategory): TenantOptionCategory;
+  <K extends string = string>(_: Client, _: string): ForeignTenantOptionCategory<K>;
+  invalidateAll: () => Promise<void>;
+  refreshAll: () => Promise<Record<string, string | undefined>>;
+}
+// #endregion
+
 // #region Other
 export { createLogger }
 // #endregion
