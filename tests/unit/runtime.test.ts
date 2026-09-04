@@ -10,14 +10,10 @@ vi.mock('fs/promises', () => memFs.promises)
 // Create a minimal mock Nitro instance
 function createMockNitro(
   rootDir = '/project',
-  generatedTypesDir = 'node_modules/.nitro/types',
 ) {
   return {
     options: {
       rootDir,
-      typescript: {
-        generatedTypesDir,
-      },
       virtual: {},
     },
     logger: {
@@ -38,7 +34,7 @@ describe('setupRuntime', () => {
       setupRuntime(nitro, {} as C8YManifest)
 
       const generatedFiles = vol.toJSON()
-      const typesPath = '/project/node_modules/.nitro/types/c8y-nitro.d.ts'
+      const typesPath = '/project/node_modules/.c8y-nitro/types.d.ts'
 
       expect(generatedFiles).toHaveProperty(typesPath)
 
@@ -63,7 +59,7 @@ describe('setupRuntime', () => {
       } as C8YManifest)
 
       const generatedFiles = vol.toJSON()
-      const typesPath = '/project/node_modules/.nitro/types/c8y-nitro.d.ts'
+      const typesPath = '/project/node_modules/.c8y-nitro/types.d.ts'
       const content = generatedFiles[typesPath] as string
 
       // Check that roles are properly typed
@@ -83,7 +79,7 @@ describe('setupRuntime', () => {
       } as C8YManifest)
 
       const generatedFiles = vol.toJSON()
-      const typesPath = '/project/node_modules/.nitro/types/c8y-nitro.d.ts'
+      const typesPath = '/project/node_modules/.c8y-nitro/types.d.ts'
       const content = generatedFiles[typesPath] as string
 
       // Check that tenant option keys are properly typed
@@ -103,7 +99,7 @@ describe('setupRuntime', () => {
       } as C8YManifest)
 
       const generatedFiles = vol.toJSON()
-      const typesPath = '/project/node_modules/.nitro/types/c8y-nitro.d.ts'
+      const typesPath = '/project/node_modules/.c8y-nitro/types.d.ts'
       const content = generatedFiles[typesPath] as string
 
       // Check roles
@@ -125,7 +121,7 @@ describe('setupRuntime', () => {
       } as C8YManifest)
 
       const generatedFiles = vol.toJSON()
-      const content = generatedFiles['/project/node_modules/.nitro/types/c8y-nitro.d.ts'] as string
+      const content = generatedFiles['/project/node_modules/.c8y-nitro/types.d.ts'] as string
 
       expect(content).toContain('type C8YSettingsCategory = \'my-service\'')
     })
@@ -136,35 +132,24 @@ describe('setupRuntime', () => {
         contextPath: 'my-context',
         name: 'my-name',
       } as C8YManifest)
-      expect(vol.toJSON()['/project/node_modules/.nitro/types/c8y-nitro.d.ts'] as string)
+      expect(vol.toJSON()['/project/node_modules/.c8y-nitro/types.d.ts'] as string)
         .toContain('type C8YSettingsCategory = \'my-context\'')
 
       vol.reset()
 
       const nitroName = createMockNitro()
       setupRuntime(nitroName, { name: 'my-name' } as C8YManifest)
-      expect(vol.toJSON()['/project/node_modules/.nitro/types/c8y-nitro.d.ts'] as string)
+      expect(vol.toJSON()['/project/node_modules/.c8y-nitro/types.d.ts'] as string)
         .toContain('type C8YSettingsCategory = \'my-name\'')
     })
 
-    it('should respect custom generatedTypesDir', () => {
-      const nitro = createMockNitro('/project', 'custom-types')
+    it('should create the module-owned types directory recursively', () => {
+      const nitro = createMockNitro('/project/nested/deep')
 
       setupRuntime(nitro, {} as C8YManifest)
 
       const generatedFiles = vol.toJSON()
-      const typesPath = '/project/custom-types/c8y-nitro.d.ts'
-
-      expect(generatedFiles).toHaveProperty(typesPath)
-    })
-
-    it('should create directory recursively', () => {
-      const nitro = createMockNitro('/project', 'nested/deep/types')
-
-      setupRuntime(nitro, {} as C8YManifest)
-
-      const generatedFiles = vol.toJSON()
-      const typesPath = '/project/nested/deep/types/c8y-nitro.d.ts'
+      const typesPath = '/project/nested/deep/node_modules/.c8y-nitro/types.d.ts'
 
       expect(generatedFiles).toHaveProperty(typesPath)
     })
@@ -181,11 +166,11 @@ describe('setupRuntime', () => {
 
       // Should only have one consolidated file
       expect(Object.keys(generatedFiles)).toHaveLength(1)
-      expect(generatedFiles).toHaveProperty('/project/node_modules/.nitro/types/c8y-nitro.d.ts')
+      expect(generatedFiles).toHaveProperty('/project/node_modules/.c8y-nitro/types.d.ts')
 
       // Should NOT have legacy files
-      expect(generatedFiles).not.toHaveProperty('/project/node_modules/.nitro/types/c8y-roles.d.ts')
-      expect(generatedFiles).not.toHaveProperty('/project/node_modules/.nitro/types/c8y-tenant-options.d.ts')
+      expect(generatedFiles).not.toHaveProperty('/project/node_modules/.c8y-nitro/c8y-roles.d.ts')
+      expect(generatedFiles).not.toHaveProperty('/project/node_modules/.c8y-nitro/c8y-tenant-options.d.ts')
     })
   })
 
@@ -268,7 +253,7 @@ describe('setupRuntime', () => {
       } as C8YManifest)
 
       const generatedFiles = vol.toJSON()
-      const content = generatedFiles['/project/node_modules/.nitro/types/c8y-nitro.d.ts'] as string
+      const content = generatedFiles['/project/node_modules/.c8y-nitro/types.d.ts'] as string
 
       expect(content).toContain('\'ROLE_WITH-DASH\': \'ROLE_WITH-DASH\'')
       expect(content).toContain('\'ROLE_WITH_UNDERSCORE\': \'ROLE_WITH_UNDERSCORE\'')
@@ -286,7 +271,7 @@ describe('setupRuntime', () => {
       } as C8YManifest)
 
       const generatedFiles = vol.toJSON()
-      const content = generatedFiles['/project/node_modules/.nitro/types/c8y-nitro.d.ts'] as string
+      const content = generatedFiles['/project/node_modules/.c8y-nitro/types.d.ts'] as string
 
       expect(content).toContain('\'key.with.dots\'')
       expect(content).toContain('\'key-with-dashes\'')
@@ -301,7 +286,7 @@ describe('setupRuntime', () => {
       } as C8YManifest)
 
       const generatedFiles = vol.toJSON()
-      const content = generatedFiles['/project/node_modules/.nitro/types/c8y-nitro.d.ts'] as string
+      const content = generatedFiles['/project/node_modules/.c8y-nitro/types.d.ts'] as string
 
       expect(content).toContain('\'ROLE_SINGLE\': \'ROLE_SINGLE\'')
     })
@@ -314,7 +299,7 @@ describe('setupRuntime', () => {
       } as C8YManifest)
 
       const generatedFiles = vol.toJSON()
-      const content = generatedFiles['/project/node_modules/.nitro/types/c8y-nitro.d.ts'] as string
+      const content = generatedFiles['/project/node_modules/.c8y-nitro/types.d.ts'] as string
 
       expect(content).toContain('type C8YTenantOptionKey = \'single.key\'')
       expect(content).toContain('export const c8yTenantOptionKeys: readonly [\'single.key\']')
@@ -325,7 +310,7 @@ describe('setupRuntime', () => {
 
       // Create existing file
       vol.fromJSON({
-        '/project/node_modules/.nitro/types/c8y-nitro.d.ts': 'old content',
+        '/project/node_modules/.c8y-nitro/types.d.ts': 'old content',
       })
 
       setupRuntime(nitro, {
@@ -333,7 +318,7 @@ describe('setupRuntime', () => {
       } as C8YManifest)
 
       const generatedFiles = vol.toJSON()
-      const content = generatedFiles['/project/node_modules/.nitro/types/c8y-nitro.d.ts'] as string
+      const content = generatedFiles['/project/node_modules/.c8y-nitro/types.d.ts'] as string
 
       expect(content).not.toContain('old content')
       expect(content).toContain('\'ROLE_NEW\': \'ROLE_NEW\'')

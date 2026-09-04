@@ -68,7 +68,15 @@ export function tryGetTenantFromBasicAuth(requestOrEvent: ServerRequest | H3Even
   }
 }
 
-export const getCurrentUserTenantId = defineCachedFunction(
+// Explicit annotation: `defineCachedFunction()` returns ocache's `CachedFunction`,
+// which nitro does not re-export (unlike `CacheEntry`/`CacheOptions`), so the
+// inferred type cannot be named for declaration emit without depending on
+// `ocache` directly. Mirrors ocache's shape.
+export const getCurrentUserTenantId: ((requestOrEvent: ServerRequest | H3Event) => Promise<string>) & {
+  invalidate: (requestOrEvent: ServerRequest | H3Event) => Promise<void>
+  expire: (requestOrEvent: ServerRequest | H3Event) => Promise<void>
+  resolveKeys: (requestOrEvent: ServerRequest | H3Event) => Promise<string[]>
+} = defineCachedFunction(
   async (requestOrEvent: ServerRequest | H3Event): Promise<string> => {
     const basicTenant = tryGetTenantFromBasicAuth(requestOrEvent)
     if (basicTenant) {

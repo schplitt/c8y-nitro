@@ -88,9 +88,11 @@ export function registerRuntime(nitro: Nitro, options: C8yNitroModuleOptions = {
       // per-request server URL (it is baked in at build time).
       nitro.logger.warn('c8y-nitro cannot transform a prerendered OpenAPI document (internal routes stay listed and the server URL is baked in at build time). Use `openAPI: { production: true }` to serve the document at runtime instead.')
     } else {
-      // Registered globally (the middleware exits early on other paths): nitro
-      // currently pushes route-scoped middleware entries into the h3 chain
-      // without unwrapping their handler, which crashes the request.
+      // Registered globally (the middleware exits early on other paths).
+      // Route-scoping this is not possible: global middleware runs before
+      // nitro's routed-middleware matcher, so the rewriteRequestUrl middleware
+      // above has already rewritten `event.url.pathname` to the public
+      // /service/<contextPath>/... form by the time a route match is attempted.
       nitro.options.handlers.push({
         route: '/**',
         handler: join(thisFilePath, './runtime/handlers/openapi'),
