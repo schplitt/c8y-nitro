@@ -50,6 +50,23 @@ C8Y_DEVELOPMENT_USER=your-username
 C8Y_DEVELOPMENT_PASSWORD=your-password
 ```
 
+## Set Up TypeScript
+
+The starter template already has this configured. For an existing Nitro service, extend
+Nitro's shared config and include the declarations `c8y-nitro` generates:
+
+```json [tsconfig.json]
+{
+  "extends": "nitro/tsconfig",
+  "include": ["**/*", "node_modules/.c8y-nitro/*.d.ts"]
+}
+```
+
+The `include` entry is what makes the manifest-derived role names, tenant option keys,
+and the [`c8y-nitro/runtime`](/reference/runtime-module) module visible to TypeScript.
+The file is written by `nitro dev` and `nitro build`; run
+[`c8y-nitro typegen`](/reference/cli#typegen) to generate it without a build.
+
 ## Start Developing
 
 ```sh

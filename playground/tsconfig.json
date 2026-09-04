@@ -1,5 +1,5 @@
 {
-  "extends": "./node_modules/.nitro/types/tsconfig.json",
+  "extends": "nitro/tsconfig",
   "compilerOptions": {
     "noFallthroughCasesInSwitch": true,
     "noImplicitReturns": true,
@@ -24,5 +24,6 @@
     // Module resolution
     "target": "ESNext",
     "skipLibCheck": true
-  }
+  },
+  "include": ["**/*", "node_modules/.c8y-nitro/*.d.ts"]
 }

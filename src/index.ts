@@ -30,14 +30,6 @@ export function c8y(): NitroModule {
     setup: async (nitro) => {
       const options = nitro.options.c8y ?? {}
 
-      // enable tsconfig generation
-      nitro.options.typescript.generateTsConfig = true
-      // workaround as the generated tsconfig creates an invalid extends entry
-      // https://github.com/nitrojs/nitro/issues/3945
-      nitro.options.typescript.tsConfig = {}
-      nitro.options.typescript.tsConfig.include = ['./**/*.d.ts']
-      nitro.options.typescript.tsConfig.exclude = []
-
       // set own library (pkgName) as noExternal to bundle it always
       // makes runtime nitro features available in c8y-nitro utilities
       // avoids esm issues with @c8y/client
@@ -117,13 +109,6 @@ export function c8y(): NitroModule {
         // Check probes when all things are registered
         if (options.manifest) {
           checkProbes(nitro, options.manifest)
-        }
-      })
-
-      nitro.hooks.hook('types:extend', async () => {
-        if (options.apiClient) {
-          nitro.logger.debug('Generating C8Y API client')
-          await writeAPIClient(nitro, options)
         }
       })
 
