@@ -22,7 +22,7 @@
     "dev": "nitro dev",
     "preview": "npx srvx --prod .output/",
     "typecheck": "tsc --noEmit",
-    "typegen": "nitro prepare",
+    "typegen": "c8y-nitro typegen",
     "test": "vitest",
     "bootstrap": "c8y-nitro bootstrap"
   },
