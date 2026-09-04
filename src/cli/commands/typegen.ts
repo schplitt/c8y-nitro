@@ -33,9 +33,14 @@ export default defineCommand({
 
     consola.success(`Generated types at ${C8Y_NITRO_TYPES_DIR}/${C8Y_NITRO_TYPES_FILE}`)
 
-    const apiClient = nitro.options.c8y?.apiClient
-    if (apiClient) {
-      await writeAPIClient(nitro, nitro.options.c8y ?? {})
+    // Routes are scanned right after the modules install, so the client sees the
+    // user's handlers. The module's own handlers (probes, OpenAPI) are registered
+    // in `build:before` and are therefore absent here — which is what a UI-facing
+    // client wants anyway.
+    const c8yOptions = nitro.options.c8y ?? {}
+    if (c8yOptions.apiClient) {
+      // Logs its own success line including the resolved output path.
+      await writeAPIClient(nitro, c8yOptions)
     }
 
     consola.info(
