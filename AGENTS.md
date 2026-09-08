@@ -378,7 +378,6 @@ User-facing documentation belongs in `docs/` first:
 - Runtime hooks → `docs/reference/runtime-hooks.md`
 - Environment variables → `docs/reference/environment-variables.md`
 - Generated runtime exports or generated types → `docs/reference/runtime-module.md`
-- Deployment, CI, release, or GitHub Pages behavior → `docs/guide/deployment.md`
 - Changes to existing API behavior → update the relevant `docs/guide/**` and `docs/reference/**` pages
 - Any feature that users can configure, use, or interact with
 
@@ -423,8 +422,6 @@ After changing docs, run `pnpm docs:build` when feasible to catch broken links, 
 
 - Example: Adding tenant options support requires `docs/guide/tenant-options.md` plus reference updates
 
-11. **Changing release, CI, docs build, or Pages behavior** → Update `docs/guide/deployment.md` and, if needed, `README.md` links or quickstart notes
-
 **Documentation Update Checklist:**
 
 - [ ] Did I add/change a utility? → Update `docs/reference/utilities.md` and relevant guide docs
@@ -434,7 +431,6 @@ After changing docs, run `pnpm docs:build` when feasible to catch broken links, 
 - [ ] Did I learn a pattern? → Update AGENTS.md patterns/conventions
 - [ ] Did I add an env variable? → Update `docs/reference/environment-variables.md`
 - [ ] Did I change runtime exports/generated types? → Update `docs/reference/runtime-module.md`
-- [ ] Did I change release/deploy behavior? → Update `docs/guide/deployment.md`
 - [ ] Did I change quickstart/install/package positioning? → Update `README.md`
 - [ ] Did I update docs? → Run `pnpm docs:build` when feasible
 - [ ] At the end of my response: Did I explicitly notify the user of documentation changes?
