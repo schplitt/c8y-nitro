@@ -55,7 +55,6 @@ export default defineConfig({
           { text: 'API Client Generation', link: '/guide/api-client' },
           { text: 'OpenAPI', link: '/guide/openapi' },
           { text: 'Native Dependencies', link: '/guide/native-dependencies' },
-          { text: 'Deployment', link: '/guide/deployment' },
         ],
       },
       {
