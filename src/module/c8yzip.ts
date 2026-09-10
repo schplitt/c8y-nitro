@@ -62,10 +62,13 @@ export async function createC8yZip(nitro: Nitro, options: C8YZipOptions = {}, do
   zip.file('image.tar', imageTarBuffer)
   zip.file('cumulocity.json', JSON.stringify(manifest, null, 2))
 
-  // Generate zip buffer without compression (tar already contains compressed layers)
+  // Use balanced DEFLATE compression (level 6) as a speed/size compromise.
+  // Note: image.tar usually contains already-compressed Docker layers, so size wins vary.
+  const compressionLevel = options.compressionLevel ?? 6
   const zipBuffer = await zip.generateAsync({
     type: 'nodebuffer',
-    compression: 'STORE', // No compression for speed - Docker layers already compressed
+    compression: 'DEFLATE',
+    compressionOptions: { level: compressionLevel },
   })
 
   // Determine output path

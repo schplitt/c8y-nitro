@@ -75,6 +75,7 @@ export interface C8YRoles {}
 export interface C8YZipOptions {
   name?: string | ((_: string, _: string) => string);
   outputDir?: string;
+  compressionLevel?: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
   manifest?: C8YManifestOptions;
 }
 // #endregion
