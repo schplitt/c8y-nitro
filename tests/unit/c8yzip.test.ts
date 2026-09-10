@@ -5,6 +5,16 @@ import JSZip from 'jszip'
 import type { C8YManifest } from '../../src/types/manifest'
 import { createC8yZip, resolveZipOutputPath } from '../../src/module/c8yzip'
 
+const DEFLATE_COMPRESSION_MAGIC = '\b\x00'
+
+function getCompressionMagic(zip: JSZip, fileName: string): string {
+  const file = zip.file(fileName)
+  expect(file).toBeDefined()
+  const compressionMagic = (file as { _data?: { compression?: { magic?: string } } })._data?.compression?.magic
+  expect(compressionMagic).toBeDefined()
+  return compressionMagic!
+}
+
 // Mock spinnies to silence output
 vi.mock('spinnies', () => ({
   default: class {
@@ -225,6 +235,19 @@ describe('c8yzip', () => {
       expect(fileNames).toHaveLength(2)
       expect(fileNames).toContain('image.tar')
       expect(fileNames).toContain('cumulocity.json')
+    })
+
+    it('should use DEFLATE compression for both zip entries', async () => {
+      const nitro = createMockNitro()
+
+      await createC8yZip(nitro, {})
+
+      const zipPath = '/project/test-service-1.0.0.zip'
+      const zipBuffer = vol.readFileSync(zipPath) as Buffer
+      const zip = await JSZip.loadAsync(zipBuffer)
+
+      expect(getCompressionMagic(zip, 'image.tar')).toBe(DEFLATE_COMPRESSION_MAGIC)
+      expect(getCompressionMagic(zip, 'cumulocity.json')).toBe(DEFLATE_COMPRESSION_MAGIC)
     })
 
     it('should verify zip content matches inputs', async () => {

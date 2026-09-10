@@ -73,6 +73,8 @@ zip?: {
 
 Use this when the build artifact itself needs different naming or placement.
 
+Artifact ZIP files are generated with JSZip using `DEFLATE` compression at level `6` by default. This balances build speed and package size; `image.tar` typically contains already-compressed Docker layers, so end-to-end size reductions can be limited.
+
 ## `docker`
 
 ```json
