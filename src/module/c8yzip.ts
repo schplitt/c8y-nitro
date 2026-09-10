@@ -64,10 +64,11 @@ export async function createC8yZip(nitro: Nitro, options: C8YZipOptions = {}, do
 
   // Use balanced DEFLATE compression (level 6) as a speed/size compromise.
   // Note: image.tar usually contains already-compressed Docker layers, so size wins vary.
+  const compressionLevel = options.compressionLevel ?? 6
   const zipBuffer = await zip.generateAsync({
     type: 'nodebuffer',
     compression: 'DEFLATE',
-    compressionOptions: { level: 6 },
+    compressionOptions: { level: compressionLevel },
   })
 
   // Determine output path

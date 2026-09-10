@@ -21,6 +21,8 @@ By default, the generated artifact ZIP uses **DEFLATE** compression at **level 6
 
 This is a practical speed/size compromise: faster than higher levels while still reducing metadata and text payload size in many cases. The `image.tar` payload often contains already-compressed Docker layers, so total ZIP size may not shrink substantially.
 
+You can tune the level via `c8y.zip.compressionLevel` (`1` to `9`) when packaging tradeoffs differ for your service.
+
 ## Customizing Output
 
 Use the `zip` options when you want to change the artifact name, output directory, or packaging-time manifest overrides.

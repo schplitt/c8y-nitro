@@ -15,6 +15,13 @@ export interface C8YZipOptions {
   outputDir?: string
 
   /**
+   * ZIP DEFLATE compression level used for `image.tar` and `cumulocity.json`.
+   * Valid values are 1 (faster, larger) to 9 (slower, smaller).
+   * @default 6
+   */
+  compressionLevel?: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+
+  /**
    * Configuration of the "cumulocity.json" manifest file used for the zip.
    */
   manifest?: C8YManifestOptions

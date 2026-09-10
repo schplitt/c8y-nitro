@@ -67,13 +67,14 @@ apiClient?: {
 zip?: {
   name?: string | ((packageName: string, version: string) => string)
   outputDir?: string
+  compressionLevel?: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
   manifest?: C8YManifestOptions
 }
 ```
 
 Use this when the build artifact itself needs different naming or placement.
 
-Artifact ZIP files are generated with JSZip using `DEFLATE` compression at level `6` by default. This balances build speed and package size; `image.tar` typically contains already-compressed Docker layers, so end-to-end size reductions can be limited.
+Artifact ZIP files are generated with JSZip using `DEFLATE` compression. By default, `compressionLevel` is `6` as a speed/size compromise; `image.tar` typically contains already-compressed Docker layers, so end-to-end size reductions can be limited.
 
 ## `docker`
 

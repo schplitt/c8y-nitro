@@ -59,7 +59,7 @@ Enables Angular client generation from your Nitro routes.
 ### `zip`
 
 Controls the generated artifact name, output directory, and manifest overrides used during packaging.
-Packaging uses DEFLATE compression level 6 by default as a speed/size compromise; Docker-layer-heavy `image.tar` content may see limited additional compression.
+Packaging uses DEFLATE compression with `compressionLevel: 6` by default as a speed/size compromise; Docker-layer-heavy `image.tar` content may see limited additional compression.
 
 ### `cache`
 
