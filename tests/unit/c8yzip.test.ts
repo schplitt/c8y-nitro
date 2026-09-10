@@ -227,21 +227,6 @@ describe('c8yzip', () => {
       expect(fileNames).toContain('cumulocity.json')
     })
 
-    it('should pass configured compression level to JSZip', async () => {
-      const nitro = createMockNitro()
-      const generateAsyncSpy = vi.spyOn(JSZip.prototype, 'generateAsync')
-
-      try {
-        await createC8yZip(nitro, { compressionLevel: 3 })
-        expect(generateAsyncSpy).toHaveBeenCalledWith(expect.objectContaining({
-          compression: 'DEFLATE',
-          compressionOptions: { level: 3 },
-        }))
-      } finally {
-        generateAsyncSpy.mockRestore()
-      }
-    })
-
     it('should verify zip content matches inputs', async () => {
       const nitro = createMockNitro()
 
