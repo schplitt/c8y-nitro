@@ -173,6 +173,7 @@ export class MicroserviceClientRequestAuth {
 export class Client {
   core = {
     tenant: 't12345',
+    defaultHeaders: {},
     fetch: async (url, init = {}) => {
       const method = String(init.method || 'GET').toUpperCase()
       const [rawPath] = String(url).split('?')
