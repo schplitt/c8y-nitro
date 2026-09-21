@@ -28,7 +28,11 @@ export function useUserClient(requestOrEvent: ServerRequest | H3Event): Client {
   const auth = new MicroserviceClientRequestAuth(headers)
 
   // C8Y_BASEURL is enforced to be set
-  const client = new Client(auth, process.env.C8Y_BASEURL)
+  const client = new Client(auth, process.env.C8Y_BASEURL);
+
+  // api gateway cant resolve the original host from the incoming request token if it's bearer token based
+  // we set the X-Forwarded-Host header to ensure the original host is preserved
+  (client.core.defaultHeaders as Record<string, string>)['X-Forwarded-Host'] = request.headers.get('x-forwarded-host') ?? process.env.C8Y_BASEURL!
 
   // cache client in request context for subsequent calls
   request.context ??= {}
