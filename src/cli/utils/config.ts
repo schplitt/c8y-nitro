@@ -1,5 +1,6 @@
 import { loadConfig, loadDotenv } from 'c12'
 import { dirname } from 'pathe'
+import { applyC8yNitroEnvVars, resolveEnvFileNames, toPrefixedEnvVar } from './env'
 import type { NitroConfig } from 'nitro/types'
 import type { C8yNitroModuleOptions } from '../../types'
 import process from 'process'
@@ -39,13 +40,8 @@ function normalizeBaseUrl(baseUrl: string): string {
  */
 export async function loadC8yConfig(): Promise<C8yConfig> {
   const cwd = process.cwd()
-  // Load .env and .env.local files
-  const env = await loadDotenv({
-    cwd,
-    fileName: ['.env', '.env.local'],
-  })
 
-  // Load nitro config
+  // Load nitro config first - it may configure extra env files via `c8y.envFile`
   const { config, _configFile } = await loadConfig<NitroConfig>({
     configFile: 'nitro.config',
     cwd,
@@ -61,6 +57,15 @@ export async function loadC8yConfig(): Promise<C8yConfig> {
 
   // Extract c8y options from the config
   const c8yOptions = config.c8y as C8yNitroModuleOptions | undefined
+
+  // Load env files: configured extra files (e.g. monorepo root) first, the
+  // project's own .env/.env.local last so they win. C8Y_NITRO_*-prefixed
+  // variables override their unprefixed counterparts.
+  const env = await loadDotenv({
+    cwd: configDir,
+    fileName: resolveEnvFileNames(configDir, c8yOptions?.envFile),
+  })
+  applyC8yNitroEnvVars(env)
 
   return {
     env,
@@ -94,7 +99,7 @@ export function validateBootstrapEnv(env: Record<string, string | undefined>): B
 
   if (missing.length > 0) {
     throw new Error(
-      `Missing required environment variables:\n${missing.map((k) => `  - ${k}`).join('\n')}\n\nPlease set these in your .env or .env.local file.`,
+      `Missing required environment variables:\n${missing.map((k) => `  - ${k} (or ${toPrefixedEnvVar(k)})`).join('\n')}\n\nPlease set these in your .env or .env.local file (or a file configured via \`c8y.envFile\`).`,
     )
   }
 

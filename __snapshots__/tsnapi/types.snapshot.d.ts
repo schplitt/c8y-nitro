@@ -52,6 +52,7 @@ export interface C8yNitroModuleOptions {
   realtime?: C8yRealtimeOptions;
   openapi?: C8yOpenAPIOptions;
   enableTenantOptionsInvalidationRoute?: boolean;
+  envFile?: string | string[];
   skipBootstrap?: boolean;
 }
 export interface C8yOpenAPIOptions {
