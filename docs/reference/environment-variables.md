@@ -17,7 +17,7 @@ These are required for auto-bootstrap and the CLI commands that operate on your 
 
 Each development tenant variable also accepts a `C8Y_NITRO_`-prefixed variant that takes precedence over the unprefixed name:
 
-| Unprefixed                 | Prefixed variant                 |
+| Unprefixed                 | Prefixed Variant                 |
 | -------------------------- | -------------------------------- |
 | `C8Y_BASEURL`              | `C8Y_NITRO_BASEURL`              |
 | `C8Y_DEVELOPMENT_TENANT`   | `C8Y_NITRO_DEVELOPMENT_TENANT`   |

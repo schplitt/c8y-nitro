@@ -197,9 +197,11 @@ Supported query params:
 Additional `.env` file(s) to load during development and for CLI commands - typically a shared env file at the monorepo root:
 
 ```ts
-c8y: {
-  envFile: '../../.env',
-}
+export default defineNitroConfig({
+  c8y: {
+    envFile: '../../.env',
+  },
+})
 ```
 
 Entries are resolved relative to the project root (absolute paths work too). An entry may point at a file (`'../../.env'`) or a directory (`'../..'`, which loads its `.env` and `.env.local`).
