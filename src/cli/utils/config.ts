@@ -64,6 +64,8 @@ export async function loadC8yConfig(): Promise<C8yConfig> {
   const env = await loadDotenv({
     cwd: configDir,
     fileName: resolveEnvFileNames(configDir, c8yOptions?.envFile),
+    // Same as dev mode (setupDotenv), which interpolates by default.
+    interpolate: true,
   })
   applyC8yNitroEnvVars(env)
 

@@ -110,6 +110,23 @@ describe('env', () => {
       expect(env.C8Y_BASEURL).toBe('https://shared.example.com')
     })
 
+    it('interpolates variables across merged files', async () => {
+      const root = await makeTempDir()
+      const project = join(root, 'apps', 'service')
+      await mkdir(project, { recursive: true })
+      await writeFile(join(root, '.env'), 'C8Y_HOST=example.cumulocity.com\n')
+      // c12 supports both `$VAR` and `${VAR}` interpolation syntax
+      await writeFile(join(project, '.env'), 'C8Y_BASEURL=https://$C8Y_HOST\n')
+
+      const env = await loadDotenv({
+        cwd: project,
+        fileName: resolveEnvFileNames(project, '../../.env'),
+        interpolate: true,
+      })
+
+      expect(env.C8Y_BASEURL).toBe('https://example.cumulocity.com')
+    })
+
     it('resolves prefixed variables from a shared env file', async () => {
       const root = await makeTempDir()
       const project = join(root, 'apps', 'service')
