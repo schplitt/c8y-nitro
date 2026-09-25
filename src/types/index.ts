@@ -79,6 +79,24 @@ export interface C8yNitroModuleOptions {
    */
   enableTenantOptionsInvalidationRoute?: boolean
   /**
+   * Additional `.env` file(s) to load during development and for CLI commands,
+   * for example a shared monorepo-root env file.
+   *
+   * Entries are resolved relative to the project root (absolute paths work too)
+   * and may point at a file (`'../../.env'`) or a directory (`'../..'`, which
+   * loads its `.env` and `.env.local`).
+   *
+   * Precedence (highest first): real environment variables, the project's own
+   * `.env.local` and `.env`, then the entries here (later entries override
+   * earlier ones). Bootstrap credentials are still written to the project's
+   * own env file, keeping them per-microservice in a monorepo.
+   *
+   * Only used in dev mode and by the CLI - deployed microservices get their
+   * environment from the platform.
+   * @default []
+   */
+  envFile?: string | string[]
+  /**
    * Disable auto-bootstrap during development.
    * When true, the module will not automatically register the microservice
    * or retrieve bootstrap credentials on startup.

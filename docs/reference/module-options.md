@@ -15,6 +15,7 @@ interface C8yNitroModuleOptions {
   realtime?: C8yRealtimeOptions
   openapi?: C8yOpenAPIOptions
   enableTenantOptionsInvalidationRoute?: boolean
+  envFile?: string | string[]
   skipBootstrap?: boolean
 }
 ```
@@ -190,6 +191,30 @@ Supported query params:
 
 - `key`: invalidates one created tenant option cache
 - `all`: invalidates all created tenant option caches and takes priority over `key`
+
+## `envFile`
+
+Additional `.env` file(s) to load during development and for CLI commands - typically a shared env file at the monorepo root:
+
+```ts
+export default defineNitroConfig({
+  c8y: {
+    envFile: '../../.env',
+  },
+})
+```
+
+Entries are resolved relative to the project root (absolute paths work too). An entry may point at a file (`'../../.env'`) or a directory (`'../..'`, which loads its `.env` and `.env.local`).
+
+Precedence, highest first:
+
+1. Real environment variables
+2. The project's own `.env.local`, then `.env`
+3. The configured `envFile` (later entries override earlier ones)
+
+Bootstrap credentials are still written to the project's own env file, so they stay per-microservice in a monorepo. Deployed microservices are unaffected - they get their environment from the platform.
+
+To avoid clashing with other tools that read the generic `C8Y_*` names from a shared env file, the development variables also accept `C8Y_NITRO_`-prefixed variants. See [Environment Variables](./environment-variables#c8y-nitro-prefixed-variants).
 
 ## `skipBootstrap`
 

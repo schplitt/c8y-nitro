@@ -13,6 +13,19 @@ These are required for auto-bootstrap and the CLI commands that operate on your 
 | `C8Y_DEVELOPMENT_USER`     | Development user name                                             |
 | `C8Y_DEVELOPMENT_PASSWORD` | Development user password                                         |
 
+### `C8Y_NITRO_`-Prefixed Variants {#c8y-nitro-prefixed-variants}
+
+Each development tenant variable also accepts a `C8Y_NITRO_`-prefixed variant that takes precedence over the unprefixed name:
+
+| Unprefixed                 | Prefixed Variant                 |
+| -------------------------- | -------------------------------- |
+| `C8Y_BASEURL`              | `C8Y_NITRO_BASEURL`              |
+| `C8Y_DEVELOPMENT_TENANT`   | `C8Y_NITRO_DEVELOPMENT_TENANT`   |
+| `C8Y_DEVELOPMENT_USER`     | `C8Y_NITRO_DEVELOPMENT_USER`     |
+| `C8Y_DEVELOPMENT_PASSWORD` | `C8Y_NITRO_DEVELOPMENT_PASSWORD` |
+
+Use the prefixed names when a shared env file (for example at a monorepo root, see [`envFile`](./module-options#envfile)) also serves other tools that read generic `C8Y_*` variables - the prefixed values are unambiguously for c8y-nitro and win when both are set.
+
 ## Bootstrap Credentials
 
 These are written by auto-bootstrap or by the `bootstrap` CLI command.
@@ -38,4 +51,6 @@ Values are in seconds.
 
 ## Where They Are Loaded
 
-The CLI loads project config and env files before validating required variables. During development, auto-bootstrap writes generated bootstrap credentials back into the env file and also updates `process.env` so the current process can continue immediately.
+Both dev mode and the CLI load env files in this order (later wins): files configured via [`c8y.envFile`](./module-options#envfile), then the project's own `.env`, then `.env.local`. Real environment variables always win over file values, and `C8Y_NITRO_`-prefixed variants win over their unprefixed counterparts.
+
+The CLI loads project config and env files before validating required variables. During development, auto-bootstrap writes generated bootstrap credentials back into the project's own env file (never into a shared `envFile` entry) and also updates `process.env` so the current process can continue immediately.

@@ -7,6 +7,7 @@ import { setupRuntimeConfig } from './module/runtimeConfig'
 import { registerRuntime } from './module/registerRuntime'
 import { checkProbes } from './module/probeCheck'
 import { autoBootstrap } from './module/autoBootstrap'
+import { setupC8yDevEnv } from './cli/utils/env'
 import { name as pkgName } from '../package.json'
 import evlog from 'evlog/nitro/v3'
 import { createC8yManifestFromNitro } from './module/manifest'
@@ -82,8 +83,13 @@ export function c8y(): NitroModule {
       // Dev-only: it writes bootstrap credentials to .env and mutates the tenant,
       // which must not happen during a production build.
       const isNitroDev = nitro.options.preset === 'nitro-dev'
-      if (isNitroDev && !options.skipBootstrap) {
-        await autoBootstrap(nitro)
+      if (isNitroDev) {
+        // Load configured extra env files (e.g. a monorepo-root .env) and
+        // resolve C8Y_NITRO_*-prefixed variables before anything reads them.
+        await setupC8yDevEnv(nitro.options.rootDir, options.envFile)
+        if (!options.skipBootstrap) {
+          await autoBootstrap(nitro)
+        }
       }
 
       await setupRuntimeConfig(nitro, options)
@@ -91,6 +97,8 @@ export function c8y(): NitroModule {
       setupRuntime(nitro, manifest)
 
       nitro.hooks.hook('dev:reload', async () => {
+        // Pick up in-session edits to the configured extra env files too.
+        await setupC8yDevEnv(nitro.options.rootDir, options.envFile)
         manifest = await createC8yManifestFromNitro(nitro)
         setupRuntime(nitro, manifest)
         // Re-sync the tenant on in-session manifest edits, not just full restarts.
