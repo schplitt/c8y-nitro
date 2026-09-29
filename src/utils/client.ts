@@ -34,9 +34,13 @@ export function useUserClient(requestOrEvent: ServerRequest | H3Event): Client {
   // we set the X-Forwarded-Host header to ensure the original host is preserved
   // the header may contain a comma-separated list when multiple proxy hops appended
   // their own value (same convention as X-Forwarded-For); the first entry is the
-  // original, client-facing host
-  const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim();
-  (client.core.defaultHeaders as Record<string, string>)['X-Forwarded-Host'] = forwardedHost || process.env.C8Y_BASEURL!
+  // original, client-facing host.
+  // C8Y_BASEURL is not a usable fallback: it is the platform's internal URL, not the
+  // tenant's public host, so without an incoming value the header is left unset
+  const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim()
+  if (forwardedHost) {
+    (client.core.defaultHeaders as Record<string, string>)['X-Forwarded-Host'] = forwardedHost
+  }
 
   // cache client in request context for subsequent calls
   request.context ??= {}
