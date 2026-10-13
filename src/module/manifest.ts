@@ -138,7 +138,7 @@ async function readPackageJsonFieldsForManifest(
  * Create a Cumulocity manifest from a project root and its Nitro config.
  * Reads `package.json` for identity fields, takes user manifest options from
  * `nitroConfig.c8y.manifest`, and auto-injects `openApiSpec` when Nitro
- * OpenAPI is enabled for production.
+ * OpenAPI is enabled for production (unless set explicitly in the options).
  *
  * Used by both the Nitro module and the CLI commands.
  * @param rootDir - Directory containing the project's `package.json`
@@ -198,12 +198,18 @@ export async function createC8yManifest(
     logger?.debug(`Auto-added ${ROLE_OPTION_MANAGEMENT_READ} to requiredRoles because manifest.settings are defined`)
   }
 
+  // An explicitly configured openApiSpec (e.g. a hand-written spec route) wins
+  // over the auto-detected Nitro OpenAPI route.
+  const resolvedOpenApiSpec = options.openApiSpec ?? openApiSpec
+
+  // probeFields must come after options so that a timing-only user probe
+  // (no httpGet) does not overwrite the injected generated httpGet path.
   const manifest: C8YManifest = {
     ...restManifestFields,
-    ...probeFields,
     ...options,
+    ...probeFields,
     ...(requiredRoles !== undefined ? { requiredRoles } : {}),
-    ...(openApiSpec ? { openApiSpec } : {}),
+    ...(resolvedOpenApiSpec ? { openApiSpec: resolvedOpenApiSpec } : {}),
     provider,
     name,
     version,
@@ -211,7 +217,9 @@ export async function createC8yManifest(
     key,
     type: 'MICROSERVICE',
   }
-  if (openApiSpec) {
+  if (options.openApiSpec) {
+    logger?.debug(`Using openApiSpec="${options.openApiSpec}" from manifest options`)
+  } else if (openApiSpec) {
     logger?.debug(`Auto-added openApiSpec="${openApiSpec}" to manifest (Nitro OpenAPI is enabled)`)
   }
   logger?.debug(`Created Cumulocity manifest: ${JSON.stringify(manifest, null, 2)}`)

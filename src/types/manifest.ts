@@ -1,6 +1,6 @@
 import type { C8YRole } from './roles'
 
-export type C8YManifestOptions = Omit<C8YManifest, 'name' | 'version' | 'apiVersion' | 'key' | 'type' | 'provider' | 'openApiSpec'>
+export type C8YManifestOptions = Omit<C8YManifest, 'name' | 'version' | 'apiVersion' | 'key' | 'type' | 'provider'>
 
 export interface C8YManifest {
   /**
@@ -137,10 +137,56 @@ export interface C8YManifest {
    * `openAPI.production` is configured. Used by clients (e.g., mc8yp) to
    * auto-discover the API.
    *
+   * Set it explicitly to point at a spec your service serves itself (e.g. a
+   * hand-written spec route). An explicit value takes precedence over the
+   * auto-detected Nitro route.
+   *
    * Path is relative to the microservice context path.
    * @example "/_openapi.json"
    */
   openApiSpec?: string
+
+  /**
+   * MCP (Model Context Protocol) servers exposed by this microservice.
+   * Once the application is subscribed, Cumulocity AI Agent Manager
+   * auto-registers these entries, and MCP-aware clients (e.g., mc8yp)
+   * discover them from the manifest.
+   * @example [{ name: "my-service", url: "/service/my-service/mcp", type: "http", sendAuthentication: true }]
+   */
+  exposeMcpServers?: ExposedMcpServer[]
+}
+
+/**
+ * MCP server entry declared via `exposeMcpServers`.
+ */
+export interface ExposedMcpServer {
+  /**
+   * Name of the MCP server as shown in AI Agent Manager.
+   * @example "my-service"
+   */
+  name: string
+
+  /**
+   * Human-readable description of what the MCP server offers.
+   */
+  description?: string
+
+  /**
+   * URL of the MCP endpoint, usually the full service path including the context path.
+   * @example "/service/my-service/mcp"
+   */
+  url: string
+
+  /**
+   * MCP transport type. Streamable HTTP (`"http"`) is the supported transport.
+   * @example "http"
+   */
+  type: 'http' | (string & {})
+
+  /**
+   * Forward the calling user's authentication to the MCP server.
+   */
+  sendAuthentication?: boolean
 }
 
 /**
