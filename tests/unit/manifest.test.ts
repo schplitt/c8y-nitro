@@ -395,22 +395,6 @@ describe('manifest generation', () => {
         expect(manifest.openApiSpec).toBe('/api/spec.json')
       })
 
-      it('uses an explicit openApiSpec from manifest options', async () => {
-        const manifest = await createC8yManifest('/project', nitroConfigWithManifest({ openApiSpec: 'openapi.json' }))
-
-        expect(manifest.openApiSpec).toBe('openapi.json')
-      })
-
-      it('prefers an explicit openApiSpec over the auto-detected Nitro route', async () => {
-        const manifest = await createC8yManifest('/project', {
-          c8y: { manifest: { openApiSpec: '/custom-spec.json' } },
-          experimental: { openAPI: true },
-          openAPI: { production: 'runtime' },
-        })
-
-        expect(manifest.openApiSpec).toBe('/custom-spec.json')
-      })
-
       it('composes with user manifest options from c8y.manifest', async () => {
         const manifest = await createC8yManifest('/project', {
           c8y: { manifest: { requiredRoles: ['ROLE_INVENTORY_READ'] } },

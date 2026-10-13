@@ -19,7 +19,7 @@ export default defineNitroConfig({
 })
 ```
 
-With this in place, Nitro serves the document at `/_openapi.json` together with the Scalar (`/_scalar`) and Swagger (`/_swagger`) UIs. When OpenAPI is enabled for production, the manifest generation also injects the spec route as `openApiSpec` into `cumulocity.json` automatically. An explicit `c8y.manifest.openApiSpec` takes precedence, which is useful when the service serves its own spec.
+With this in place, Nitro serves the document at `/_openapi.json` together with the Scalar (`/_scalar`) and Swagger (`/_swagger`) UIs. When OpenAPI is enabled for production, the manifest generation also injects the spec route as `openApiSpec` into `cumulocity.json` automatically.
 
 ::: warning Prerendered documents cannot be transformed
 `openAPI: { production: 'prerender' }` bakes the document into a static asset at build time. It is served before the transform middleware runs, so internal routes stay listed and the server URL points at the build machine. Use `production: true` instead; `c8y-nitro` warns about this at build time.

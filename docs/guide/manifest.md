@@ -75,10 +75,6 @@ export default defineNitroConfig({
 })
 ```
 
-## OpenAPI Spec
-
-When Nitro OpenAPI is enabled for production, `openApiSpec` is filled in automatically (see [OpenAPI](./openapi.md)). If your service serves its own spec, for example a hand-written one, set `manifest.openApiSpec` to its path. An explicit value takes precedence over the auto-detected route.
-
 ## Tenant Options (Settings)
 
 Define your microservice's settings in the manifest to get type-safe keys for `useTenantOption()`:
