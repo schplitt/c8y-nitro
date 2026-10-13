@@ -141,6 +141,48 @@ export interface C8YManifest {
    * @example "/_openapi.json"
    */
   openApiSpec?: string
+
+  /**
+   * MCP (Model Context Protocol) servers exposed by this microservice.
+   * Once the application is subscribed, Cumulocity AI Agent Manager
+   * auto-registers these entries, and MCP-aware clients (e.g., mc8yp)
+   * discover them from the manifest.
+   * @example [{ name: "my-service", url: "/service/my-service/mcp", type: "http", sendAuthentication: true }]
+   */
+  exposeMcpServers?: ExposedMcpServer[]
+}
+
+/**
+ * MCP server entry declared via `exposeMcpServers`.
+ */
+export interface ExposedMcpServer {
+  /**
+   * Name of the MCP server as shown in AI Agent Manager.
+   * @example "my-service"
+   */
+  name: string
+
+  /**
+   * Human-readable description of what the MCP server offers.
+   */
+  description?: string
+
+  /**
+   * URL of the MCP endpoint, usually the full service path including the context path.
+   * @example "/service/my-service/mcp"
+   */
+  url: string
+
+  /**
+   * MCP transport type. Streamable HTTP (`"http"`) is the supported transport.
+   * @example "http"
+   */
+  type: 'http' | (string & {})
+
+  /**
+   * Forward the calling user's authentication to the MCP server.
+   */
+  sendAuthentication?: boolean
 }
 
 /**

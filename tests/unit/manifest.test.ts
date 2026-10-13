@@ -151,6 +151,51 @@ describe('manifest generation', () => {
       expect(manifest.readinessProbe?.httpGet?.path).toBe('/custom/readiness')
     })
 
+    it('should keep generated httpGet paths for timing-only probes', async () => {
+      mockPackageData.current = {
+        name: 'my-service',
+        version: '1.0.0',
+        author: 'Test Author',
+      }
+
+      const manifest = await createC8yManifest('/project', nitroConfigWithManifest({
+        livenessProbe: { initialDelaySeconds: 60 },
+        readinessProbe: { periodSeconds: 5, failureThreshold: 6 },
+      }))
+
+      expect(manifest.livenessProbe).toEqual({
+        initialDelaySeconds: 60,
+        httpGet: { path: '/_c8y_nitro/liveness' },
+      })
+      expect(manifest.readinessProbe).toEqual({
+        periodSeconds: 5,
+        failureThreshold: 6,
+        httpGet: { path: '/_c8y_nitro/readiness' },
+      })
+    })
+
+    it('should pass exposeMcpServers through to the manifest', async () => {
+      mockPackageData.current = {
+        name: 'my-service',
+        version: '1.0.0',
+        author: 'Test Author',
+      }
+
+      const exposeMcpServers: C8YManifestOptions['exposeMcpServers'] = [
+        {
+          name: 'my-service',
+          description: 'Tools for my service',
+          url: '/service/my-service/mcp',
+          type: 'http',
+          sendAuthentication: true,
+        },
+      ]
+
+      const manifest = await createC8yManifest('/project', nitroConfigWithManifest({ exposeMcpServers }))
+
+      expect(manifest.exposeMcpServers).toEqual(exposeMcpServers)
+    })
+
     it('should merge options into manifest', async () => {
       mockPackageData.current = {
         name: 'my-service',

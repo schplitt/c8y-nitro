@@ -198,10 +198,12 @@ export async function createC8yManifest(
     logger?.debug(`Auto-added ${ROLE_OPTION_MANAGEMENT_READ} to requiredRoles because manifest.settings are defined`)
   }
 
+  // probeFields must come after options so that a timing-only user probe
+  // (no httpGet) does not overwrite the injected generated httpGet path.
   const manifest: C8YManifest = {
     ...restManifestFields,
-    ...probeFields,
     ...options,
+    ...probeFields,
     ...(requiredRoles !== undefined ? { requiredRoles } : {}),
     ...(openApiSpec ? { openApiSpec } : {}),
     provider,

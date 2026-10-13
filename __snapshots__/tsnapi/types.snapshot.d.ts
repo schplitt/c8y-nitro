@@ -41,6 +41,7 @@ export interface C8YManifest {
   readinessProbe?: Probe;
   extensions?: Extension[];
   openApiSpec?: string;
+  exposeMcpServers?: ExposedMcpServer[];
 }
 export interface C8yNitroModuleOptions {
   dev?: C8yDevOptions;
@@ -78,6 +79,13 @@ export interface C8YZipOptions {
   outputDir?: string;
   compressionLevel?: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
   manifest?: C8YManifestOptions;
+}
+export interface ExposedMcpServer {
+  name: string;
+  description?: string;
+  url: string;
+  type: 'http' | (string & {});
+  sendAuthentication?: boolean;
 }
 // #endregion
 
