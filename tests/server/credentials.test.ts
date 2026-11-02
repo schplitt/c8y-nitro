@@ -1,20 +1,12 @@
-import { describe, expect, it, vi } from 'vitest'
-import { c8yMock } from './mocks/c8y-client'
+import { describe, expect, it } from 'vitest'
+import { c8y } from 'c8y-nitro/testing'
 import { clearCredentialHookEvents, getCredentialHookEvents } from './fixture/plugins/tenant-credentials-updated'
-import { fetchJson, stubC8yEnv } from './utils'
+import { fetchJson } from './utils'
 
-stubC8yEnv()
-
-vi.mock('@c8y/client', async () => {
-  const { mockC8yClientModule } = await import('./mocks/c8y-client')
-  return mockC8yClientModule({
-    currentUser: { userName: 'testUser', effectiveRoles: [] } as any,
-    subscriptions: [
-      { tenant: 't12345', user: 'serviceuser1', password: 'pass1' },
-      { tenant: 't67890', user: 'serviceuser2', password: 'pass2' },
-    ],
-  })
-})
+c8y.subscriptions.set([
+  { tenant: 't12345', user: 'serviceuser1', password: 'pass1' },
+  { tenant: 't67890', user: 'serviceuser2', password: 'pass2' },
+])
 
 describe('tenant credentials', () => {
   it('returns subscribed tenants and deployed tenant credentials', async () => {
@@ -24,6 +16,7 @@ describe('tenant credentials', () => {
     expect(json.subscribedTenants).toEqual(expect.arrayContaining(['t12345', 't67890']))
     expect(json.deployedTenant).toBe('t12345')
     expect(json.userTenant).toBe('t12345')
+    expect(c8y).toHaveReceived('GET /application/currentApplication/subscriptions', { times: 1 })
   })
 
   it('only emits the lifecycle hook when the tenant id set changes', async () => {
@@ -43,7 +36,7 @@ describe('tenant credentials', () => {
     expect(takeEvents()).toEqual([])
 
     // added tenant: cached until refreshed, then exactly one event
-    c8yMock.setSubscription({ tenant: 't99999', user: 'serviceuser3', password: 'pass3' })
+    c8y.subscriptions.add({ tenant: 't99999', user: 'serviceuser3', password: 'pass3' })
     expect(await subscribedTenants()).toEqual(['t12345', 't67890'])
     expect(await subscribedTenants(true)).toEqual(['t12345', 't67890', 't99999'])
     expect(takeEvents()).toEqual([
@@ -51,7 +44,7 @@ describe('tenant credentials', () => {
     ])
 
     // removed tenant
-    c8yMock.deleteSubscription('t67890')
+    c8y.subscriptions.remove('t67890')
     expect(await subscribedTenants()).toEqual(['t12345', 't67890', 't99999'])
     expect(await subscribedTenants(true)).toEqual(['t12345', 't99999'])
     expect(takeEvents()).toEqual([
@@ -59,8 +52,8 @@ describe('tenant credentials', () => {
     ])
 
     // replaced tenant (same count, different ids)
-    c8yMock.deleteSubscription('t12345')
-    c8yMock.setSubscription({ tenant: 't67890', user: 'serviceuser2', password: 'pass2' })
+    c8y.subscriptions.remove('t12345')
+    c8y.subscriptions.add({ tenant: 't67890', user: 'serviceuser2', password: 'pass2' })
     expect(await subscribedTenants(true)).toEqual(['t67890', 't99999'])
     expect(takeEvents()).toEqual([
       { prevTenants: ['t12345', 't99999'], nextTenants: ['t67890', 't99999'] },

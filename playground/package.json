@@ -31,6 +31,8 @@
     "c8y-nitro": "workspace:*",
     "nitro": "catalog:",
     "rolldown": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
   }
 }

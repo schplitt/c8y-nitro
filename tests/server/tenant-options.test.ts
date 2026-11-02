@@ -1,28 +1,13 @@
-import { describe, expect, it, vi } from 'vitest'
-import { c8yMock } from './mocks/c8y-client'
-import { fetchJson, sleep, stubC8yEnv } from './utils'
+import { describe, expect, it } from 'vitest'
+import { c8y } from 'c8y-nitro/testing'
+import { fetchJson, sleep } from './utils'
 
-stubC8yEnv()
-
-vi.mock('@c8y/client', async () => {
-  const { mockC8yClientModule } = await import('./mocks/c8y-client')
-  return mockC8yClientModule({
-    subscriptions: [
-      { tenant: 't12345', user: 'serviceuser1', password: 'pass1' },
-    ],
-    tenantOptions: {
-      'myOption': 'hello-world',
-      'credentials.secret': 'super-secret-value',
-      'cacheExpiryOption': 'cache-initial-value',
-    },
-    tenantOptionsByCategory: {
-      'other-service': {
-        foreignKey: 'foreign-initial',
-        extraKey: 'extra-value',
-      },
-    },
-  })
-})
+// File level: these options exist in the platform for every test of this file.
+c8y.tenantOptions.set('myOption', 'hello-world')
+c8y.tenantOptions.set('credentials.secret', 'super-secret-value')
+c8y.tenantOptions.set('cacheExpiryOption', 'cache-initial-value')
+c8y.tenantOptions.set('foreignKey', 'foreign-initial', { category: 'other-service' })
+c8y.tenantOptions.set('extraKey', 'extra-value', { category: 'other-service' })
 
 describe('tenant options', () => {
   it('fetches tenant option values', async () => {
@@ -84,7 +69,7 @@ describe('tenant options', () => {
     // `cacheExpiryOption` has a 4 s TTL in the fixture config
     expect((await fetchJson('/tenant-options')).json.cacheExpiryOption).toBe('cache-initial-value')
 
-    c8yMock.setOption('cacheExpiryOption', 'cache-updated-value')
+    c8y.tenantOptions.set('cacheExpiryOption', 'cache-updated-value')
 
     await sleep(2_000)
     expect((await fetchJson('/tenant-options')).json.cacheExpiryOption).toBe('cache-initial-value')
@@ -106,7 +91,7 @@ describe('tenant option invalidation route', () => {
 
   it('serves the new value after invalidation', async () => {
     expect((await fetchJson('/tenant-options')).json.myOption).toBe('hello-world')
-    c8yMock.setOption('myOption', 'invalidated-value')
+    c8y.tenantOptions.set('myOption', 'invalidated-value')
     expect((await fetchJson('/tenant-options')).json.myOption).toBe('hello-world')
 
     await fetchJson('/_c8y_nitro/invalidate-tenant-options?key=myOption')

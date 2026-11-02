@@ -57,6 +57,10 @@ On build, it can generate the manifest, build the Docker image, and emit the dep
 
 At runtime, it gives you helpers for user context, credentials, tenant options, authorization checks, structured logging, and runtime task scheduling (one-shot and recurring).
 
+### Testing
+
+With `c8y-nitro/testing`, Vitest tests run your service against a fake Cumulocity tenant: arrange devices, measurements, alarms, users, and tenant options as data, call your routes, and assert on the responses and on the data your service changed. See [Testing](/guide/testing).
+
 ### Typed surface
 
 Roles, tenant option keys, and configuration all stay close to TypeScript instead of becoming loosely documented conventions.

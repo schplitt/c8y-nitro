@@ -55,6 +55,7 @@ export default defineConfig({
           { text: 'API Client Generation', link: '/guide/api-client' },
           { text: 'OpenAPI', link: '/guide/openapi' },
           { text: 'Native Dependencies', link: '/guide/native-dependencies' },
+          { text: 'Testing', link: '/guide/testing' },
         ],
       },
       {
@@ -66,6 +67,7 @@ export default defineConfig({
           { text: 'Runtime Hooks', link: '/reference/runtime-hooks' },
           { text: 'Runtime Module', link: '/reference/runtime-module' },
           { text: 'Environment Variables', link: '/reference/environment-variables' },
+          { text: 'Testing API', link: '/reference/testing' },
         ],
       },
     ],

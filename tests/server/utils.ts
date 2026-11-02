@@ -1,39 +1,16 @@
 import { vi } from 'vitest'
-import { serverFetch } from 'nitro'
+import { c8y } from 'c8y-nitro/testing'
+import type { C8yFetchInit } from 'c8y-nitro/testing'
 
 /**
- * Dev and bootstrap environment a c8y-nitro dev server expects.
- */
-export const completeEnv = {
-  C8Y_DEVELOPMENT_TENANT: 't12345',
-  C8Y_DEVELOPMENT_USER: 'someUser@example.com',
-  C8Y_DEVELOPMENT_PASSWORD: '<password>',
-  C8Y_BASEURL: 'https://someTenant.cumulocity.com/',
-  C8Y_BOOTSTRAP_TENANT: 't12345',
-  C8Y_BOOTSTRAP_USER: 'bootstrapUser',
-  C8Y_BOOTSTRAP_PASSWORD: 'bootstrapPassword',
-}
-
-/**
- * Stubs the C8Y_* environment for the current test file. Call it at the top
- * level of the file: the Nitro app is created in `beforeAll`, after the stubs.
- *
- * @param overrides - Variables to change from {@link completeEnv}
- */
-export function stubC8yEnv(overrides: Partial<typeof completeEnv> = {}) {
-  for (const [key, value] of Object.entries({ ...completeEnv, ...overrides })) {
-    vi.stubEnv(key, value)
-  }
-}
-
-/**
- * Requests a route of the test file's Nitro app and parses the JSON body.
+ * Requests a route of the test file's Nitro app (via `c8y.fetch`) and parses
+ * the JSON body.
  *
  * @param path - Route path including query
- * @param init - Request options
+ * @param init - Request options, including `as` to send it as another user
  */
-export async function fetchJson(path: string, init?: Parameters<typeof serverFetch>[1]) {
-  const res = await serverFetch(path, init)
+export async function fetchJson(path: string, init?: C8yFetchInit) {
+  const res = await c8y.fetch(path, init)
   const json = await res.json() as Record<string, any>
   return { res, json }
 }
