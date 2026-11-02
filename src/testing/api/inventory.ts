@@ -23,8 +23,9 @@ export function notFound(id: string): Response {
  * @param options - Rendering options
  * @param options.withChildren - Include child references (default true)
  * @param options.skipChildrenNames - Omit names in references
+ * @param options.withParents
  */
-export function renderManagedObject(data: TenantData, document: StoredDocument, options: { withChildren?: boolean, skipChildrenNames?: boolean } = {}): StoredDocument {
+export function renderManagedObject(data: TenantData, document: StoredDocument, options: { withChildren?: boolean, skipChildrenNames?: boolean, withParents?: boolean } = {}): StoredDocument {
   const self = moSelf(document.id)
   const reference = (id: string, referenceSelf: string) => ({
     self: referenceSelf,
@@ -39,7 +40,9 @@ export function renderManagedObject(data: TenantData, document: StoredDocument, 
     const children = options.withChildren === false ? [] : childIds(data, document.id, kind)
     rendered[kind] = { self: `${self}/${kind}`, references: children.map((id) => reference(id, `${self}/${kind}/${id}`)) }
     const parentKind = PARENT_KIND[kind]
-    rendered[parentKind] = { self: `${self}/${parentKind}`, references: parentIds(data, document.id, kind).map((id) => reference(id, `${moSelf(id)}/${kind}/${document.id}`)) }
+    // verified against the platform: parent references only with withParents=true
+    const parents = options.withParents ? parentIds(data, document.id, kind) : []
+    rendered[parentKind] = { self: `${self}/${parentKind}`, references: parents.map((id) => reference(id, `${moSelf(id)}/${kind}/${document.id}`)) }
   }
   return rendered
 }
@@ -147,6 +150,7 @@ function inventoryRequest(call: C8yRequest, segments: string[], data: TenantData
   const render = (document: StoredDocument) => renderManagedObject(data, document, {
     withChildren: flag(call, 'withChildren', true),
     skipChildrenNames: flag(call, 'skipChildrenNames'),
+    withParents: flag(call, 'withParents'),
   })
 
   if (id === undefined) {

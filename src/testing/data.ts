@@ -323,7 +323,7 @@ function collectionView(tenant: () => string, collection: DocumentCollection): C
   const rendered = () => {
     const data = store.tenant(tenant())
     return [...data[collection].values()].map((document: StoredDocument) => collection === 'managedObjects'
-      ? renderManagedObject(data, document)
+      ? renderManagedObject(data, document, { withParents: true })
       : renderDocument(data, Object.values(RESOURCES).find((item) => item.collection === collection)!, document))
   }
   return {

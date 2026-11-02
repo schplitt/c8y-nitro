@@ -188,6 +188,16 @@ pnpm gen:testing-capabilities -- --file ./c8y-oas.json # or parse a local spec
 
 When you emulate a new endpoint, add it to `ENDPOINTS` in `scripts/generate-testing-capabilities.ts` and regenerate.
 
+### Contract scenarios against a real tenant (`test:contract`)
+
+`tests/contract/scenarios.ts` runs against the fake in `pnpm test` (`tests/server/contract.test.ts`) and against a **real tenant** with:
+
+```sh
+pnpm test:contract
+```
+
+Credentials come from the environment or `.env` / `playground/.env` (`C8Y_CONTRACT_BASEURL/TENANT/USER/PASSWORD`, else `C8Y_BASEURL` + `C8Y_DEVELOPMENT_*`). Never print or read them in agent sessions; the runner loads them itself. Every scenario names its data with a unique run id and the runner deletes it afterwards. Not part of `pnpm test` or CI. Run it after changing fake behavior; a failure there means the fake is wrong. Scenarios must pass on both: use `eventually()` for writes the platform applies asynchronously (bulk deletes).
+
 ### Testing the Playground
 
 ```sh

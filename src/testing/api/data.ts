@@ -1,8 +1,8 @@
 import type { C8yRequest } from '../types'
 import type { C8yEndpoint } from '../capabilities.generated'
 import type { DocumentCollection, StoredDocument, TenantData } from '../store'
+import { parentIds, store } from '../store'
 import { C8Y_ENUMS } from '../capabilities.generated'
-import { store } from '../store'
 import { apiError, baseUrl, byTime, checkQuery, checkRequired, flag, inRange, paged, raw, sourceId } from './http'
 import { moSelf } from './inventory'
 import type { RealtimeApi } from '../realtime'
@@ -91,6 +91,11 @@ export function createDocument(data: TenantData, resource: Resource, body: Recor
     return invalid(`Source with id '${String(source)}' does not exist`)
   }
 
+  if (resource.collection === 'operations' && !hasAgent(data, String(source))) {
+    // verified against the platform
+    return apiError(422, 'devicecontrol/Unprocessable Entity', `Agent for device '${String(source)}' does not exist in inventory!`)
+  }
+
   if (resource.collection === 'alarms') {
     const error = checkEnum('severity', body.severity, C8Y_ENUMS.alarmSeverity) ?? checkEnum('status', body.status, C8Y_ENUMS.alarmStatus)
     if (error) {
@@ -132,6 +137,24 @@ export function createDocument(data: TenantData, resource: Resource, body: Recor
   data[resource.collection].set(document.id, document)
   publish(data, resource, 'CREATE', document)
   return document
+}
+
+/**
+ * Whether a device is an agent (`com_cumulocity_model_Agent`) or has one
+ * among its device parents, which the platform requires for operations.
+ * @param data - Tenant data
+ * @param deviceId - Device id
+ * @param seen
+ */
+function hasAgent(data: TenantData, deviceId: string, seen = new Set<string>()): boolean {
+  if (seen.has(deviceId)) {
+    return false
+  }
+  seen.add(deviceId)
+  if (data.managedObjects.get(deviceId)?.com_cumulocity_model_Agent !== undefined) {
+    return true
+  }
+  return parentIds(data, deviceId, 'childDevices').some((parent) => hasAgent(data, parent, seen))
 }
 
 /**
@@ -220,12 +243,13 @@ function list(call: C8yRequest, data: TenantData, resource: Resource): StoredDoc
     items = items.filter((document) => inRange(document.lastUpdated, query.lastUpdatedFrom, query.lastUpdatedTo))
   }
 
-  // Default orders from the spec: measurements oldest first, events and
-  // alarms newest first, operations by ascending id; `revert` flips them.
+  // Default orders: measurements newest first (time series persistence,
+  // verified against the platform; `revert=false` gives oldest first), events
+  // and alarms newest first, operations by ascending id.
   const revert = flag(call, 'revert')
   switch (resource.collection) {
     case 'measurements':
-      return byTime(items, 'time', revert)
+      return byTime(items, 'time', call.query.revert === undefined ? true : revert)
     case 'events':
       return byTime(items, 'time', !revert)
     case 'alarms':
@@ -262,6 +286,13 @@ export function documents(call: C8yRequest, segments: string[], data: TenantData
         ? ['dateFrom', 'dateTo', 'fragmentType', 'source', 'type']
         : ['createdFrom', 'createdTo', 'dateFrom', 'dateTo', 'fragmentType', 'source', 'type']
       checkQuery(`DELETE ${resource.path}` as C8yEndpoint, call, supported)
+      if (resource.collection === 'measurements') {
+        // verified against the platform
+        const unaligned = ['dateFrom', 'dateTo'].some((name) => call.query[name] !== undefined && Date.parse(call.query[name]!) % 3_600_000 !== 0)
+        if (unaligned) {
+          return apiError(422, 'measurement/Invalid Data', 'Date from and date to parameters used for delete filter must be truncated to hour!')
+        }
+      }
       for (const document of list(call, data, resource)) {
         collection.delete(document.id)
         data.eventBinaries.delete(document.id)
@@ -438,6 +469,7 @@ function series(call: C8yRequest, data: TenantData): Response {
     bucket.set(point.key, [...(bucket.get(point.key) ?? []), point.value])
     buckets.set(time, bucket)
   }
+  // oldest first unless revert=true (verified against the platform)
   const times = [...buckets.keys()].sort((a, b) => flag(call, 'revert') ? b - a : a - b)
   const fns = functions.length > 0 ? functions : ['min', 'max']
   const values: Record<string, Array<Record<string, number> | null>> = {}

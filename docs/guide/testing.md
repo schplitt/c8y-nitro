@@ -312,7 +312,7 @@ Answer it with `c8y.override()`, or set `onUnhandledRequest: 'warn'` or `'ignore
 
 ## What the Fake Emulates
 
-The fake implements a documented subset of the Cumulocity REST API. Request and response formats, query parameters, required fields, and enum values come from the [official OpenAPI spec](https://cumulocity.com/api/core/). The behavior is checked by contract scenarios.
+The fake implements a documented subset of the Cumulocity REST API. Request and response formats, query parameters, required fields, and enum values come from the [official OpenAPI spec](https://cumulocity.com/api/core/). The behavior is checked by contract scenarios that run against both the fake and a real tenant.
 
 | API                          | Emulated                                                                                                                                                                                                                                                                                                                 |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -345,13 +345,16 @@ These details behave like the platform, checked against a real tenant: exact mat
 - **`owner`** is the calling user.
 - **Groups:** `bygroupid()` matches the group's direct child assets. `isinhierarchyof()` follows child assets, devices, and additions recursively.
 - **Paging:** pages are 1-based, the default page size is 5, and `next` is present when a page is full.
-- **Sort orders** (from the spec): measurements oldest first, events and alarms newest first, operations by ascending ID, inventory by ID. `revert` flips the order where the spec allows it.
+- **Sort orders:** measurements, events, and alarms newest first (`revert=false` gives measurements oldest first), operations by ascending ID, inventory by ID, series values oldest first.
 - **Date ranges:** the `…From` end is inclusive, the `…To` end is exclusive.
 - **Alarm deduplication:** an `ACTIVE` or `ACKNOWLEDGED` alarm with the same source and type increments `count` and updates `time`.
-- **Operations** start as `PENDING`. Only your tests change their status.
+- **Operations** need an agent: the device has `com_cumulocity_model_Agent`, or one of its device parents does. Otherwise the platform answers 422. They start as `PENDING`, and only your tests change their status, for example with `c8y.db.operations.update()`.
 - **Validation:** writes that reference a missing source or device fail with 422.
+- **External IDs:** creating an existing external ID again for the same object succeeds; for another object it fails with 409.
+- **Parent references** (`deviceParents`, `assetParents`, `additionParents`) are only filled with `withParents=true`. `c8y.db` always shows them.
 - **Deleting a managed object** removes its references, external IDs, and binary content. Its measurements, events, alarms, and operations stay.
 - **Tenant options:** default values from your manifest's settings are not applied. Set the options your test needs.
+- **Bulk deletes** apply immediately. On the platform they run asynchronously and take effect within about a second.
 - **Series:** values are bucketed in UTC. Without aggregation, every measurement is its own entry with `min` = `max`. Entries are oldest first unless `revert=true`.
 - **Notifications:** a DELETE notification's payload is `{ id }`. Tokens can be created for any subscription name. Persistent subscriptions keep notifications until a consumer connects.
 - **No permission checks:** roles only matter in your own middleware, like `hasUserRequiredRole()`.

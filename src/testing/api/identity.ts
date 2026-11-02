@@ -23,8 +23,12 @@ export function addExternalId(data: TenantData, managedObjectId: string, type: s
   if (!data.managedObjects.has(managedObjectId)) {
     return notFound(managedObjectId)
   }
-  if (data.externalIds.some((entry) => entry.type === type && entry.externalId === externalId)) {
-    return apiError(409, 'identity/Conflict', `External id '${externalId}' of type '${type}' already exists`)
+  const existing = data.externalIds.find((entry) => entry.type === type && entry.externalId === externalId)
+  if (existing) {
+    // verified against the platform: idempotent for the same object
+    return existing.managedObjectId === managedObjectId
+      ? existing
+      : apiError(409, 'identity/Duplicate', `ID [type=${type}, value=${externalId}] was already bound to different Global ID.`)
   }
   const entry = { type, externalId, managedObjectId }
   data.externalIds.push(entry)

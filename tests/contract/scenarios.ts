@@ -35,6 +35,28 @@ async function rejection(promise: Promise<unknown>): Promise<{ res: { status: nu
   throw new Error('expected the request to fail')
 }
 
+/**
+ * Retries an assertion for a few seconds: some platform writes (bulk deletes)
+ * apply asynchronously on a real tenant. The fake applies them immediately.
+ * @param assertion
+ * @param timeout
+ */
+async function eventually(assertion: () => Promise<void>, timeout = 5000): Promise<void> {
+  const start = Date.now()
+  for (;;) {
+    try {
+      return await assertion()
+    } catch (error) {
+      if (Date.now() - start > timeout) {
+        throw error
+      }
+      await new Promise((resolve) => {
+        setTimeout(resolve, 250)
+      })
+    }
+  }
+}
+
 const time = (minutes: number) => new Date(Date.UTC(2026, 0, 1, 10, minutes)).toISOString()
 
 export const scenarios: ContractScenario[] = [
@@ -124,12 +146,15 @@ export const scenarios: ContractScenario[] = [
       const { data: children } = await client.inventory.childDevicesList(parent.id)
       expect(children.map((mo) => mo.id)).toEqual([child.id])
 
-      const { data: detail } = await client.inventory.detail(child.id)
+      // parent references only with withParents=true
+      const { data: plain } = await client.inventory.detail(child.id)
+      expect(plain.deviceParents.references).toEqual([])
+      const { data: detail } = await client.inventory.detail(child.id, { withParents: true })
       expect(detail.deviceParents.references.map((reference: any) => reference.managedObject.id)).toEqual([parent.id])
     },
   },
   {
-    name: 'identity: create, read, conflict, list, delete',
+    name: 'identity: create, read, idempotent re-create, conflict, list, delete',
     async run({ client, unique }) {
       const { data: device } = await client.inventory.create({ name: `device-${unique}`, c8y_IsDevice: {} })
       const identity = { type: 'c8y_Serial', externalId: `SN-${unique}`, managedObject: { id: device.id } }
@@ -140,7 +165,12 @@ export const scenarios: ContractScenario[] = [
       const { data } = await client.identity.detail({ type: 'c8y_Serial', externalId: `SN-${unique}` } as any)
       expect(data.managedObject!.id).toBe(device.id)
 
-      expect((await rejection(client.identity.create(identity as any))).res.status).toBe(409)
+      // re-creating for the same object is idempotent, another object conflicts
+      expect((await client.identity.create(identity as any)).res.status).toBe(201)
+      const { data: other } = await client.inventory.create({ name: `other-${unique}`, c8y_IsDevice: {} })
+      const conflict = await rejection(client.identity.create({ ...identity, managedObject: { id: other.id } } as any))
+      expect(conflict.res.status).toBe(409)
+      expect(conflict.data?.error).toBe('identity/Duplicate')
 
       const { data: list } = await client.identity.list(device.id)
       expect(list.map((entry) => entry.externalId)).toEqual([`SN-${unique}`])
@@ -150,7 +180,7 @@ export const scenarios: ContractScenario[] = [
     },
   },
   {
-    name: 'measurements: oldest first, revert for newest first in a range',
+    name: 'measurements: newest first, revert=false for oldest first',
     async run({ client, unique }) {
       const { data: device } = await client.inventory.create({ name: `m-${unique}`, c8y_IsDevice: {} })
       for (const [minute, value] of [[1, 10], [3, 30], [2, 20]] as const) {
@@ -158,11 +188,11 @@ export const scenarios: ContractScenario[] = [
       }
       const values = (data: any[]) => data.map((measurement) => measurement.c8y_Temperature.T.value)
 
-      const { data: oldestFirst } = await client.measurement.list({ source: device.id, type: 'c8y_Temperature' })
-      expect(values(oldestFirst)).toEqual([10, 20, 30])
+      const { data: newestFirst } = await client.measurement.list({ source: device.id, type: 'c8y_Temperature' })
+      expect(values(newestFirst)).toEqual([30, 20, 10])
 
-      const { data: newestFirst } = await client.measurement.list({ source: device.id, dateFrom: time(0), dateTo: time(10), revert: true, pageSize: 2 })
-      expect(values(newestFirst)).toEqual([30, 20])
+      const { data: oldestFirst } = await client.measurement.list({ source: device.id, dateFrom: time(0), dateTo: time(10), revert: false, pageSize: 2 })
+      expect(values(oldestFirst)).toEqual([10, 20])
     },
   },
   {
@@ -204,9 +234,12 @@ export const scenarios: ContractScenario[] = [
     },
   },
   {
-    name: 'operations: PENDING on create, status updates, list by device and status',
+    name: 'operations: need an agent, PENDING on create, status updates, list by device and status',
     async run({ client, unique }) {
-      const { data: device } = await client.inventory.create({ name: `o-${unique}`, c8y_IsDevice: {} })
+      const { data: plain } = await client.inventory.create({ name: `o-plain-${unique}`, c8y_IsDevice: {} })
+      expect((await rejection(client.operation.create({ deviceId: plain.id, c8y_Restart: {} } as any))).res.status).toBe(422)
+
+      const { data: device } = await client.inventory.create({ name: `o-${unique}`, c8y_IsDevice: {}, com_cumulocity_model_Agent: {} } as any)
       const { data: operation } = await client.operation.create({ deviceId: device.id, c8y_Restart: {} } as any)
       expect(operation.status).toBe('PENDING')
 
@@ -239,9 +272,14 @@ export const scenarios: ContractScenario[] = [
         [time(60)]: [{ min: 50, max: 50 }],
       })
 
-      const res = await client.core.fetch(`/measurement/measurements?source=${device.id}&dateTo=${encodeURIComponent(time(30))}`, { method: 'DELETE' })
+      // bulk delete boundaries must be full hours
+      const unaligned = await client.core.fetch(`/measurement/measurements?source=${device.id}&dateTo=${encodeURIComponent(time(30))}`, { method: 'DELETE' })
+      expect(unaligned.status).toBe(422)
+      const res = await client.core.fetch(`/measurement/measurements?source=${device.id}&dateTo=${encodeURIComponent(time(60))}`, { method: 'DELETE' })
       expect(res.status).toBe(204)
-      expect((await client.measurement.list({ source: device.id })).data).toHaveLength(1)
+      await eventually(async () => {
+        expect((await client.measurement.list({ source: device.id })).data).toHaveLength(1)
+      })
     },
   },
   {
@@ -260,7 +298,9 @@ export const scenarios: ContractScenario[] = [
       await client.event.create({ source: { id: device.id }, type: `att-${unique}`, text: 'second', time: time(2) } as any)
       const res = await client.core.fetch(`/event/events?source=${device.id}&type=att-${unique}`, { method: 'DELETE' })
       expect(res.status).toBe(204)
-      expect((await client.event.list({ source: device.id })).data).toEqual([])
+      await eventually(async () => {
+        expect((await client.event.list({ source: device.id })).data).toEqual([])
+      })
     },
   },
   {

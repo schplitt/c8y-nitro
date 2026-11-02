@@ -57,13 +57,23 @@ describe('writing data', () => {
     ])
   })
 
-  it('creates a pending restart operation that a device can complete', async () => {
-    const { json } = await fetchJson(`/devices/${pump.id}/restart`, { method: 'POST' })
+  describe('operations', () => {
+    // the platform only accepts operations for agents (or devices below one)
+    const agent = c8y.device({ name: 'Agent pump', com_cumulocity_model_Agent: {} })
 
-    expect(json.status).toBe('PENDING')
+    it('creates a pending restart operation that a device can complete', async () => {
+      const { json } = await fetchJson(`/devices/${agent.id}/restart`, { method: 'POST' })
 
-    c8y.db.operations.update(json.operationId, { status: 'SUCCESSFUL' })
-    expect(c8y.db.operations.find({ deviceId: pump })).toMatchObject([{ status: 'SUCCESSFUL', c8y_Restart: {}, deviceName: 'Pump 1' }])
+      expect(json.status).toBe('PENDING')
+
+      c8y.db.operations.update(json.operationId, { status: 'SUCCESSFUL' })
+      expect(c8y.db.operations.find({ deviceId: agent })).toMatchObject([{ status: 'SUCCESSFUL', c8y_Restart: {}, deviceName: 'Agent pump' }])
+    })
+
+    it('rejects operations for devices without an agent', async () => {
+      // 422 from the platform; the c8y-client middleware turns it into a 500
+      expect((await fetchJson(`/devices/${pump.id}/restart`, { method: 'POST' })).res.status).toBe(500)
+    })
   })
 })
 
