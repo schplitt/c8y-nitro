@@ -3,7 +3,12 @@ import type { C8YManifest, C8YManifestOptions, Provider } from '../types/manifes
 import type { C8yNitroModuleOptions } from '../types'
 import { readPackage } from 'pkg-types'
 import { GENERATED_LIVENESS_ROUTE, GENERATED_READINESS_ROUTE } from './constants'
-import type { ConsolaInstance } from 'consola'
+
+/**
+ * Nitro's logger (`nitro.logger`). Since the Nitro RC this is Nitro's own
+ * logger type, not consola's.
+ */
+type NitroLogger = Nitro['logger']
 
 const DEFAULT_OPENAPI_ROUTE = '/_openapi.json'
 const ROLE_OPTION_MANAGEMENT_READ = 'ROLE_OPTION_MANAGEMENT_READ'
@@ -89,7 +94,7 @@ function validateManifestSettings(options: C8YManifestOptions): void {
 
 async function readPackageJsonFieldsForManifest(
   rootDir: string,
-  logger?: Pick<ConsolaInstance, 'debug'>,
+  logger?: NitroLogger,
 ): Promise<PackageJsonFields> {
   logger?.debug(`Reading package file from ${rootDir}`)
 
@@ -143,12 +148,12 @@ async function readPackageJsonFieldsForManifest(
  * Used by both the Nitro module and the CLI commands.
  * @param rootDir - Directory containing the project's `package.json`
  * @param nitroConfig - Nitro config (or options) for this project
- * @param logger - Optional logger for debug output
+ * @param logger - Optional Nitro logger (`nitro.logger`) for debug output
  */
 export async function createC8yManifest(
   rootDir: string,
   nitroConfig: NitroConfigForManifest = {},
-  logger?: Pick<ConsolaInstance, 'debug'>,
+  logger?: NitroLogger,
 ): Promise<C8YManifest> {
   const { options, openApiSpec } = extractManifestInputs(nitroConfig)
 
