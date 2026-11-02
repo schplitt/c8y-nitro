@@ -85,6 +85,34 @@ export const scenarios: ContractScenario[] = [
     },
   },
   {
+    // Verified against a real tenant (eu-latest, 2026-11) via the mc8yp MCP server.
+    name: 'inventory: query language details',
+    async run({ client, unique }) {
+      const { data: group } = await client.inventory.create({ name: `group-${unique}`, type: 'c8y_DeviceGroup' })
+      const { data: pump } = await client.inventory.create({ name: `Pump-${unique}`, type: `ql-${unique}`, c8y_IsDevice: {}, c8y_Position: { lng: 6.5 }, tags: ['a', 'b'], owners: [{ id: 'o1' }] } as any)
+      await client.inventory.create({ name: `valve-${unique}`, type: `ql-${unique}`, c8y_IsDevice: {}, c8y_Flag: {} } as any)
+      await client.inventory.childAssetsAdd(pump.id, group.id)
+      const names = async (query: string, extra: Record<string, unknown> = {}) =>
+        (await client.inventory.list({ query, pageSize: 100, ...extra })).data.map((mo) => mo.name).sort()
+
+      // exact matches are case-sensitive, wildcards case-insensitive
+      expect(await names(`$filter=(name eq 'pump-${unique}')`)).toEqual([])
+      expect(await names(`$filter=(name eq 'PUMP-${unique.slice(0, 4)}*')`)).toEqual([`Pump-${unique}`])
+      // decimals need a f/d suffix
+      expect(await names(`$filter=(type eq 'ql-${unique}' and c8y_Position.lng gt 6.4d)`)).toEqual([`Pump-${unique}`])
+      // eq matches array elements and objects in arrays
+      expect(await names(`$filter=(tags eq 'b' and type eq 'ql-${unique}')`)).toEqual([`Pump-${unique}`])
+      expect(await names(`$filter=(owners.id eq 'o1' and type eq 'ql-${unique}')`)).toEqual([`Pump-${unique}`])
+      // hasany() and group membership
+      expect(await names(`$filter=(type eq 'ql-${unique}' and hasany(c8y_Position,c8y_Flag))`)).toEqual([`Pump-${unique}`, `valve-${unique}`])
+      expect(await names(`$filter=(bygroupid(${group.id}))`)).toEqual([`Pump-${unique}`])
+      // type is ignored when a query is given
+      expect(await names(`$filter=(name eq 'Pump-${unique}')`, { type: 'not-the-type' })).toEqual([`Pump-${unique}`])
+      // unsupported operators are rejected
+      expect((await rejection(client.inventory.list({ query: `$filter=(name ne 'x')` }))).res.status).toBe(422)
+    },
+  },
+  {
     name: 'inventory: child devices and parent references',
     async run({ client, unique }) {
       const { data: parent } = await client.inventory.create({ name: `parent-${unique}` })

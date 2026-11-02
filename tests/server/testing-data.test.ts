@@ -77,6 +77,19 @@ describe('relations', () => {
   })
 })
 
+describe('multiple tenants', () => {
+  c8y.subscriptions.add({ tenant: 't99999', user: 'service_t99999', password: 'pw' })
+  c8y.device({ name: 'Other tenant pump', tenant: 't99999' })
+
+  it('keeps data per tenant and answers each service user with its own tenant', async () => {
+    const { json } = await fetchJson('/devices/count-per-tenant')
+
+    // t12345 has the 3 file-level devices, t99999 only its own
+    expect(json).toEqual({ t12345: 3, t99999: 1 })
+    expect(c8y.db.tenant('t99999').managedObjects.find()).toMatchObject([{ name: 'Other tenant pump' }])
+  })
+})
+
 describe('seeding errors', () => {
   it('validates seeds like the platform validates writes', () => {
     expect(() => c8y.seed({ alarms: [{ source: pump, type: 'x', severity: 'SEVERE' as any }] })).toThrow(/Invalid value 'SEVERE' for severity/)

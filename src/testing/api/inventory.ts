@@ -2,7 +2,7 @@ import type { C8yRequest } from '../types'
 import type { ChildKind, StoredDocument, TenantData } from '../store'
 import { addChild, CHILD_KINDS, childIds, deleteManagedObject, PARENT_KIND, parentIds, removeChild, store } from '../store'
 import { apiError, baseUrl, checkQuery, flag, paged } from './http'
-import { applyOrderBy, parseQuery } from './query'
+import { applyOrderBy, parseQuery, QuerySyntaxError } from './query'
 
 const SERVER_FIELDS = ['id', 'self', 'creationTime', 'lastUpdated', ...CHILD_KINDS, ...Object.values(PARENT_KIND)]
 
@@ -77,7 +77,8 @@ function searchText(data: TenantData, document: StoredDocument, text: string): b
 function listManagedObjects(call: C8yRequest, data: TenantData, documents: StoredDocument[]): StoredDocument[] {
   let items = documents
   const { query } = call
-  if (query.type) {
+  // documented platform behavior: `type` is ignored when a query is given
+  if (query.type && query.query === undefined && query.q === undefined) {
     items = items.filter((document) => document.type === query.type)
   }
   if (query.fragmentType) {
@@ -105,7 +106,7 @@ function listManagedObjects(call: C8yRequest, data: TenantData, documents: Store
   let orderBy: ReturnType<typeof parseQuery>['orderBy'] = []
   for (const param of ['query', 'q'] as const) {
     if (query[param]) {
-      const parsed = parseQuery(query[param]!)
+      const parsed = parseQuery(query[param]!, data)
       items = items.filter((document) => parsed.filter(document))
       orderBy = parsed.orderBy
     }
@@ -127,6 +128,18 @@ const DETAIL_PARAMS = ['skipChildrenNames', 'withChildren', 'withParents']
  * @param data - Tenant data
  */
 export function inventory(call: C8yRequest, segments: string[], data: TenantData): Response | undefined {
+  try {
+    return inventoryRequest(call, segments, data)
+  } catch (error) {
+    if (error instanceof QuerySyntaxError) {
+      const query = call.query.query ?? call.query.q
+      return apiError(422, 'inventory/Invalid Data', `Find by filter query failed : Query '${query}' could not be understood. Please try again.`)
+    }
+    throw error
+  }
+}
+
+function inventoryRequest(call: C8yRequest, segments: string[], data: TenantData): Response | undefined {
   const [, , id, kind, childId] = segments
   const { method } = call
   const render = (document: StoredDocument) => renderManagedObject(data, document, {
@@ -190,7 +203,7 @@ export function inventory(call: C8yRequest, segments: string[], data: TenantData
     }
     let children = childIds(data, id, childKind).map((child) => data.managedObjects.get(child)).filter((child) => child !== undefined)
     if (call.query.query) {
-      const parsed = parseQuery(call.query.query)
+      const parsed = parseQuery(call.query.query, data)
       children = applyOrderBy(children.filter((child) => parsed.filter(child)), parsed.orderBy)
     }
     const references = children.map((child) => ({ self: `${moSelf(id)}/${childKind}/${child.id}`, managedObject: render(child) }))

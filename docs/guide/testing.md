@@ -155,7 +155,26 @@ c8y.tenantOptions.set('maxTemperature', '100')
 ```
 
 - **Service users** of the subscribed tenants are used by `useSubscribedTenantCredentials()`, `useDeployedTenantClient()`, and the other service clients. By default, the deployed tenant `t12345` is subscribed.
-- **Data is kept per tenant.** Pass `tenant` to `c8y.device()`, `c8y.seed()`, or `c8y.tenantOptions.set()` to arrange data for another subscribed tenant.
+- **Data is kept per tenant.** Pass `tenant` to `c8y.device()`, `c8y.seed()`, or `c8y.tenantOptions.set()` to arrange data for another tenant.
+
+### Multiple Tenants
+
+A multi-tenant service sees each subscribed tenant through its own service user. Subscribe more tenants and give them their own data:
+
+```ts
+c8y.subscriptions.add({ tenant: 't99999', user: 'service_t99999', password: 'pw' })
+c8y.device({ name: 'Pump A' }) // deployed tenant (t12345)
+c8y.device({ name: 'Pump B', tenant: 't99999' }) // subscribed tenant
+
+it('reports devices per tenant', async () => {
+  const res = await serverFetch('/reports/devices') // e.g. uses useSubscribedTenantClients()
+
+  expect(await res.json()).toEqual({ t12345: 1, t99999: 1 })
+  expect(c8y.db.tenant('t99999').alarms.find()).toEqual([])
+})
+```
+
+Each request is answered with the data of the tenant it was sent to: the tenant of the credentials, or the `targetTenant` parameter. Personas can belong to any tenant (`c8y.persona({ ..., tenant: 't99999' })`), so you can also test what users of a subscribed tenant see.
 
 ## Personas
 
@@ -262,14 +281,22 @@ The fake implements a documented subset of the Cumulocity REST API. Request and 
 | Alarms                       | create (with deduplication), read, update, bulk update, list by `source`, `type`, `status`, `severity`, `resolved`, date ranges                                                                                                                                                 |
 | Operations                   | create, read, update, list by `deviceId`, `status`, `fragmentType`, date range, `revert`                                                                                                                                                                                        |
 
-All lists support `pageSize`, `currentPage`, `withTotalPages`, and `withTotalElements`, with `next` and `prev` links. Inventory queries support `eq` (with `*` wildcards), `ne`, `gt`, `ge`, `lt`, `le`, `and`, `or`, `not()`, `has()`, and `$orderby`.
+All lists support `pageSize`, `currentPage`, `withTotalPages`, and `withTotalElements`, with `next` and `prev` links. Inventory queries (`query` and `q`) support the documented [query language](https://cumulocity.com/api/core/#section/Query-language):
 
-**Not emulated:** `bygroupid()` and `isinhierarchyof()` in queries, `withLatestValues`, `withGroups`, `withSourceAssets` and similar `withSource*` parameters, cascade deletes, measurement series, binaries, bulk operations, real-time notifications, and all other APIs. These fail loudly instead of returning wrong results. Unknown query parameters are ignored, as on the platform.
+- `eq`, `gt`, `ge`, `lt`, `le`, `and`, `or`, `not()`, parentheses, and `$orderby`
+- `has()`, `hasany()`, `bygroupid()`, and `isinhierarchyof()`
+- values: strings, `*` wildcards, integers, decimals with an `f`/`d` suffix, `null`, and date-times with `.date`
+- `eq` on array properties and on objects in arrays
+
+These details behave like the platform, checked against a real tenant: exact matches are case-sensitive, wildcards case-insensitive, decimals without a suffix are compared as strings, `type` is ignored when a query is given, and anything outside the language (such as `ne`) is rejected with 422.
+
+**Not emulated:** `withLatestValues`, `withGroups`, `withSourceAssets` and similar `withSource*` parameters, cascade deletes, measurement series, binaries, bulk operations, real-time notifications, and all other APIs. These fail loudly instead of returning wrong results. Unknown query parameters are ignored, as on the platform.
 
 **Assumptions:** where the spec doesn't define behavior, the fake assumes the following:
 
 - **IDs** are sequential numbers, starting at `1` in every test. Timestamps come from `Date`, so `vi.useFakeTimers()` controls them.
 - **`owner`** is the calling user.
+- **Groups:** `bygroupid()` matches the group's direct child assets. `isinhierarchyof()` follows child assets, devices, and additions recursively.
 - **Paging:** pages are 1-based, the default page size is 5, and `next` is present when a page is full.
 - **Sort orders** (from the spec): measurements oldest first, events and alarms newest first, operations by ascending ID, inventory by ID. `revert` flips the order where the spec allows it.
 - **Date ranges:** the `…From` end is inclusive, the `…To` end is exclusive.
