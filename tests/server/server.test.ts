@@ -529,6 +529,30 @@ describe('Nitro Server', () => {
       expect(json.message).toBe('success')
     })
 
+    it('should serve the updated value after invalidating a key', async () => {
+      const initialRes = await server.fetch(new Request(new URL('/tenant-options', server.url)))
+      const initialJson = await initialRes.json() as Record<string, any>
+      expect(initialJson.myOption).toBe('hello-world')
+
+      await server.fetch(new Request(new URL('/mock-tenant-option?key=myOption&value=invalidated-value', server.url)))
+
+      // still cached
+      const cachedRes = await server.fetch(new Request(new URL('/tenant-options', server.url)))
+      const cachedJson = await cachedRes.json() as Record<string, any>
+      expect(cachedJson.myOption).toBe('hello-world')
+
+      const invalidateRes = await server.fetch(new Request(new URL('/_c8y_nitro/invalidate-tenant-options?key=myOption', server.url)))
+      expect(invalidateRes.status).toEqual(200)
+
+      const refreshedRes = await server.fetch(new Request(new URL('/tenant-options', server.url)))
+      const refreshedJson = await refreshedRes.json() as Record<string, any>
+      expect(refreshedJson.myOption).toBe('invalidated-value')
+
+      // restore for the other tests in this block
+      await server.fetch(new Request(new URL('/mock-tenant-option?key=myOption&value=hello-world', server.url)))
+      await server.fetch(new Request(new URL('/_c8y_nitro/invalidate-tenant-options?key=myOption', server.url)))
+    })
+
     it('should skip invalidation when the key fetcher was not created yet', async () => {
       const res = await server.fetch(new Request(new URL('/_c8y_nitro/invalidate-tenant-options?key=credentials.secret', server.url)))
 

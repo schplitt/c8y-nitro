@@ -1,7 +1,9 @@
 import { c8yTenantOptionKeys } from 'c8y-nitro/runtime'
-import { createError } from '../../../utils/logging'
-import { useDeployedTenantClient } from '../../../utils/client'
-import { useTenantOption, useTenantOptions } from '../../../utils/tenantOptions'
+// Import the public entry, not relative paths: runtime files are built separately
+// from `c8y-nitro/utils`, so relative imports would inline a second copy of the
+// tenant option fetcher registry, and invalidating it would not reach the
+// fetchers user routes created.
+import { createError, useDeployedTenantClient, useTenantOption, useTenantOptions } from 'c8y-nitro/utils'
 import { defineEventHandler, getQuery } from 'nitro/h3'
 
 export default defineEventHandler(async (event) => {
