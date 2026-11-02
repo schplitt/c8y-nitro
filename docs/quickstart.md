@@ -31,8 +31,9 @@ The starter template already has this configured. For an existing Nitro service,
 
 ```ts
 import c8y from 'c8y-nitro'
+import { defineConfig } from 'nitro'
 
-export default defineNitroConfig({
+export default defineConfig({
   preset: 'node-server',
   builder: 'rolldown',
   modules: [c8y()],

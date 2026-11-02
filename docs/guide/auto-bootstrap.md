@@ -45,7 +45,7 @@ Disable auto-bootstrap when:
 Set `skipBootstrap: true` in your c8y config to disable auto-bootstrap entirely. This is useful in CI/CD pipelines or when you want to manage bootstrap manually.
 
 ```ts
-export default defineNitroConfig({
+export default defineConfig({
   c8y: {
     skipBootstrap: true,
   },

@@ -54,7 +54,6 @@ function shouldEmitTenantCredentialsUpdated(prev: TenantCredentials | null, next
  * // Force refresh:
  * const freshCreds = await useSubscribedTenantCredentials.refresh()
  */
-// TODO: Remove this cast once Nitro's `defineCachedFunction()` types expose ocache's `.invalidate()` helper.
 const cachedSubscribedTenantCredentials = defineCachedFunction(async () => {
   // all env vars are enforced to be set
   const subscriptions = await Client.getMicroserviceSubscriptions({
@@ -86,9 +85,7 @@ const cachedSubscribedTenantCredentials = defineCachedFunction(async () => {
   name: '_c8y_nitro_get_subscribed_tenant_credentials',
   group: 'c8y_nitro',
   swr: false,
-}) as (() => Promise<TenantCredentials>) & {
-  invalidate: () => Promise<void>
-}
+})
 
 // TODO: Remove this explicit type once Nitro's `defineCachedFunction()` return type includes ocache helper methods.
 export const useSubscribedTenantCredentials: (() => Promise<TenantCredentials>) & {

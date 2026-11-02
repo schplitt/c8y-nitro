@@ -5,7 +5,7 @@ If your microservice has a separate Angular frontend, `c8y-nitro` can generate a
 ## Configuration
 
 ```ts
-export default defineNitroConfig({
+export default defineConfig({
   c8y: {
     apiClient: {
       dir: '../ui/src/app/services',

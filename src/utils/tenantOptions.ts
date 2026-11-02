@@ -374,7 +374,6 @@ function createCachedTenantOptionFetcher(client: Client, tenant: string, categor
   const storeKey = fetcherStoreKey(tenant, category, key)
   const cacheName = `_c8y_nitro_tenant_option_${storeKey.replace(/[^a-zA-Z0-9]/g, '_')}`
 
-  // TODO: Remove this cast once Nitro's `defineCachedFunction()` types expose ocache's `.invalidate()` helper.
   const cachedFetcher = defineCachedFunction(
     async (): Promise<string | undefined> => fetchOptionValue(client, category, key),
     {
@@ -383,9 +382,7 @@ function createCachedTenantOptionFetcher(client: Client, tenant: string, categor
       group: 'c8y_nitro',
       swr: false,
     },
-  ) as (() => Promise<string | undefined>) & {
-    invalidate: () => Promise<void>
-  }
+  )
 
   const fetcher: CachedTenantOptionFetcher = Object.assign(cachedFetcher, {
     refresh: async (): Promise<string | undefined> => {

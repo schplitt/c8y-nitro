@@ -1,5 +1,51 @@
 # Migration
 
+## 0.10.x to 0.11.0
+
+This release upgrades the Nitro peer dependency from `3.0.260903-beta` to the Nitro v3
+release candidate `3.0.261029-rc`. `c8y-nitro` itself has no breaking API changes.
+
+### Required changes
+
+#### 1. Update Nitro
+
+The peer dependency is pinned exactly, so Nitro must be bumped in lockstep:
+
+```sh
+pnpm add -D nitro@3.0.261029-rc
+```
+
+Nitro now requires Node.js `>=22.22.0`. `c8y-nitro` already requires Node.js 24, so
+this does not affect you if you already meet that requirement.
+
+### Recommended changes
+
+#### Use `defineConfig` from `nitro`
+
+`defineNitroConfig` from `nitro/config` is deprecated. It still works, but switch to
+`defineConfig`:
+
+```ts [nitro.config.ts]
+import c8y from 'c8y-nitro'
+import { defineConfig } from 'nitro'
+
+export default defineConfig({
+  preset: 'node_server',
+  modules: [c8y()],
+})
+```
+
+Replace the `defineNitroConfig` import from `nitro/config` and rename the call. The
+config object itself is unchanged.
+
+#### Check the Nitro release notes
+
+If your service uses Nitro features beyond what `c8y-nitro` configures, review
+[Upgrading from Beta](https://nitro.build/blog/v3-rc) for the RC's breaking
+changes. Examples are custom build hooks (`rollup:before` and `rollup:reload` were
+renamed), `experimental.vite`, and file names with dotted suffixes in scanned
+directories.
+
 ## 0.9.x to 0.10.0
 
 This release upgrades the Nitro peer dependency from `3.0.260429-beta` to

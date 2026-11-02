@@ -12,7 +12,7 @@ The wrong instinct — and the one agents reach for first — is to force everyt
 
 ```ts
 // ❌ WRONG for native modules — a .node binary cannot be inlined into JS
-export default defineNitroConfig({
+export default defineConfig({
   noExternals: true
 })
 ```
@@ -41,7 +41,7 @@ DuckDB splits itself into an API package (`@duckdb/node-api`), a bindings loader
 ```ts
 import c8y from 'c8y-nitro'
 
-export default defineNitroConfig({
+export default defineConfig({
   preset: 'node-server',
   builder: 'rolldown',
   modules: [c8y()],
@@ -76,7 +76,7 @@ Add or remove platforms in the exclude list to match what you build for and deve
 If a package resolves its platform binaries in a way `traceDeps` exclusions cannot express cleanly, drop down to the node-file-trace `ignore` hook, which decides per resolved path:
 
 ```ts
-export default defineNitroConfig({
+export default defineConfig({
   // ...
   traceOpts: {
     nft: {
@@ -116,7 +116,7 @@ Some native modules also need **system packages inside the image** at runtime �
 Use the [`docker` module option](/reference/module-options#docker) to install them into the generated image:
 
 ```ts
-export default defineNitroConfig({
+export default defineConfig({
   c8y: {
     docker: {
       extraInstructions: [

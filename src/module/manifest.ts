@@ -89,7 +89,7 @@ function validateManifestSettings(options: C8YManifestOptions): void {
 
 async function readPackageJsonFieldsForManifest(
   rootDir: string,
-  logger?: ConsolaInstance,
+  logger?: Pick<ConsolaInstance, 'debug'>,
 ): Promise<PackageJsonFields> {
   logger?.debug(`Reading package file from ${rootDir}`)
 
@@ -148,7 +148,7 @@ async function readPackageJsonFieldsForManifest(
 export async function createC8yManifest(
   rootDir: string,
   nitroConfig: NitroConfigForManifest = {},
-  logger?: ConsolaInstance,
+  logger?: Pick<ConsolaInstance, 'debug'>,
 ): Promise<C8YManifest> {
   const { options, openApiSpec } = extractManifestInputs(nitroConfig)
 

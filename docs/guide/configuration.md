@@ -7,7 +7,7 @@ The module is configured through the `c8y` key in your Nitro config.
 ```ts
 import c8y from 'c8y-nitro'
 
-export default defineNitroConfig({
+export default defineConfig({
   preset: 'node-server',
   modules: [c8y()],
   c8y: {},
@@ -21,7 +21,7 @@ That is enough to enable the default module behavior.
 ```ts
 import c8y from 'c8y-nitro'
 
-export default defineNitroConfig({
+export default defineConfig({
   preset: 'node-server',
   builder: 'rolldown',
   experimental: {

@@ -43,7 +43,7 @@ If you define your own `httpGet` probes, the module respects those instead of ge
 Define your microservice's settings in the manifest to get type-safe keys for `useTenantOption()`:
 
 ```ts
-export default defineNitroConfig({
+export default defineConfig({
   c8y: {
     manifest: {
       settings: [

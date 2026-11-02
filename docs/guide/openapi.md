@@ -7,7 +7,7 @@ Nitro can generate and serve an OpenAPI document for your routes. `c8y-nitro` bu
 Enable Nitro's OpenAPI support in your `nitro.config.ts`:
 
 ```ts
-export default defineNitroConfig({
+export default defineConfig({
   experimental: {
     openAPI: true,
   },
@@ -39,7 +39,7 @@ By default the following paths are removed from the document:
 You can extend or disable this via the [`openapi` module options](/reference/module-options#openapi):
 
 ```ts
-export default defineNitroConfig({
+export default defineConfig({
   c8y: {
     openapi: {
       // additional path prefixes to hide

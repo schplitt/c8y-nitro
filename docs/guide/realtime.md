@@ -57,7 +57,7 @@ Clients are pooled per tenant and created lazily on first use. You do not manage
 Realtime options are set once under `c8y.realtime` and applied to every tenant's client. The client `name` — the platform topic identity — is derived from your microservice `contextPath` by default (stable across restarts, unique per service); override it only if you must.
 
 ```ts
-export default defineNitroConfig({
+export default defineConfig({
   c8y: {
     realtime: {
       // name: 'myservice',  // optional; derived from contextPath by default
