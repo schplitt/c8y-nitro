@@ -5,33 +5,33 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { c8y } from 'c8y-nitro/testing'
 import { fetchJson } from './utils'
 
-// file level: every test sees this device and this user
+// file level: every test sees this device and this option
 const pump = c8y.device({ name: 'file-pump' })
-c8y.user({ userName: 'file-user', roles: [] })
+c8y.tenantOptions.set('scopeOption', 'file')
 
 const deviceName = async () => (await fetchJson(`/devices/${pump.id}`)).json.name
 
 describe('scopes', () => {
   it('applies file-level arrangements', async () => {
     expect(await deviceName()).toBe('file-pump')
-    expect((await fetchJson('/user')).json.userName).toBe('file-user')
+    expect(c8y.tenantOptions.get('scopeOption')).toBe('file')
   })
 
   describe('a describe', () => {
     c8y.override('GET /inventory/managedObjects/:id', ({ params }) => ({ id: params.id, name: 'describe-override' }))
-    c8y.user({ userName: 'describe-user', roles: [] })
+    c8y.tenantOptions.set('scopeOption', 'describe')
 
     it('overrides the file level', async () => {
       expect(await deviceName()).toBe('describe-override')
-      expect((await fetchJson('/user')).json.userName).toBe('describe-user')
+      expect(c8y.tenantOptions.get('scopeOption')).toBe('describe')
     })
 
     describe('a nested describe', () => {
-      c8y.user({ userName: 'nested-user', roles: [] })
+      c8y.tenantOptions.set('scopeOption', 'nested')
 
       it('inherits what it does not override', async () => {
         expect(await deviceName()).toBe('describe-override')
-        expect((await fetchJson('/user')).json.userName).toBe('nested-user')
+        expect(c8y.tenantOptions.get('scopeOption')).toBe('nested')
       })
     })
 
@@ -47,7 +47,7 @@ describe('scopes', () => {
 
   it('restores the file level after a describe', async () => {
     expect(await deviceName()).toBe('file-pump')
-    expect((await fetchJson('/user')).json.userName).toBe('file-user')
+    expect(c8y.tenantOptions.get('scopeOption')).toBe('file')
   })
 
   it('rebuilds data before every test (stable ids)', () => {
@@ -125,7 +125,7 @@ describe('misuse', () => {
 
   beforeAll(() => {
     try {
-      c8y.user({ userName: 'nope' })
+      c8y.tenantOptions.set('nope', 'nope')
     } catch (error) {
       beforeAllError = error
     }

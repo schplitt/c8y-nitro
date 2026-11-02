@@ -30,7 +30,7 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   plugins: [
     nitro(),
-    // The user calling your service in every test
+    // The default user calling your service (see Personas)
     c8yTest({
       user: { userName: 'operator', roles: ['ROLE_INVENTORY_READ', 'ROLE_ALARM_ADMIN'] },
     }),
@@ -101,9 +101,9 @@ describe('POST /pumps/:serial/check', () => {
   })
 
   it('requires the alarm admin role', async () => {
-    c8y.user({ userName: 'visitor', roles: [] })
+    const visitor = c8y.persona({ userName: 'visitor', roles: [] })
 
-    expect((await serverFetch('/pumps/SN-1/check', { method: 'POST' })).status).toBe(403)
+    expect((await visitor.fetch('/pumps/SN-1/check', { method: 'POST' })).status).toBe(403)
   })
 })
 ```
@@ -147,27 +147,33 @@ Seeds get the same treatment as writes from your service:
 - **Defaults:** `time` defaults to now, `text` to the type, and alarm `severity` to `MAJOR`.
 - **Platform behavior:** alarms are deduplicated, and operations start as `PENDING`.
 
-### The User, Subscriptions, and Tenant Options
+### Subscriptions and Tenant Options
 
 ```ts
-c8y.user({ userName: 'bob', roles: ['ROLE_INVENTORY_READ'] }) // null: not logged in
 c8y.subscriptions.add({ tenant: 't99999', user: 'service_t99999', password: 'pw' })
 c8y.tenantOptions.set('maxTemperature', '100')
 ```
 
-- **The user** calls your service through [dev user injection](/guide/dev-user). `useUser()`, `useUserRoles()`, and the auth middleware see this user.
 - **Service users** of the subscribed tenants are used by `useSubscribedTenantCredentials()`, `useDeployedTenantClient()`, and the other service clients. By default, the deployed tenant `t12345` is subscribed.
 - **Data is kept per tenant.** Pass `tenant` to `c8y.device()`, `c8y.seed()`, or `c8y.tenantOptions.set()` to arrange data for another subscribed tenant.
 
-To call your service as a different user, set the user in that test. The scope's user is back for the next test:
+## Personas
+
+A persona is a user that calls your service. `persona.fetch()` calls a route as that user, so one test can compare different callers. Plain `serverFetch()` calls as the default `user` from the `c8yTest()` config.
 
 ```ts
-it('denies users without the role', async () => {
-  c8y.user({ userName: 'eve', roles: [], tenant: 't99999' })
+const operator = c8y.persona({ userName: 'operator', roles: ['ROLE_ALARM_ADMIN'] })
+const visitor = c8y.persona({ userName: 'visitor', roles: [] })
+const partner = c8y.persona({ userName: 'eve', roles: ['ROLE_ALARM_ADMIN'], tenant: 't99999' })
+const anonymous = c8y.persona(null) // no valid login
 
-  expect((await serverFetch('/pumps/SN-1')).status).toBe(403)
+it('only lets operators run the check', async () => {
+  expect((await operator.fetch('/pumps/SN-1/check', { method: 'POST' })).status).toBe(200)
+  expect((await visitor.fetch('/pumps/SN-1/check', { method: 'POST' })).status).toBe(403)
 })
 ```
+
+The persona reaches your service the same way a real user does, through [dev user injection](/guide/dev-user). `useUser()`, `useUserRoles()`, the auth middleware, and `useUserClient()` see the persona. A persona belongs to the deployed tenant unless you set `tenant`. Role names autocomplete: your manifest's roles plus the known platform roles.
 
 ## Assert
 
@@ -205,7 +211,6 @@ Before every test, the fake tenant is rebuilt: the baseline first, then the file
 
 | API                                                 | Inner Scope                                    |
 | --------------------------------------------------- | ---------------------------------------------- |
-| `c8y.user()`                                        | replaces the outer user                        |
 | `c8y.device()`, `c8y.managedObject()`, `c8y.seed()` | adds data                                      |
 | `c8y.tenantOptions.set()` / `.delete()`             | changes one key                                |
 | `c8y.subscriptions.add()` / `.remove()`             | changes one tenant; `.set([...])` replaces all |
@@ -247,7 +252,7 @@ The fake implements a documented subset of the Cumulocity REST API. Request and 
 
 | API                          | Emulated                                                                                                                                                                                                                                                                        |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Current user, current tenant | from `c8y.user()` and the request's credentials                                                                                                                                                                                                                                 |
+| Current user, current tenant | from the calling persona and the request's credentials                                                                                                                                                                                                                          |
 | Microservice subscriptions   | from `c8y.subscriptions`                                                                                                                                                                                                                                                        |
 | Tenant options               | read, write, delete, and list per category and tenant                                                                                                                                                                                                                           |
 | Inventory                    | create, read, update (fragments merge, `null` removes), delete; list by `type`, `fragmentType`, `ids`, `owner`, `text`, `childDeviceId`/`childAssetId`/`childAdditionId`, `onlyRoots`, and `query`/`q` (see below); child devices, assets, and additions with parent references |

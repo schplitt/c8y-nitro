@@ -1,10 +1,13 @@
+import { Buffer } from 'node:buffer'
 import type { C8YTenantOptionKey } from 'c8y-nitro/types'
+import { serverFetch } from 'nitro'
 import type { C8yRequest, C8yRequestHandler, C8yTestState, C8yTestSubscription, C8yTestUser, C8yUnhandledRequest } from './types'
 import type { C8yDb, C8yManagedObjectInput, C8yRef, C8ySeed } from './data'
 import { applySeed, createDb, createFromInput, newRef } from './data'
 import { platform } from './platform'
 import { compileRoute, matchRoute, splitPath } from './router'
-import { arrange } from './scope'
+import { DEFAULTS } from './defaults'
+import { arrange, assertActiveTest } from './scope'
 
 export type * from './types'
 export type { C8yAlarmInput, C8yDb, C8yDbCollection, C8yDbFilter, C8yEventInput, C8yIdInput, C8yManagedObjectInput, C8yMeasurementInput, C8yOperationInput, C8yRef, C8ySeed } from './data'
@@ -49,6 +52,22 @@ declare module 'vitest' {
 }
 
 /**
+ * A user that calls your service in tests. Created with `c8y.persona()`.
+ */
+export interface C8yPersona {
+  /**
+   * The user, or `null` for a caller without a valid login.
+   */
+  readonly user: C8yTestUser | null
+  /**
+   * Calls a route of your service as this user, like `serverFetch()` from
+   * `nitro`. The platform answers `GET /user/currentUser` with this user
+   * during the request.
+   */
+  fetch: (path: string, init?: Parameters<typeof serverFetch>[1]) => Promise<Response>
+}
+
+/**
  * The fake Cumulocity tenant your microservice talks to in tests. Requires the
  * `c8yTest()` plugin from `c8y-nitro/testing/vite`.
  *
@@ -68,13 +87,12 @@ declare module 'vitest' {
  * import { serverFetch } from 'nitro'
  * import { c8y } from 'c8y-nitro/testing'
  *
- * c8y.user({ userName: 'alice', roles: ['ROLE_ORDERS_READ'] })   // whole file
+ * const pump = c8y.device({ name: 'Pump', externalIds: { c8y_Serial: 'SN-1' } })  // seed the platform
+ * const visitor = c8y.persona({ userName: 'visitor', roles: [] })
  *
- * describe('without role', () => {
- *   c8y.user({ userName: 'bob', roles: [] })                     // this describe
- *   it('is forbidden', async () => {
- *     expect((await serverFetch('/orders')).status).toBe(403)     // call your service
- *   })
+ * it('returns the pump', async () => {
+ *   expect((await serverFetch('/pumps/SN-1')).status).toBe(200)   // as the default user
+ *   expect((await visitor.fetch('/pumps/SN-1')).status).toBe(403) // as another user
  * })
  * ```
  */
@@ -170,13 +188,42 @@ export const c8y = {
   },
 
   /**
-   * Sets the user calling the microservice (replaces the outer scope's user).
-   * `null` means not logged in: the platform answers `GET /user/currentUser`
-   * with 401.
+   * Creates a persona: a user that calls your service. `persona.fetch()`
+   * calls a route as that user; plain `serverFetch()` calls as the default
+   * user from the `c8yTest()` config. `null` is a caller without a valid
+   * login (the platform answers `GET /user/currentUser` with 401).
+   *
+   * @example
+   * ```ts
+   * const operator = c8y.persona({ userName: 'operator', roles: ['ROLE_ALARM_ADMIN'] })
+   * const visitor = c8y.persona({ userName: 'visitor', roles: [], tenant: 't99999' })
+   *
+   * it('only lets operators run the check', async () => {
+   *   expect((await operator.fetch('/pumps/SN-1/check', { method: 'POST' })).status).toBe(200)
+   *   expect((await visitor.fetch('/pumps/SN-1/check', { method: 'POST' })).status).toBe(403)
+   * })
+   * ```
    * @param user - The user, or `null`
    */
-  user(user: C8yTestUser | null): void {
-    arrange('c8y.user()', () => platform.setUser(user))
+  persona(user: C8yTestUser | null): C8yPersona {
+    return {
+      user,
+      async fetch(path, init = {}) {
+        assertActiveTest('persona.fetch()')
+        const previous = platform.user
+        platform.setUser(user)
+        try {
+          const headers = new Headers(init.headers)
+          const login = user
+            ? `${user.tenant ?? platform.tenant}/${user.userName}:${DEFAULTS.developmentPassword}`
+            : `${platform.tenant}/anonymous:invalid`
+          headers.set('authorization', `Basic ${Buffer.from(login).toString('base64')}`)
+          return await serverFetch(path, { ...init, headers })
+        } finally {
+          platform.setUser(previous)
+        }
+      },
+    }
   },
 
   /**
@@ -279,10 +326,11 @@ export const c8y = {
   },
 
   /**
-   * Applies several arrange settings at once, in the current scope.
+   * Applies several arrange settings at once, in the current scope. Callers
+   * are not part of the state: use `c8y.persona()`.
    * @param state - Partial tenant state
    */
-  apply(state: Partial<C8yTestState>): void {
+  apply(state: Partial<Omit<C8yTestState, 'user'>>): void {
     arrange('c8y.apply()', () => platform.apply(state))
   },
 

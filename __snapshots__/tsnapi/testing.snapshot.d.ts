@@ -53,6 +53,10 @@ export interface C8yOperationInput {
   failureReason?: string;
   [fragment: string]: unknown;
 }
+export interface C8yPersona {
+  readonly user: C8yTestUser | null;
+  fetch: (_: string, _?: Parameters<typeof serverFetch>[1]) => Promise<Response>;
+}
 export interface C8yRef {
   readonly id: string;
 }
@@ -131,7 +135,7 @@ export declare const c8y: {
   managedObject(input?: C8yManagedObjectInput): C8yRef;
   device(input?: C8yManagedObjectInput): C8yRef;
   seed(seed: C8ySeed): void;
-  user(user: C8yTestUser | null): void;
+  persona(user: C8yTestUser | null): C8yPersona;
   subscriptions: {
     list(): readonly C8yTestSubscription[];
     add(subscription: C8yTestSubscription): void;
@@ -146,7 +150,7 @@ export declare const c8y: {
   override(pattern: string, handler: C8yRequestHandler, options?: {
     once?: boolean;
   }): void;
-  apply(state: Partial<C8yTestState>): void;
+  apply(state: Partial<Omit<C8yTestState, "user">>): void;
   callsTo(pattern: string): C8yRequest[];
 };
 // #endregion

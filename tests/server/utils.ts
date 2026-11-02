@@ -42,3 +42,12 @@ export function captureLogs() {
     clear: () => spies.forEach((spy) => spy.mockClear()),
   }
 }
+
+/**
+ * Parses a JSON response body.
+ *
+ * @param res - Response, e.g. from `persona.fetch()`
+ */
+export async function readJson(res: Response) {
+  return await res.json() as Record<string, any>
+}

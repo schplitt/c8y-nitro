@@ -5,6 +5,9 @@ import { c8y } from 'c8y-nitro/testing'
 // Seed the fake Cumulocity tenant: every test in this file starts with this pump
 const pump = c8y.device({ name: 'Pump 1', externalIds: { c8y_Serial: 'SN-1' } })
 
+// Users that call the service. Plain serverFetch() calls as the operator from vitest.config.ts.
+const visitor = c8y.persona({ userName: 'visitor', roles: [] })
+
 describe('GET /pumps/:serial', () => {
   c8y.seed({
     measurements: [
@@ -27,9 +30,7 @@ describe('GET /pumps/:serial', () => {
   })
 
   it('requires the inventory role', async () => {
-    c8y.user({ userName: 'visitor', roles: [] })
-
-    const res = await serverFetch('/pumps/SN-1')
+    const res = await visitor.fetch('/pumps/SN-1')
 
     expect(res.status).toBe(403)
   })

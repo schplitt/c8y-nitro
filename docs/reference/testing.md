@@ -13,7 +13,7 @@ Vite plugin. Add it next to `nitro()` in `vitest.config.ts`. `options` is the ba
 | Option               | Type                            | Default                                | Description                                                      |
 | -------------------- | ------------------------------- | -------------------------------------- | ---------------------------------------------------------------- |
 | `tenant`             | `string`                        | `'t12345'`                             | Tenant the microservice is deployed in (`C8Y_BOOTSTRAP_TENANT`). |
-| `user`               | `C8yTestUser \| null`           | `{ userName: 'test-user', roles: [] }` | User calling the microservice. `null`: not logged in.            |
+| `user`               | `C8yTestUser \| null`           | `{ userName: 'test-user', roles: [] }` | Default user for plain `serverFetch()`. `null`: not logged in.   |
 | `subscriptions`      | `C8yTestSubscription[]`         | the deployed tenant                    | Subscribed tenants and their service users.                      |
 | `tenantOptions`      | `Record<string, string>`        | `{}`                                   | Options of the own settings category in the deployed tenant.     |
 | `onUnhandledRequest` | `'error' \| 'warn' \| 'ignore'` | `'error'`                              | What happens to platform requests the fake cannot answer.        |
@@ -36,7 +36,6 @@ Arrange calls (marked _scoped_) apply to the scope they are called in: file, `de
 | `c8y.device(input?)`                                                              | _Scoped._ Creates a device (`c8y_IsDevice`). Returns a `C8yRef`.                           |
 | `c8y.managedObject(input?)`                                                       | _Scoped._ Creates a managed object. Returns a `C8yRef`.                                    |
 | `c8y.seed({ measurements?, events?, alarms?, operations?, tenant? })`             | _Scoped._ Creates measurements, events, alarms, and operations, validated like API writes. |
-| `c8y.user(user \| null)`                                                          | _Scoped._ Sets the user calling the microservice.                                          |
 | `c8y.tenantOptions.set(key, value, scope?)`                                       | _Scoped._ Sets an option. `scope`: `{ category?, tenant? }`.                               |
 | `c8y.tenantOptions.delete(key, scope?)`                                           | _Scoped._ Deletes an option.                                                               |
 | `c8y.subscriptions.add(subscription)` / `.remove(tenant)` / `.set(subscriptions)` | _Scoped._ Changes the subscribed tenants.                                                  |
@@ -56,7 +55,12 @@ Seed inputs reference managed objects as a ref, an id, or `{ id }`: `source` for
 
 ### Act
 
-Call your service with `serverFetch()` from `nitro`, like any Nitro route. `c8y` is only the fake platform your service talks to.
+Call your service with `serverFetch()` from `nitro` (as the default user), or with a persona:
+
+| Member                       | Description                                                       |
+| ---------------------------- | ----------------------------------------------------------------- |
+| `c8y.persona(user \| null)`  | Creates a persona. `null` is a caller without a valid login.      |
+| `persona.fetch(path, init?)` | Calls a route of your service as that user, like `serverFetch()`. |
 
 ### Assert
 
@@ -90,7 +94,7 @@ The handler receives the request: `method`, `path`, `params`, `query`, `body` (p
 
 All types are exported from `c8y-nitro/testing`:
 
-- **Plugin and state:** `C8yTestOptions`, `C8yTestState`, `C8yTestUser`, `C8yTestRole`, `C8yTestSubscription`.
+- **Plugin and state:** `C8yTestOptions`, `C8yTestState`, `C8yTestUser`, `C8yPersona`, `C8yTestRole`, `C8yTestSubscription`.
 - **Data model:** `C8yRef`, `C8yIdInput`, `C8yManagedObjectInput`, `C8ySeed`, `C8yMeasurementInput`, `C8yEventInput`, `C8yAlarmInput`, `C8yOperationInput`.
 - **Inspection:** `C8yDb`, `C8yDbCollection`, `C8yDbFilter`.
 - **Requests:** `C8yRequest`, `C8yUnhandledRequest`, `C8yRequestContext`, `C8yRequestHandler`, `UnhandledRequestStrategy`.
