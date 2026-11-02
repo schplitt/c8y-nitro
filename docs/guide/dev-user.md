@@ -23,7 +23,7 @@ Disable this when another local layer already provides the real auth context, fo
 If you run a local proxy that already forwards a user session or authorization header, disable this middleware:
 
 ```ts
-export default defineNitroConfig({
+export default defineConfig({
   c8y: {
     dev: {
       injectUser: false,

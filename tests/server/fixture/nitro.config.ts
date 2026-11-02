@@ -1,7 +1,7 @@
-import { defineNitroConfig } from 'nitro/config'
+import { defineConfig } from 'nitro'
 import c8y from 'c8y-nitro'
 
-export default defineNitroConfig({
+export default defineConfig({
   preset: 'node_server',
   serverDir: './',
 
@@ -9,11 +9,15 @@ export default defineNitroConfig({
 
   experimental: {
     asyncContext: true,
+    openAPI: true,
   },
 
   c8y: {
     skipBootstrap: true, // skip auto-bootstrap for testing purposes
     enableTenantOptionsInvalidationRoute: true,
+    openapi: {
+      excludeRoutes: ['/hidden'],
+    },
     manifest: {
       roles: ['SOME_CUSTOM_ROLE', 'ANOTHER_ROLE'],
       settings: [
@@ -27,6 +31,8 @@ export default defineNitroConfig({
       credentialsTTL: 400,
       tenantOptions: {
         myOption: 200,
+        // short TTL for the cache expiry test
+        cacheExpiryOption: 4,
       },
     },
   },

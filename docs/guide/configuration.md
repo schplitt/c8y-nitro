@@ -7,7 +7,7 @@ The module is configured through the `c8y` key in your Nitro config.
 ```ts
 import c8y from 'c8y-nitro'
 
-export default defineNitroConfig({
+export default defineConfig({
   preset: 'node-server',
   modules: [c8y()],
   c8y: {},
@@ -21,7 +21,7 @@ That is enough to enable the default module behavior.
 ```ts
 import c8y from 'c8y-nitro'
 
-export default defineNitroConfig({
+export default defineConfig({
   preset: 'node-server',
   builder: 'rolldown',
   experimental: {
@@ -80,7 +80,7 @@ Adds a debug route that invalidates tenant option caches in development or troub
 ## Practical Defaults
 
 - Use a Node preset such as `node-server` or `node-cluster`.
-- Prefer `builder: 'rolldown'` for faster builds.
+- Prefer `builder: 'rolldown'` for faster builds, and add `rolldown` to your dev dependencies. Nitro no longer ships a builder; without it, the first build asks to install it (or installs it automatically in CI) and changes your `package.json` and lockfile.
 - Enable `experimental.asyncContext` if you want to avoid threading the request through deep helper stacks.
 - Task scheduling is self-contained — the `c8yTasks()` registry needs no `experimental.tasks` flag.
 

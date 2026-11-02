@@ -23,6 +23,7 @@ Or install into an existing Nitro service:
 
 ```sh
 pnpm add c8y-nitro nitro@latest
+pnpm add -D rolldown
 ```
 
 ## Enable the Module
@@ -31,8 +32,9 @@ The starter template already has this configured. For an existing Nitro service,
 
 ```ts
 import c8y from 'c8y-nitro'
+import { defineConfig } from 'nitro'
 
-export default defineNitroConfig({
+export default defineConfig({
   preset: 'node-server',
   builder: 'rolldown',
   modules: [c8y()],

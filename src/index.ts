@@ -96,6 +96,11 @@ export function c8y(): NitroModule {
 
       setupRuntime(nitro, manifest)
 
+      // Register runtime plugins, middleware, and handlers during setup, not in a
+      // build hook: Nitro's Vitest environment and runtime mode (`builder: false`)
+      // never run a build, so anything registered in `build:before` would be missing.
+      registerRuntime(nitro, options)
+
       nitro.hooks.hook('dev:reload', async () => {
         // Pick up in-session edits to the configured extra env files too.
         await setupC8yDevEnv(nitro.options.rootDir, options.envFile)
@@ -112,9 +117,7 @@ export function c8y(): NitroModule {
       })
 
       nitro.hooks.hook('build:before', async () => {
-        registerRuntime(nitro, options)
-
-        // Check probes when all things are registered
+        // Check probes once the user's routes have been scanned
         if (options.manifest) {
           checkProbes(nitro, options.manifest)
         }

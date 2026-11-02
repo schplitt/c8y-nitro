@@ -79,16 +79,18 @@
     "changelogithub": "catalog:",
     "eslint": "catalog:",
     "memfs": "catalog:",
+    "rolldown": "catalog:",
     "tsdown": "catalog:",
     "tsnapi": "catalog:",
     "typescript": "catalog:",
+    "vite": "catalog:",
     "vitepress": "catalog:",
     "vitepress-plugin-llms": "catalog:",
     "vitest": "catalog:"
   },
   "peerDependencies": {
     "@c8y/client": ">=1021",
-    "nitro": "3.0.260903-beta"
+    "nitro": "3.0.261029-rc"
   },
   "engines": {
     "node": ">=24.0.0"

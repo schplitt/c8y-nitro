@@ -7,7 +7,7 @@ Tenant options are runtime settings for your microservice. They are a good fit f
 Add settings to `c8y.manifest.settings`:
 
 ```ts
-export default defineNitroConfig({
+export default defineConfig({
   c8y: {
     manifest: {
       settingsCategory: 'my-service',
@@ -136,7 +136,7 @@ Keys prefixed with `credentials.` are stored encrypted by Cumulocity. Use this f
 Reads are cached for 10 minutes by default, keyed per tenant (`${tenant}::${category}::${key}`) so different tenants never share a cached value. You can tune the default or override individual keys:
 
 ```ts
-export default defineNitroConfig({
+export default defineConfig({
   c8y: {
     cache: {
       defaultTenantOptionsTTL: 600,

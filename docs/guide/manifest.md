@@ -80,7 +80,7 @@ export default defineNitroConfig({
 Define your microservice's settings in the manifest to get type-safe keys for `useTenantOption()`:
 
 ```ts
-export default defineNitroConfig({
+export default defineConfig({
   c8y: {
     manifest: {
       settings: [

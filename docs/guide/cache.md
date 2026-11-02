@@ -7,7 +7,7 @@ The default TTL for both is 10 minutes.
 ## Configuration
 
 ```ts
-export default defineNitroConfig({
+export default defineConfig({
   c8y: {
     enableTenantOptionsInvalidationRoute: false,
     cache: {

@@ -3,7 +3,7 @@ minimumReleaseAgeExclude:
   - c8y-realtime@0.2.2
   - db0@0.4.1
   - h3@2.0.1-rc.31
-  - nitro@3.0.260903-beta
+  - nitro@3.0.261029-rc
   - srvx@1.0.3
   - unstorage@2.0.0-alpha.10
 shellEmulator: true
@@ -36,14 +36,16 @@ catalog:
   itty-time: ^2.0.2
   jszip: ^3.10.1
   memfs: ^4.69.1
-  nitro: 3.0.260903-beta
+  nitro: 3.0.261029-rc
   pathe: ^2.0.3
   pkg-types: ^2.3.2
+  rolldown: ^1.2.15
   spinnies: ^0.5.1
   tinyexec: ^1.3.1
   tsdown: ^0.22.14
   tsnapi: ^1.4.2
   typescript: ^6.0.3
+  vite: ^8.3.5
   vitepress: 2.0.0-alpha.17
   vitepress-plugin-llms: 1.13.3
   vitest: ^4.1.11

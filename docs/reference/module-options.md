@@ -101,7 +101,7 @@ The rest of the template is not configurable: `ENV NODE_ENV`/`PORT`, `EXPOSE 80`
 Use `dockerfile` when you need complete control over the image definition:
 
 ```ts
-export default defineNitroConfig({
+export default defineConfig({
   c8y: {
     docker: {
       dockerfile: 'docker/Dockerfile',
@@ -117,7 +117,7 @@ The path `docker/Dockerfile` is resolved relative to `rootDir` (the directory co
 A common use case is installing CA certificates or native runtime libraries the slim image does not ship:
 
 ```ts
-export default defineNitroConfig({
+export default defineConfig({
   c8y: {
     docker: {
       extraInstructions: [
@@ -198,7 +198,7 @@ Supported query params:
 Additional `.env` file(s) to load during development and for CLI commands - typically a shared env file at the monorepo root:
 
 ```ts
-export default defineNitroConfig({
+export default defineConfig({
   c8y: {
     envFile: '../../.env',
   },

@@ -78,13 +78,14 @@ tests/
 │   ├── docker.test.ts          # Docker generation tests
 │   ├── manifest.test.ts        # Manifest generation tests
 │   └── runtime.test.ts         # Runtime setup tests
-└── server/                     # Server integration tests
-    ├── server.test.ts          # Main server test file
+└── server/                     # Server integration tests (Nitro Vitest environment)
+    ├── *.test.ts               # One Nitro app per file
+    ├── utils.ts                # Env stubbing, request and log helpers
     ├── fixture/                # Mini Nitro app for testing
     │   ├── nitro.config.ts     # Nitro config with c8y module
     │   └── routes/             # Test route handlers
     └── mocks/
-        └── generator.ts        # Mock @c8y/client code generator
+        └── c8y-client.ts       # vi.mock factory and mutable mock backend for @c8y/client
 playground/                     # Development playground microservice
 ```
 
@@ -186,7 +187,17 @@ pnpm build      # Build microservice (creates .zip)
 - Run `pnpm test` for watch mode during development
 - Run `pnpm test:run` for single test run (use this in automated workflows)
 - Import modules from `../src`
-- When changing code exercised by `tests/server/fixture/`, rebuild the package before running those fixture tests (`pnpm build`). The fixture server depends on the built package output, not only the live source tree.
+- When changing code exercised by `tests/server/fixture/`, rebuild the package before running those fixture tests (`pnpm build`). The fixture app imports `c8y-nitro`, `c8y-nitro/utils`, and the runtime handlers from the built `dist/`, not from the live source tree.
+
+`vitest.config.ts` defines three Vitest projects:
+
+| Project              | Files                                   | Environment                             |
+| -------------------- | --------------------------------------- | --------------------------------------- |
+| `unit`               | `tests/unit/**/*.test.ts`               | Node                                    |
+| `server`             | `tests/server/**/*.test.ts`             | Nitro (`tests/server/fixture`)          |
+| `server-no-dev-user` | `tests/server/**/*.no-dev-user.test.ts` | Nitro, with `c8y.dev.injectUser: false` |
+
+Run one project with `pnpm vitest run --project server`.
 
 ### Unit Tests
 
@@ -204,116 +215,75 @@ test('should create manifest from package.json', async () => {
 
 ### Server Integration Tests
 
-Server tests are in `tests/server/` and test the full Nitro server with the c8y-nitro module. These tests use **Nitro's virtual modules** to mock `@c8y/client` at build time.
-
-#### Why Virtual Modules?
-
-The Nitro bundler creates an isolated execution environment. Shared mutable state between test code and server code doesn't work because the server runs bundled code. Virtual modules solve this by injecting mock code as a string during the build phase.
+Server tests are in `tests/server/` and use **Nitro's Vitest environment** (`nitro()` from `nitro/vite`, see <https://nitro.build/docs/testing>). Each test file gets its own Nitro app built from `tests/server/fixture/` (including the `c8y()` module), without starting a dev server. Requests go through `serverFetch()` from `nitro`. The app runs with the `nitro-dev` preset, so `.dev.ts` runtime files (dev user injection, env checks) are active.
 
 #### Test Structure
 
 ```
 tests/server/
-├── server.test.ts           # Main test file
-├── fixture/                  # Test fixture (mini Nitro app)
-│   ├── nitro.config.ts       # Nitro config with c8y module
-│   └── routes/               # Test route handlers
-│       ├── user.get.ts
-│       ├── credentials.get.ts
-│       └── protectedRoute.ts
-└── mocks/
-    └── generator.ts         # Generates mock @c8y/client code
+├── utils.ts                  # stubC8yEnv(), fetchJson(), captureLogs(), sleep()
+├── mocks/
+│   └── c8y-client.ts         # vi.mock factory + mutable mock backend (c8yMock)
+├── fixture/                  # Nitro app under test
+│   ├── nitro.config.ts       # c8y module config shared by all server tests
+│   ├── plugins/              # Fixture plugins (e.g. credential hook recorder)
+│   ├── routes/               # Routes that call c8y-nitro utilities
+│   └── scheduler.ts          # Shared c8yTasks() registry
+├── runtime.test.ts           # Dev user injection, probes, scheduled tasks
+├── access-control.test.ts    # useUser/roles, role and tenant middleware
+├── credentials.test.ts       # Credentials and the credentials lifecycle hook
+├── tenant-options.test.ts    # Tenant option handles, caching, invalidation route
+├── logging.test.ts           # evlog wide events
+├── openapi.test.ts           # OpenAPI transformation
+└── dev-user.no-dev-user.test.ts # Runs in the server-no-dev-user project
 ```
 
-#### Mock Generator
-
-The `generateMockClientCode()` function creates JavaScript code that replaces `@c8y/client`:
+#### Writing a Server Test
 
 ```ts
-import { generateMockClientCode } from './mocks/generator'
-import type { MockC8yClientData } from './mocks/generator'
+import { afterEach, expect, it, vi } from 'vitest'
+import { c8yMock } from './mocks/c8y-client'
+import { fetchJson, stubC8yEnv } from './utils'
 
-// MockC8yClientData interface:
-// {
-//   currentUser?: ICurrentUser | null      // User returned by client.user.currentWithEffectiveRoles()
-//   subscriptions?: Array<ICredentials>    // Subscribed tenants from bootstrap API
-//   tenantOptions?: Record<string, string> // Tenant options by key (without credentials. prefix)
-// }
+// 1. Stub the C8Y_* env at the top level (the app is created in beforeAll)
+stubC8yEnv()
 
-const mockData: MockC8yClientData = {
-  currentUser: {
-    userName: 'testUser',
-    effectiveRoles: [{ name: 'ROLE_ADMIN' }],
-  },
-  subscriptions: [
-    { tenant: 't12345', user: 'serviceuser', password: 'pass' },
-  ],
-  tenantOptions: {
-    myOption: 'value',
-    secret: 'decrypted-value', // Note: stored without "credentials." prefix
-  },
-}
-
-const code = generateMockClientCode(mockData)
-```
-
-#### Creating a Server Test
-
-```ts
-import { createNitro, createDevServer, build, prepare } from 'nitro/builder'
-
-// 1. Create server with mock data via virtual modules
-const nitro = await createNitro({
-  dev: true,
-  rootDir: resolve(__dirname, './fixture'),
-  builder: 'rolldown',
-  virtual: {
-    '@c8y/client': generateMockClientCode(mockData),
-  },
+// 2. Mock @c8y/client and seed the mock backend
+vi.mock('@c8y/client', async () => {
+  const { mockC8yClientModule } = await import('./mocks/c8y-client')
+  return mockC8yClientModule({
+    currentUser: { userName: 'testUser', effectiveRoles: [{ name: 'ROLE_A' }] },
+    subscriptions: [{ tenant: 't12345', user: 'service', password: 'pass' }],
+    tenantOptions: { myOption: 'value' },
+  })
 })
 
-const devServer = createDevServer(nitro)
-const server = devServer.listen({})
-await prepare(nitro)
-await build(nitro)
+// 3. Request routes, and change backend state or env per test
+it('denies a user from another tenant', async () => {
+  vi.stubEnv('C8Y_DEVELOPMENT_TENANT', 't99999')
+  const { res } = await fetchJson('/deployed-tenant-only')
+  expect(res.status).toBe(403)
+})
 
-// 2. Make requests and assert
-const res = await server.fetch(new Request(new URL('/user', server.url)))
-const json = await res.json()
-expect(json.userName).toBe('testUser')
-
-// 3. Cleanup
-await devServer.close()
-await nitro.close()
+afterEach(() => stubC8yEnv()) // reset per-test env changes
 ```
+
+Key points:
+
+- **One app per file.** Settings that differ per app instance (module options) need a separate Vitest project, like `server-no-dev-user`. Everything read at request time (env vars, mock backend state, the current user) can change per test inside one file.
+- **Mutable mock backend.** `c8yMock` (from `mocks/c8y-client.ts`) is the state behind the mocked `Client`: `currentUser`, `subscriptions` (`setSubscription`, `deleteSubscription`), and tenant options (`setOption`, `deleteOption`, `getOption`). The test file and the server share one module graph, so tests change it directly to simulate backend changes. Do not add fixture routes just to mutate mock state.
+- **Module state is shared too.** Tests can import fixture modules directly, e.g. the credential hook recorder in `fixture/plugins/tenant-credentials-updated.ts`.
+- **The mock replaces `@c8y/client` completely.** The runtime only uses `Client`, `BasicAuth`, and `MicroserviceClientRequestAuth`. If `src/` starts using another runtime export, add it to the mock.
+- **Responses mirror the real client**: `{ res, data }` from service calls, and fetch-style responses from `client.core.fetch()`.
+- **Logs**: `captureLogs()` spies on `console.*`. The server runs in the test worker, so evlog wide events and `console.log` from routes and tasks land there. Wide events are emitted after the response: wait ~100 ms before asserting.
+- **Known noise**: one `ReferenceError: require is not defined` (or a tslib `__extends` error) per run comes from Nitro's Vite dev worker loading the real `@c8y/client` under the Vite builder. It does not affect test results. See "Vite builder compatibility" below.
 
 #### Adding New Test Fixtures
 
 1. Create a route handler in `tests/server/fixture/routes/`
 2. Import and use utilities from `c8y-nitro/utils` (these will use the mocked client)
-3. Add a test that creates a server with appropriate `mockData`
-4. Group related tests to share server instances (reduces ~600ms overhead per server)
-
-#### Performance Tips
-
-- **Share server instances**: Each `beforeAll`/`afterAll` pair adds ~600ms. Group related tests.
-- **Use `builder: 'rolldown'`**: Faster builds than default bundler.
-- **Parallel-safe**: Each describe block gets its own server, so tests within a block run against the same instance.
-
-#### Limitations
-
-Virtual module mocking injects module code at build time. By default, the generated mock data is static per server instance, but the mock module can also expose explicit helper functions for controlled runtime mutation when a test needs to simulate backend state changes.
-
-- **Static by default**: Most mock data is fixed per built server instance unless the virtual module intentionally exposes mutable helpers
-- **Controlled runtime mutation is possible**: For cache invalidation or TTL-expiration tests, add explicit helper exports to the virtual module and trigger them through fixture routes so the bundled server mutates its own in-memory mock state
-- **No call-count/state introspection by default**: Cannot assert writes or API call counts unless the virtual module is extended to record that state
-- **One virtual module per server build**: Changing the mock implementation itself still requires building a new server instance
-
-For testing cache behavior, TTL expiration, or stateful interactions, consider:
-
-- Extending the virtual module with focused runtime mutation helpers and hitting them through fixture routes
-- Unit testing the caching logic separately with mocked dependencies
-- Using the playground with a real Cumulocity tenant for manual verification
+3. Add tests to the matching `tests/server/*.test.ts` file, or a new file if the topic is new
+4. If a test needs different module options, add a Vitest project in `vitest.config.ts` (see `server-no-dev-user`)
 
 ## Key Concepts
 
@@ -463,7 +433,9 @@ This section captures project-specific knowledge, tool quirks, and lessons learn
 
 ### Tools & Dependencies
 
-- **Nitro v3.0.1-alpha** — Using alpha version; watch for breaking changes
+- **Nitro `3.0.261029-rc`** — Nitro v3 release candidate, pinned exactly as a peer dependency; bump `package.json` (peer), the `pnpm-workspace.yaml` catalog, and its `minimumReleaseAgeExclude` entry together, and add a `docs/migration.md` section
+- **Nitro config helper** — Use `import { defineConfig } from 'nitro'`; `defineNitroConfig` from `nitro/config` is deprecated since the RC
+- **`nitro.logger` type** — Since the RC, `nitro.logger` is Nitro's own minimal logger type, not consola's `ConsolaInstance`, and Nitro does not export it by name. Type module helpers that receive it as `Nitro['logger']` (from `nitro/types`), not with consola types. Helpers shared with the CLI (which passes `consola`) use a small structural interface instead, like `BootstrapSyncLogger` in `src/module/autoBootstrap.ts`
 - **@c8y/client >= 1021** — Peer dependency; provides Cumulocity API client
 - **Docker required** — Must be installed for zip creation during build
 - **Native (NAPI) dependencies** — For any dependency shipping a compiled `.node` binary (e.g. `@duckdb/node-api`, `better-sqlite3`, `sharp`): **never** add it to `noExternals` / try to bundle it — a native binary cannot be inlined into JS. Keep Nitro's default external+trace behavior and make the tracer copy the package: `rolldownConfig.external: [/^@scope\//]` + `traceDeps: ['@scope/pkg*', '!@scope/unwanted-platform-pkg']` (`pkg*` = full package copy incl. binaries; `!pkg` = exclude). Prune extra platform packages with `!pkg` entries or `traceOpts.nft.ignore`. Add the deploy target's arch to `pnpm-workspace.yaml` `supportedArchitectures` (Docker image is traced from local `.output`). Full worked example: `docs/guide/native-dependencies.md`.
@@ -476,18 +448,17 @@ This section captures project-specific knowledge, tool quirks, and lessons learn
   - **Why `useLogger` is wrapped, not re-exported** — evlog's `useLogger(event)` reads `event.req.context.log`, so it only accepts an `HTTPEvent`; `useRequest()` returns the `ServerRequest` directly (no `.req`) and would throw. `src/utils/logging.ts` wraps it to normalize both shapes (`'req' in x ? x : { req: x }`), restoring the accept-both behavior an older evlog had. Regression-guarded by `tests/server/fixture/routes/logging/via-request.ts` + the "accept useRequest()" server test. If bumping evlog, re-check that `useLogger` still reads the logger from the request context this way.
 - **Structured errors** — always use `createError` from `c8y-nitro/utils` (re-exported from `evlog`) instead of Nitro/h3's built-in `createError`. **Field exposure contract:** `message`, `status`, `code`, `why`, `fix`, and `link` are all serialized into the JSON response (under a `data` key) and are therefore visible to the caller; only `internal` (and `cause`) stays server-side and appears solely in the wide log event. **Never leak internal system errors** — put raw upstream/core payloads, DB errors, tokens, or tenant internals in `createError({ internal: … })`, not in `message`/`why`. `@c8y/client` rejects with plain `{ res, data }` objects (not `Error`s) on HTTP failure — normalize those into a `createError` at the boundary and keep the raw `{ res, data }` in `internal`. See `docs/guide/logging.md` and the JSDoc on `createError` in `src/utils/logging.ts`.
 - **Composed / imperative auth** — when authorization is conditional or per-resource (e.g. "has read role OR owns this resource"), do not re-implement role fetching or the 403 shape. Compose `useUserRoles(event)` + `useUserClient(event)` (probe core as the caller) + `createError`. Use the `hasUserRequiredRole` / `isUserFrom*Tenant` middleware only for plain role/tenant gates. See `docs/guide/auth-middleware.md` § Composed / Imperative Authorization.
-- **Logging test pattern** — Use `consola.mockTypes()` + `consola.wrapAll()` in `it.sequential` tests, then `consola.restoreAll()` in a `finally` block. Capturing logs with `vi.fn((context) => logs.push(String(context)))` is fine when passed through `consola.mockTypes()`. Wait 100ms after the request for async log emission before asserting on `logOutput`.
-- **Server fixture test dependency** — `tests/server/fixture/` exercises the built package. After changing module/runtime behavior used by fixture tests, run `pnpm build` before running those tests or the fixture server may still use stale output.
+- **Logging test pattern** — In server tests, use `captureLogs()` from `tests/server/utils.ts` (spies on `console.*`; the server runs in the test worker) and call `logs.clear()` in `afterEach`. Wait 100ms after the request for async log emission before asserting.
+- **Server fixture test dependency** — `tests/server/fixture/` exercises the built package. After changing module/runtime behavior used by fixture tests, run `pnpm build` before running those tests or the fixture app may still use stale output.
 - **Nitro workspace version alignment** — Keep `pnpm-workspace.yaml`'s Nitro catalog version aligned with the package-level Nitro version before diagnosing Nitro type or cache helper behavior. A catalog mismatch can leave the workspace on an older Nitro build and make cache helper typings or runtime assumptions look wrong.
-- **Nitro cache typing gap** — In Nitro `3.0.260429-beta`, `defineCachedFunction()` runtime/docs expose `.invalidate()` and `.resolveKeys()`, but Nitro's exported TypeScript declaration still returns a plain cached function signature without those helper members. When using Nitro's built-in cache invalidation helpers from TypeScript, keep a narrow local cast around the cached function until Nitro updates its type declarations.
-- **Scheduled task test pattern** — Scheduling is self-contained in the `c8yTasks()` registry (no `experimental.tasks`, no Nitro tasks). Register tasks once in a shared fixture module (`tests/server/fixture/scheduler.ts`) via `c8yTasks().createTask(...)` and import that singleton from routes. Schedule a job through a route with `tasks.scheduleJob({ name, task, schedule: { in } })`, assert captured logs do not contain the job marker immediately after the request, then sleep until `nextRun` plus a generous buffer and assert the marker appears. Do not use `vi.waitFor()` for this built fixture timing check. For deterministic single/parallel-concurrency coverage, prefer a unit test (`tests/unit/tasks.test.ts`) that schedules a far-future cron and drives execution via `triggerJob()`. Reuse an existing fixture server `describe` block when possible. Use `consola.mockTypes()` + `consola.wrapAll()` for log assertions.
-- **Shared fixture cache tests** — When adding cache-expiration coverage to an existing shared server describe block, prefer introducing a dedicated manifest-defined tenant option key used only by that test instead of reusing a key that other assertions depend on. This avoids cross-test state coupling while still saving the extra server startup/teardown cost.
-- **Lifecycle hook fixture tests** — Reuse an existing shared fixture server `describe` block when the required mock data already matches instead of creating another `beforeAll`/`afterAll` server pair. For credential lifecycle coverage, prefer one fixture plugin that records hook events plus two routes: one route that reads/mutates/refreshes the credential cache through query params and one route that returns/clears recorded hook events. When asserting credential lifecycle behavior, verify both sides: unchanged refreshes should not emit the hook, while adding a tenant, removing a tenant, or replacing one tenant id with another should emit exactly one event.
+- **Scheduled task test pattern** — Scheduling is self-contained in the `c8yTasks()` registry (no `experimental.tasks`, no Nitro tasks). Register tasks once in a shared fixture module (`tests/server/fixture/scheduler.ts`) via `c8yTasks().createTask(...)` and import that singleton from routes. Schedule a job through a route with `tasks.scheduleJob({ name, task, schedule: { in } })`, assert captured logs do not contain the job marker immediately after the request, then sleep until `nextRun` plus a buffer and assert the marker appears. For deterministic single/parallel-concurrency coverage, prefer a unit test (`tests/unit/tasks.test.ts`) that schedules a far-future cron and drives execution via `triggerJob()`. Use `captureLogs()` for log assertions.
+- **Fixture cache tests** — For cache-expiration coverage, prefer a dedicated manifest-defined tenant option key with its own short TTL in `tests/server/fixture/nitro.config.ts` (e.g. `cacheExpiryOption`) instead of reusing a key other assertions depend on. Change the backend value with `c8yMock.setOption()` and assert the cached value until the TTL passes.
+- **Lifecycle hook fixture tests** — Record hook events in a fixture plugin and import its getters directly in the test (shared module graph). Change subscriptions with `c8yMock.setSubscription()` / `deleteSubscription()` and refresh through a route. Verify both sides: unchanged refreshes must not emit the hook, while adding a tenant, removing a tenant, or replacing one tenant id with another emits exactly one event.
 
 - Utility functions accept `H3Event | ServerRequest` for flexibility
 - Use `defineCachedFunction` from Nitro for cached API calls (e.g., credentials)
   - Always include `invalidate` and `refresh` helper functions
-  - Prefer Nitro/ocache's built-in cached function `.invalidate()` over manually constructing storage keys with `useStorage('cache').removeItem(...)`; manual keys are easy to get wrong when `group`, `base`, or `getKey` differ from defaults
+  - Prefer Nitro/ocache's built-in cached function `.invalidate()` over manually constructing cache storage keys and removing them; manual keys are easy to get wrong when `group`, `base`, or `getKey` differ from defaults
   - Carefully consider what requests make sense to be cached (e.g., credentials, not real-time data, consider security implications)
   - For per-key caching (like tenant options), use a factory pattern with a Map/Record to store fetchers
   - `maxAge` does NOT accept a function — if you need per-key TTL, create separate cached functions per key
@@ -503,10 +474,11 @@ This section captures project-specific knowledge, tool quirks, and lessons learn
   - Use `as const` for tuples to preserve literal types
   - Keep `src/runtime.d.ts` in sync as a fallback declaration
 - Auto-injected routes use `/_c8y_nitro/` prefix to avoid conflicts with user routes
-- Runtime handler bundling can accidentally pull in the full `utils` dependency graph
-  - If a handler only needs `createError`, import it from `src/utils/logging.ts`, not the `src/utils/index.ts` barrel
-  - If a handler only needs the tenant option fetcher registry, import `src/utils/internal/tenantOptionFetchers.ts`, not `src/utils/tenantOptions.ts`
-  - Otherwise Nitro may bundle `@c8y/client` into the handler chunk, which can trigger a dev worker crash like `Cannot destructure property '__extends' of 'import_tslib.default' as it is undefined`
+- Runtime files (`src/module/runtime/**`) are built by a **separate tsdown config** from `c8y-nitro/utils`. A relative import from a runtime file into `src/utils/` inlines a **second copy** of that module, including its module-level state
+  - If a runtime file needs **shared state** (e.g. the tenant option fetcher registry behind `useTenantOption`), import the public `c8y-nitro/utils` entry. It is `neverBundle` in the runtime tsdown config, so Nitro bundles one copy for user routes and runtime handlers. Example: `runtime/handlers/invalidateTenantOptions.ts` (a relative import made the invalidation route a silent no-op)
+  - Stateless helpers (e.g. `createError` from `src/utils/logging.ts`) can still be imported by relative path
+- Runtime registration (`registerRuntime()`) runs during module **setup**, not in `build:before`. Nitro's Vitest environment and runtime mode (`builder: false`) never run a build, so handlers registered in a build hook would be missing there. Only checks that need scanned routes (`checkProbes`) stay in `build:before`
+- **Vite builder compatibility** — `@c8y/client` does not load under Nitro's Vite builder yet: tslib's CJS entry (`__extends` destructure error) and CJS `cross-fetch` (`require is not defined`). The `tslib` alias lives in `rolldownConfig.resolve.alias` on purpose: a `nitro.options.alias` entry resolves from the project root, where pnpm does not expose `tslib`, and breaks production builds
 - Runtime handlers/middleware/plugins must be in `src/module/runtime/` directory structure:
   - `runtime/handlers/` — Event handlers (e.g., probe endpoints)
   - `runtime/middlewares/` — Global middlewares (e.g., dev user injection)
