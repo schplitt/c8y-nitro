@@ -69,11 +69,13 @@ describe('role middleware', () => {
       expect(json.message).toBe('You have one of the required roles!')
     })
 
-    it('can send a single request as another user', async () => {
-      const { res } = await fetchJson('/protectedRoute', { as: { roles: [] } })
-      expect(res.status).toBe(403)
+    it('can change the user for a single test', async () => {
+      c8y.user({ userName: 'adminUser', roles: [] })
 
-      // the describe's user is back for the next request
+      expect((await fetchJson('/protectedRoute')).res.status).toBe(403)
+    })
+
+    it('has the describe\'s user again in the next test', async () => {
       expect((await fetchJson('/protectedRoute')).res.status).toBe(200)
     })
   })
@@ -105,7 +107,9 @@ describe('tenant middleware', () => {
   })
 
   it('denies access for a user from another tenant', async () => {
-    const { res, json } = await fetchJson('/deployed-tenant-only', { as: { tenant: 't99999' } })
+    c8y.user({ userName: 'testUser', roles: [], tenant: 't99999' })
+
+    const { res, json } = await fetchJson('/deployed-tenant-only')
 
     expect(res.status).toBe(403)
     expect(json.message).toContain(c8y.tenant)

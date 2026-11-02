@@ -56,9 +56,7 @@ Seed inputs reference managed objects as a ref, an id, or `{ id }`: `source` for
 
 ### Act
 
-| Member                   | Description                                                                                                                                           |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `c8y.fetch(path, init?)` | Requests a route of your microservice (like `serverFetch()` from `nitro`). `init.as` sends the request as another user, merged over the current user. |
+Call your service with `serverFetch()` from `nitro`, like any Nitro route. `c8y` is only the fake platform your service talks to.
 
 ### Assert
 
@@ -95,5 +93,5 @@ All types are exported from `c8y-nitro/testing`:
 - **Plugin and state:** `C8yTestOptions`, `C8yTestState`, `C8yTestUser`, `C8yTestRole`, `C8yTestSubscription`.
 - **Data model:** `C8yRef`, `C8yIdInput`, `C8yManagedObjectInput`, `C8ySeed`, `C8yMeasurementInput`, `C8yEventInput`, `C8yAlarmInput`, `C8yOperationInput`.
 - **Inspection:** `C8yDb`, `C8yDbCollection`, `C8yDbFilter`.
-- **Requests:** `C8yRequest`, `C8yUnhandledRequest`, `C8yRequestContext`, `C8yRequestHandler`, `C8yFetchInit`, `UnhandledRequestStrategy`.
+- **Requests:** `C8yRequest`, `C8yUnhandledRequest`, `C8yRequestContext`, `C8yRequestHandler`, `UnhandledRequestStrategy`.
 - **Enums from the spec:** `C8yAlarmSeverity`, `C8yAlarmStatus`, `C8yOperationStatus`.

@@ -35,9 +35,6 @@ export interface C8yDbCollection<T> {
 export interface C8yEventInput extends SourcedInput {
   text?: string;
 }
-export interface C8yFetchInit extends ServerFetchInit {
-  as?: Partial<C8yTestUser>;
-}
 export interface C8yManagedObjectInput {
   name?: string;
   type?: string;
@@ -151,12 +148,10 @@ export declare const c8y: {
   }): void;
   apply(state: Partial<C8yTestState>): void;
   callsTo(pattern: string): C8yRequest[];
-  fetch(path: string, init?: C8yFetchInit): Promise<Response>;
 };
 // #endregion
 
 // #region Referenced (internal)
-type ServerFetchInit = NonNullable<Parameters<typeof serverFetch>[1]>;
 interface SourcedInput {
   source: C8yIdInput;
   type: string;

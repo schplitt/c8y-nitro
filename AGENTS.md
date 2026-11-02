@@ -247,7 +247,7 @@ Server tests are in `tests/server/` and use **Nitro's Vitest environment** (`nit
 
 ```
 tests/server/
-├── utils.ts                  # fetchJson() (via c8y.fetch), captureLogs(), sleep()
+├── utils.ts                  # fetchJson() (via serverFetch), captureLogs(), sleep()
 ├── fixture/                  # Nitro app under test
 │   ├── nitro.config.ts       # c8y module config shared by all server tests
 │   ├── plugins/              # Fixture plugins (e.g. credential hook recorder)
@@ -295,7 +295,7 @@ it('raises an overheating alarm', async () => {
 
 Key points:
 
-- **Test services, not the Cumulocity API.** Arrange platform data (`c8y.device()`, `c8y.seed()`, `c8y.user()`, `c8y.tenantOptions`), call routes, and assert on responses and `c8y.db`. Use `c8y.override()` only for failures and unemulated APIs, and `toHaveReceived`/`callsTo` only where the request itself is the behavior (e.g. caching). Tests of the fake's own API semantics belong in `tests/contract/scenarios.ts`.
+- **Test services, not the Cumulocity API.** Arrange platform data (`c8y.device()`, `c8y.seed()`, `c8y.user()`, `c8y.tenantOptions`), call routes with `serverFetch()` from `nitro` (`c8y` is only the fake platform), and assert on responses and `c8y.db`. Use `c8y.override()` only for failures and unemulated APIs, and `toHaveReceived`/`callsTo` only where the request itself is the behavior (e.g. caching). Tests of the fake's own API semantics belong in `tests/contract/scenarios.ts`.
 - **Tests use the public API only** (`c8y-nitro/testing`, resolved from `dist`). If a test needs something the API cannot express, improve the API instead of adding a private workaround.
 - **One app per file.** Module options need a separate Vitest project, like `server-no-dev-user` (each project lists `nitro(...)` and `c8yTest()`). Everything read at request time (user, subscriptions, tenant options, handlers, dev env) can change per scope inside one file.
 - **Module state is shared.** Tests can import fixture modules directly, e.g. the credential hook recorder in `fixture/plugins/tenant-credentials-updated.ts`. Do not add fixture routes just to mutate platform state: use `c8y.*`.

@@ -1,7 +1,8 @@
+import { serverFetch } from 'nitro'
 import { describe, expect, it } from 'vitest'
 import { c8y } from 'c8y-nitro/testing'
 
-// The platform data every test in this file starts with
+// Seed the fake Cumulocity tenant: every test in this file starts with this pump
 const pump = c8y.device({ name: 'Pump 1', externalIds: { c8y_Serial: 'SN-1' } })
 
 describe('GET /pumps/:serial', () => {
@@ -13,20 +14,22 @@ describe('GET /pumps/:serial', () => {
   })
 
   it('returns the pump with its latest temperature', async () => {
-    const res = await c8y.fetch('/pumps/SN-1')
+    const res = await serverFetch('/pumps/SN-1')
 
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ name: 'Pump 1', temperature: 71.5 })
   })
 
   it('answers 404 for an unknown serial number', async () => {
-    const res = await c8y.fetch('/pumps/SN-404')
+    const res = await serverFetch('/pumps/SN-404')
 
     expect(res.status).toBe(404)
   })
 
   it('requires the inventory role', async () => {
-    const res = await c8y.fetch('/pumps/SN-1', { as: { roles: [] } })
+    c8y.user({ userName: 'visitor', roles: [] })
+
+    const res = await serverFetch('/pumps/SN-1')
 
     expect(res.status).toBe(403)
   })
@@ -39,7 +42,7 @@ describe('POST /pumps/:serial/check', () => {
     })
 
     it('raises a critical overheating alarm', async () => {
-      const res = await c8y.fetch('/pumps/SN-1/check', { method: 'POST' })
+      const res = await serverFetch('/pumps/SN-1/check', { method: 'POST' })
 
       expect(await res.json()).toEqual({ temperature: 95, maxTemperature: 80, overheating: true })
       expect(c8y.db.alarms.find({ source: pump })).toMatchObject([
@@ -50,7 +53,7 @@ describe('POST /pumps/:serial/check', () => {
     it('respects the configured maximum temperature', async () => {
       c8y.tenantOptions.set('maxTemperature', '100')
 
-      const res = await c8y.fetch('/pumps/SN-1/check', { method: 'POST' })
+      const res = await serverFetch('/pumps/SN-1/check', { method: 'POST' })
 
       expect((await res.json()).overheating).toBe(false)
       expect(c8y.db.alarms.find({ source: pump })).toEqual([])
@@ -58,7 +61,7 @@ describe('POST /pumps/:serial/check', () => {
   })
 
   it('does not raise an alarm without measurements', async () => {
-    const res = await c8y.fetch('/pumps/SN-1/check', { method: 'POST' })
+    const res = await serverFetch('/pumps/SN-1/check', { method: 'POST' })
 
     expect(await res.json()).toEqual({ temperature: null, maxTemperature: 80, overheating: false })
     expect(c8y.db.alarms.find()).toEqual([])

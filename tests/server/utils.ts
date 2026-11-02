@@ -1,16 +1,14 @@
 import { vi } from 'vitest'
-import { c8y } from 'c8y-nitro/testing'
-import type { C8yFetchInit } from 'c8y-nitro/testing'
+import { serverFetch } from 'nitro'
 
 /**
- * Requests a route of the test file's Nitro app (via `c8y.fetch`) and parses
- * the JSON body.
+ * Requests a route of the test file's Nitro app and parses the JSON body.
  *
  * @param path - Route path including query
- * @param init - Request options, including `as` to send it as another user
+ * @param init - Request options
  */
-export async function fetchJson(path: string, init?: C8yFetchInit) {
-  const res = await c8y.fetch(path, init)
+export async function fetchJson(path: string, init?: Parameters<typeof serverFetch>[1]) {
+  const res = await serverFetch(path, init)
   const json = await res.json() as Record<string, any>
   return { res, json }
 }

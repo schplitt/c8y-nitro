@@ -5,7 +5,7 @@
 A test works in three steps:
 
 1. **Arrange** the platform as data: the user calling your service, devices, measurements, alarms, tenant options, and so on.
-2. **Act**: call a route of your service.
+2. **Act**: call a route of your service with `serverFetch()` from `nitro`.
 3. **Assert** on what your service did: its response, and the data it changed in the platform.
 
 Your tests describe what your service does, not which Cumulocity endpoints it calls. You can refactor the service, for example from `inventory.detail()` to `inventory.list()`, without touching a test.
@@ -62,9 +62,10 @@ export default defineHandler({
 })
 ```
 
-The tests arrange a pump and its measurements, call the service, and check the result:
+The tests seed the fake Cumulocity tenant with a pump and its measurements, call the service with `serverFetch()`, and check the result. `c8y` is only the fake platform; your service is called like any Nitro route:
 
 ```ts [test/pumps.test.ts]
+import { serverFetch } from 'nitro'
 import { describe, expect, it } from 'vitest'
 import { c8y } from 'c8y-nitro/testing'
 
@@ -77,7 +78,7 @@ describe('POST /pumps/:serial/check', () => {
     })
 
     it('raises a critical overheating alarm', async () => {
-      const res = await c8y.fetch('/pumps/SN-1/check', { method: 'POST' })
+      const res = await serverFetch('/pumps/SN-1/check', { method: 'POST' })
 
       expect(await res.json()).toEqual({ temperature: 95, maxTemperature: 80, overheating: true })
       expect(c8y.db.alarms.find({ source: pump })).toMatchObject([
@@ -88,7 +89,7 @@ describe('POST /pumps/:serial/check', () => {
     it('respects the configured maximum temperature', async () => {
       c8y.tenantOptions.set('maxTemperature', '100')
 
-      const res = await c8y.fetch('/pumps/SN-1/check', { method: 'POST' })
+      const res = await serverFetch('/pumps/SN-1/check', { method: 'POST' })
 
       expect((await res.json()).overheating).toBe(false)
       expect(c8y.db.alarms.find({ source: pump })).toEqual([])
@@ -96,11 +97,13 @@ describe('POST /pumps/:serial/check', () => {
   })
 
   it('answers 404 for an unknown pump', async () => {
-    expect((await c8y.fetch('/pumps/SN-404/check', { method: 'POST' })).status).toBe(404)
+    expect((await serverFetch('/pumps/SN-404/check', { method: 'POST' })).status).toBe(404)
   })
 
   it('requires the alarm admin role', async () => {
-    expect((await c8y.fetch('/pumps/SN-1/check', { method: 'POST', as: { roles: [] } })).status).toBe(403)
+    c8y.user({ userName: 'visitor', roles: [] })
+
+    expect((await serverFetch('/pumps/SN-1/check', { method: 'POST' })).status).toBe(403)
   })
 })
 ```
@@ -123,7 +126,7 @@ const gateway = c8y.device({
 c8y.managedObject({ name: 'Plant A', type: 'c8y_DeviceGroup', assets: [gateway] })
 
 it('…', async () => {
-  await c8y.fetch(`/devices/${gateway.id}`)
+  await serverFetch(`/devices/${gateway.id}`)
 })
 ```
 
@@ -156,11 +159,14 @@ c8y.tenantOptions.set('maxTemperature', '100')
 - **Service users** of the subscribed tenants are used by `useSubscribedTenantCredentials()`, `useDeployedTenantClient()`, and the other service clients. By default, the deployed tenant `t12345` is subscribed.
 - **Data is kept per tenant.** Pass `tenant` to `c8y.device()`, `c8y.seed()`, or `c8y.tenantOptions.set()` to arrange data for another subscribed tenant.
 
-`c8y.fetch(path, { as })` sends one request as a different user. The scope's user is back for the next request:
+To call your service as a different user, set the user in that test. The scope's user is back for the next test:
 
 ```ts
-await c8y.fetch('/pumps/SN-1', { as: { roles: [] } })
-await c8y.fetch('/pumps/SN-1', { as: { userName: 'eve', tenant: 't99999' } })
+it('denies users without the role', async () => {
+  c8y.user({ userName: 'eve', roles: [], tenant: 't99999' })
+
+  expect((await serverFetch('/pumps/SN-1')).status).toBe(403)
+})
 ```
 
 ## Assert
@@ -180,7 +186,7 @@ c8y.db.tenant('t99999').alarms.find()
 Some services wait for a device to process an operation. Drive the operation's status like the device would:
 
 ```ts
-const { operationId } = await (await c8y.fetch('/pumps/SN-1/restart', { method: 'POST' })).json()
+const { operationId } = await (await serverFetch('/pumps/SN-1/restart', { method: 'POST' })).json()
 c8y.db.operations.update(operationId, { status: 'SUCCESSFUL' })
 ```
 
@@ -216,7 +222,7 @@ it('fails while the inventory is unavailable', async () => {
   c8y.override('GET /inventory/**', () => Response.json({ message: 'Unavailable' }, { status: 503 }))
 
   // c8y-nitro turns platform errors your service does not handle into a 500
-  expect((await c8y.fetch('/pumps/SN-1')).status).toBe(500)
+  expect((await serverFetch('/pumps/SN-1')).status).toBe(500)
 })
 ```
 

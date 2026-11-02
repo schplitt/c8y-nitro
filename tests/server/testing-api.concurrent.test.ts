@@ -7,8 +7,4 @@ describe('concurrent tests', () => {
   it.concurrent('reject arrange calls', () => {
     expect(() => c8y.user({ userName: 'nope' })).toThrow('cannot be used in concurrent tests')
   })
-
-  it.concurrent('reject requests as another user', async () => {
-    await expect(c8y.fetch('/hello', { as: { userName: 'nope' } })).rejects.toThrow('cannot be used in concurrent tests')
-  })
 })

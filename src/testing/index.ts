@@ -1,13 +1,10 @@
-import { Buffer } from 'node:buffer'
 import type { C8YTenantOptionKey } from 'c8y-nitro/types'
-import { serverFetch } from 'nitro'
 import type { C8yRequest, C8yRequestHandler, C8yTestState, C8yTestSubscription, C8yTestUser, C8yUnhandledRequest } from './types'
 import type { C8yDb, C8yManagedObjectInput, C8yRef, C8ySeed } from './data'
 import { applySeed, createDb, createFromInput, newRef } from './data'
-import { DEFAULTS } from './defaults'
 import { platform } from './platform'
 import { compileRoute, matchRoute, splitPath } from './router'
-import { arrange, assertActiveTest } from './scope'
+import { arrange } from './scope'
 
 export type * from './types'
 export type { C8yAlarmInput, C8yDb, C8yDbCollection, C8yDbFilter, C8yEventInput, C8yIdInput, C8yManagedObjectInput, C8yMeasurementInput, C8yOperationInput, C8yRef, C8ySeed } from './data'
@@ -21,19 +18,6 @@ type TenantOptionKeyInput = C8YTenantOptionKey | (string & {})
 export interface C8yTenantOptionScope {
   category?: string
   tenant?: string
-}
-
-type ServerFetchInit = NonNullable<Parameters<typeof serverFetch>[1]>
-
-/**
- * `fetch` options of `c8y.fetch()`.
- */
-export interface C8yFetchInit extends ServerFetchInit {
-  /**
-   * Sends this request as a different user. Merged over the current user; the
-   * scope's user is restored after the request.
-   */
-  as?: Partial<C8yTestUser>
 }
 
 /**
@@ -81,6 +65,7 @@ declare module 'vitest' {
  *
  * @example
  * ```ts
+ * import { serverFetch } from 'nitro'
  * import { c8y } from 'c8y-nitro/testing'
  *
  * c8y.user({ userName: 'alice', roles: ['ROLE_ORDERS_READ'] })   // whole file
@@ -88,7 +73,7 @@ declare module 'vitest' {
  * describe('without role', () => {
  *   c8y.user({ userName: 'bob', roles: [] })                     // this describe
  *   it('is forbidden', async () => {
- *     expect((await c8y.fetch('/orders')).status).toBe(403)
+ *     expect((await serverFetch('/orders')).status).toBe(403)     // call your service
  *   })
  * })
  * ```
@@ -155,7 +140,7 @@ export const c8y = {
    * ```ts
    * const pump = c8y.device({ name: 'Pump', externalIds: { c8y_Serial: 'SN-1' } })
    * it('…', async () => {
-   *   await c8y.fetch(`/devices/${pump.id}`)
+   *   await serverFetch(`/devices/${pump.id}`)
    * })
    * ```
    * @param input - Fragments, plus `children`/`assets`/`additions`, `externalIds`, and `tenant`
@@ -310,34 +295,4 @@ export const c8y = {
     return platform.calls.filter((call) => matchRoute(route, call.method, splitPath(call.path)))
   },
 
-  /**
-   * Requests a route of the microservice, like `serverFetch()` from `nitro`.
-   * With `as`, the request is sent as a different user.
-   *
-   * @example
-   * ```ts
-   * const res = await c8y.fetch('/orders', { as: { roles: [] } })
-   * const other = await c8y.fetch('/orders', { as: { userName: 'eve', tenant: 't99999' } })
-   * ```
-   * @param path - Route path, including the query
-   * @param init - Request options, plus `as`
-   */
-  async fetch(path: string, init: C8yFetchInit = {}): Promise<Response> {
-    const { as, ...requestInit } = init
-    if (!as) {
-      return serverFetch(path, requestInit)
-    }
-    assertActiveTest('c8y.fetch({ as })')
-    const previous = platform.user
-    const user = { ...(previous ?? DEFAULTS.user), ...as } as C8yTestUser
-    platform.setUser(user)
-    try {
-      const headers = new Headers(requestInit.headers)
-      const login = `${user.tenant ?? platform.tenant}/${user.userName}:${DEFAULTS.developmentPassword}`
-      headers.set('authorization', `Basic ${Buffer.from(login).toString('base64')}`)
-      return await serverFetch(path, { ...requestInit, headers })
-    } finally {
-      platform.setUser(previous)
-    }
-  },
 }
