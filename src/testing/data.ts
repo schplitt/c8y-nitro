@@ -3,6 +3,7 @@ import type { DocumentCollection, StoredDocument, TenantData } from './store'
 import { createDocument, RESOURCES, renderDocument, updateDocument } from './api/data'
 import { addExternalId } from './api/identity'
 import { createManagedObject, renderManagedObject } from './api/inventory'
+import { createBinary } from './api/binaries'
 import { addChild, store } from './store'
 import { platform } from './platform'
 
@@ -166,6 +167,66 @@ export function createFromInput(ref: Ref, input: C8yManagedObjectInput): void {
   }
 }
 
+/**
+ * Input of `c8y.binary()`.
+ */
+export interface C8yBinaryInput {
+  /**
+   * File name.
+   */
+  name: string
+  /**
+   * File content.
+   */
+  content: string | Uint8Array
+  /**
+   * Content type. Defaults to `text/plain` for strings, `application/octet-stream` otherwise.
+   */
+  contentType?: string
+  /**
+   * Tenant to create it in. Defaults to the deployed tenant.
+   */
+  tenant?: string
+  /**
+   * Any other managed object fragments.
+   */
+  [fragment: string]: unknown
+}
+
+/**
+ * Creates an inventory binary from seed input and binds it to its ref.
+ * @param ref - The ref returned to the test
+ * @param input - Binary input
+ */
+export function createBinaryFromInput(ref: Ref, input: C8yBinaryInput): void {
+  const { name, content, contentType, tenant, ...fragments } = input
+  const data = store.tenant(tenant ?? platform.tenant)
+  const bytes = typeof content === 'string' ? new TextEncoder().encode(content) : content
+  const document = createBinary(data, {
+    bytes,
+    contentType: contentType ?? (typeof content === 'string' ? 'text/plain' : 'application/octet-stream'),
+    name,
+  }, { name, ...fragments }, platform.user?.userName ?? 'test-user')
+  store.refs.set(ref, document.id)
+}
+
+/**
+ * Stored file content, as read by `c8y.db.binaries.content()`.
+ */
+export interface C8yBinaryContent {
+  name: string
+  contentType: string
+  bytes: Uint8Array
+  /**
+   * The content decoded as UTF-8.
+   */
+  text: () => string
+}
+
+function toContent(content: { name: string, contentType: string, bytes: Uint8Array } | undefined): C8yBinaryContent | undefined {
+  return content && { ...content, text: () => new TextDecoder().decode(content.bytes) }
+}
+
 function seedInto(data: TenantData, collection: Exclude<DocumentCollection, 'managedObjects'>, input: Record<string, unknown>): void {
   const resource = Object.values(RESOURCES).find((item) => item.collection === collection)!
   const now = store.now()
@@ -188,7 +249,7 @@ function seedInto(data: TenantData, collection: Exclude<DocumentCollection, 'man
     throw new TypeError(`c8y.seed(): invalid ${collection.slice(0, -1)}: ${(result as Response & { message?: string }).message ?? result.status}`)
   }
   if (collection === 'operations' && (input.status !== undefined || input.failureReason !== undefined)) {
-    updateDocument(resource, result, { status: input.status ?? 'PENDING', failureReason: input.failureReason })
+    updateDocument(data, resource, result, { status: input.status ?? 'PENDING', failureReason: input.failureReason })
   }
 }
 
@@ -277,7 +338,18 @@ function collectionView(tenant: () => string, collection: DocumentCollection): C
 export interface C8yDb {
   managedObjects: C8yDbCollection<Record<string, any>>
   measurements: C8yDbCollection<Record<string, any>>
-  events: C8yDbCollection<Record<string, any>>
+  events: C8yDbCollection<Record<string, any>> & {
+    /**
+     * Attachment (binary) of an event.
+     */
+    attachment: (id: C8yIdInput) => C8yBinaryContent | undefined
+  }
+  binaries: C8yDbCollection<Record<string, any>> & {
+    /**
+     * Content of an inventory binary.
+     */
+    content: (id: C8yIdInput) => C8yBinaryContent | undefined
+  }
   alarms: C8yDbCollection<Record<string, any>>
   operations: C8yDbCollection<Record<string, any>> & {
     /**
@@ -302,7 +374,18 @@ export function createDb(tenant: () => string): Omit<C8yDb, 'tenant'> {
   return {
     managedObjects: collectionView(tenant, 'managedObjects'),
     measurements: collectionView(tenant, 'measurements'),
-    events: collectionView(tenant, 'events'),
+    events: {
+      ...collectionView(tenant, 'events'),
+      attachment: (id) => toContent(store.tenant(tenant()).eventBinaries.get(resolveId(id))),
+    },
+    binaries: {
+      get: (id) => {
+        const document = collectionView(tenant, 'managedObjects').get(id)
+        return document?.c8y_IsBinary !== undefined ? document : undefined
+      },
+      find: (filter) => collectionView(tenant, 'managedObjects').find(filter).filter((document) => document.c8y_IsBinary !== undefined),
+      content: (id) => toContent(store.tenant(tenant()).binaries.get(resolveId(id))),
+    },
     alarms: collectionView(tenant, 'alarms'),
     operations: {
       ...collectionView(tenant, 'operations'),
@@ -311,7 +394,7 @@ export function createDb(tenant: () => string): Omit<C8yDb, 'tenant'> {
         if (!operation) {
           throw new TypeError(`c8y.db.operations.update(): no operation ${resolveId(id)}`)
         }
-        updateDocument(RESOURCES.devicecontrol, operation, update)
+        updateDocument(store.tenant(tenant()), RESOURCES.devicecontrol, operation, update)
       },
     },
     externalIds: {

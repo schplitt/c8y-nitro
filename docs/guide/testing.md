@@ -146,6 +146,14 @@ Seeds get the same treatment as writes from your service:
 - **Defaults:** `time` defaults to now, `text` to the type, and alarm `severity` to `MAJOR`.
 - **Platform behavior:** alarms are deduplicated, and operations start as `PENDING`.
 
+### Files (Binaries)
+
+```ts
+const manual = c8y.binary({ name: 'manual.txt', content: 'Turn it off and on again.' })
+```
+
+A binary is a managed object with `c8y_IsBinary` and the file's content. Your service can download it with `client.inventoryBinary.download()`, and its uploads end up in the fake tenant too. Check them with `c8y.db.binaries.content(id).text()`. Event attachments are stored the same way: read them with `c8y.db.events.attachment(eventId)`.
+
 ### Subscriptions and Tenant Options
 
 ```ts
@@ -215,6 +223,43 @@ const { operationId } = await (await serverFetch('/pumps/SN-1/restart', { method
 c8y.db.operations.update(operationId, { status: 'SUCCESSFUL' })
 ```
 
+## Realtime
+
+Services often react to platform data in real time: a [Nitro plugin](https://nitro.build/docs/plugins) subscribes with [`useTenantRealtimeClient()`](/guide/realtime) and handles new measurements, alarms, or operations. The fake tenant implements Notification 2.0, so these handlers run in tests:
+
+```ts [plugins/overheating-trigger.ts]
+export default definePlugin(async () => {
+  const realtime = await useTenantRealtimeClient(process.env.C8Y_BOOTSTRAP_TENANT!)
+
+  realtime.measurements.onCreate('*', async (measurement) => {
+    if (measurement.c8y_Temperature?.T?.value > 80) {
+      const client = await useDeployedTenantClient()
+      await client.alarm.create({ source: { id: measurement.source.id }, type: 'pump_Overheating', severity: 'CRITICAL', /* … */ })
+    }
+  })
+})
+```
+
+A test follows four steps:
+
+1. **The service sets itself up.** The Nitro app and its plugins start before the first test, and their subscriptions stay for the whole test file.
+2. **Trigger a write**, like a device would: `c8y.seed()` or `c8y.device()` inside the test, a route of your service, or `c8y.db.operations.update()`.
+3. **Wait until it is processed:** `await c8y.notifications.settled()`. This waits until every delivered notification has been handled, including notifications caused by the handlers' own writes.
+4. **Query the fake world** with `c8y.db`.
+
+```ts [test/overheating-trigger.test.ts]
+const pump = c8y.device({ name: 'Pump 1' })
+
+it('raises an alarm when a pump reports a high temperature', async () => {
+  c8y.seed({ measurements: [{ source: pump, type: 'c8y_Temperature', c8y_Temperature: { T: { value: 95, unit: 'C' } } }] })
+  await c8y.notifications.settled()
+
+  expect(c8y.db.alarms.find({ source: pump })).toMatchObject([{ type: 'pump_Overheating', severity: 'CRITICAL' }])
+})
+```
+
+Data arranged at file or `describe` level is rebuilt before every test, but it is not a change, so it does not send notifications. Only writes during the test do. `c8y.notifications.subscriptions()` lists the subscriptions your service created.
+
 ## Scopes
 
 Arrange calls apply to the scope they are called in:
@@ -269,17 +314,19 @@ Answer it with `c8y.override()`, or set `onUnhandledRequest: 'warn'` or `'ignore
 
 The fake implements a documented subset of the Cumulocity REST API. Request and response formats, query parameters, required fields, and enum values come from the [official OpenAPI spec](https://cumulocity.com/api/core/). The behavior is checked by contract scenarios.
 
-| API                          | Emulated                                                                                                                                                                                                                                                                        |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Current user, current tenant | from the calling user (`as`) and the request's credentials                                                                                                                                                                                                                      |
-| Microservice subscriptions   | from `c8y.subscriptions`                                                                                                                                                                                                                                                        |
-| Tenant options               | read, write, delete, and list per category and tenant                                                                                                                                                                                                                           |
-| Inventory                    | create, read, update (fragments merge, `null` removes), delete; list by `type`, `fragmentType`, `ids`, `owner`, `text`, `childDeviceId`/`childAssetId`/`childAdditionId`, `onlyRoots`, and `query`/`q` (see below); child devices, assets, and additions with parent references |
-| Identity                     | external IDs: create, read, delete, list per managed object                                                                                                                                                                                                                     |
-| Measurements                 | create (single or collection), read, delete, list by `source`, `type`, `valueFragmentType`/`valueFragmentSeries`, `dateFrom`/`dateTo`, `revert`                                                                                                                                 |
-| Events                       | create, read, update, delete, list by `source`, `type`, `fragmentType`, date ranges, `revert`                                                                                                                                                                                   |
-| Alarms                       | create (with deduplication), read, update, bulk update, list by `source`, `type`, `status`, `severity`, `resolved`, date ranges                                                                                                                                                 |
-| Operations                   | create, read, update, list by `deviceId`, `status`, `fragmentType`, date range, `revert`                                                                                                                                                                                        |
+| API                          | Emulated                                                                                                                                                                                                                                                                                                                 |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Current user, current tenant | from the calling user (`as`) and the request's credentials                                                                                                                                                                                                                                                               |
+| Microservice subscriptions   | from `c8y.subscriptions`                                                                                                                                                                                                                                                                                                 |
+| Tenant options               | read, write, delete, and list per category and tenant                                                                                                                                                                                                                                                                    |
+| Inventory                    | create, read, update (fragments merge, `null` removes), delete; list by `type`, `fragmentType`, `ids`, `owner`, `text`, `childDeviceId`/`childAssetId`/`childAdditionId`, `onlyRoots`, and `query`/`q` (see below); child devices, assets, and additions with parent references                                          |
+| Binaries                     | upload (multipart), download, replace, delete, list                                                                                                                                                                                                                                                                      |
+| Notification 2.0             | subscriptions (`mo` and `tenant` context, `apis`, `typeFilter`), tokens, unsubscribe, and the consumer WebSocket of c8y-nitro's realtime client                                                                                                                                                                          |
+| Identity                     | external IDs: create, read, delete, list per managed object                                                                                                                                                                                                                                                              |
+| Measurements                 | create (single or collection), read, delete, bulk delete by filter, list by `source`, `type`, `valueFragmentType`/`valueFragmentSeries`, `dateFrom`/`dateTo`, `revert`; `series` with `aggregationInterval`/`aggregationType` and `aggregationFunction` (`min`, `max`, `avg`, `sum`, `count`, `stdDevPop`, `stdDevSamp`) |
+| Events                       | create, read, update, delete, bulk delete by filter, list by `source`, `type`, `fragmentType`, date ranges, `revert`; attachments (upload, download, replace, delete)                                                                                                                                                    |
+| Alarms                       | create (with deduplication), read, update, bulk update, list by `source`, `type`, `status`, `severity`, `resolved`, date ranges                                                                                                                                                                                          |
+| Operations                   | create, read, update, list by `deviceId`, `status`, `fragmentType`, date range, `revert`                                                                                                                                                                                                                                 |
 
 All lists support `pageSize`, `currentPage`, `withTotalPages`, and `withTotalElements`, with `next` and `prev` links. Inventory queries (`query` and `q`) support the documented [query language](https://cumulocity.com/api/core/#section/Query-language):
 
@@ -290,7 +337,7 @@ All lists support `pageSize`, `currentPage`, `withTotalPages`, and `withTotalEle
 
 These details behave like the platform, checked against a real tenant: exact matches are case-sensitive, wildcards case-insensitive, decimals without a suffix are compared as strings, `type` is ignored when a query is given, and anything outside the language (such as `ne`) is rejected with 422.
 
-**Not emulated:** `withLatestValues`, `withGroups`, `withSourceAssets` and similar `withSource*` parameters, cascade deletes, measurement series, binaries, bulk operations, real-time notifications, and all other APIs. These fail loudly instead of returning wrong results. Unknown query parameters are ignored, as on the platform.
+**Not emulated:** `withLatestValues`, `withGroups`, `withSourceAssets` and similar `withSource*` parameters, `fragmentValue`, cascade deletes, `alarmsWithChildren`/`eventsWithChildren` subscriptions, bulk operations, user management, audit records, and all other APIs. These fail loudly instead of returning wrong results. Unknown query parameters are ignored, as on the platform.
 
 **Assumptions:** where the spec doesn't define behavior, the fake assumes the following:
 
@@ -303,8 +350,10 @@ These details behave like the platform, checked against a real tenant: exact mat
 - **Alarm deduplication:** an `ACTIVE` or `ACKNOWLEDGED` alarm with the same source and type increments `count` and updates `time`.
 - **Operations** start as `PENDING`. Only your tests change their status.
 - **Validation:** writes that reference a missing source or device fail with 422.
-- **Deleting a managed object** removes its references and external IDs. Its measurements, events, alarms, and operations stay.
+- **Deleting a managed object** removes its references, external IDs, and binary content. Its measurements, events, alarms, and operations stay.
 - **Tenant options:** default values from your manifest's settings are not applied. Set the options your test needs.
+- **Series:** values are bucketed in UTC. Without aggregation, every measurement is its own entry with `min` = `max`. Entries are oldest first unless `revert=true`.
+- **Notifications:** a DELETE notification's payload is `{ id }`. Tokens can be created for any subscription name. Persistent subscriptions keep notifications until a consumer connects.
 - **No permission checks:** roles only matter in your own middleware, like `hasUserRequiredRole()`.
 
 If you find a difference from the real platform, please [open an issue](https://github.com/schplitt/c8y-nitro/issues).
@@ -326,4 +375,4 @@ Prefer asserting on responses and `c8y.db` over asserting on calls. Asserting on
 - **One app per test file.** [Module options](/reference/module-options) apply to the whole Nitro app. To test different options, use a separate [Vitest project](https://vitest.dev/guide/projects) with its own `nitro({ ... })` config.
 - **No concurrent tests.** All tests of a file share the fake tenant, so `c8y` throws in `it.concurrent` and `describe.concurrent`.
 - **Your own caches persist within a file.** c8y-nitro clears its own caches before every test, but functions you cache with `defineCachedFunction` keep their entries.
-- **Only `@c8y/client` is faked.** Requests sent with plain `fetch` are not intercepted.
+- **Requests to other hosts are not faked.** `@c8y/client`, c8y-realtime, and plain `fetch` calls to the platform's URL (`C8Y_BASEURL`) go to the fake tenant.

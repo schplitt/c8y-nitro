@@ -5,6 +5,7 @@ import type { ConsumerResilienceOptions, RealtimeClient, SubscriptionApi, WebSoc
 import { WebSocket } from 'ws'
 import { useSubscribedTenantCredentials } from './credentials'
 import { getCurrentUserTenantId } from './internal/tenant'
+import { useTestingHooks } from './internal/testing'
 import { createError } from './logging'
 import { useRuntimeConfig } from 'nitro/runtime-config'
 import { useNitroHooks } from 'nitro/app'
@@ -114,7 +115,8 @@ function createRealtimeClientForTenant(tenantId: string, creds: ICredentials): R
     // `ws` implements the whole protocol, so the heartbeat works. It has no browser
     // build, which costs nothing here: c8y-nitro is Node-only. There is no opt-out —
     // the global socket is strictly worse for a long-lived server connection.
-    webSocketImpl: wsWebSocketImpl,
+    // `c8y-nitro/testing` swaps in an in-memory socket (never set in production).
+    webSocketImpl: (useTestingHooks()?.WebSocket as WebSocketFactory | undefined) ?? wsWebSocketImpl,
     // Background lifecycle runs outside a request, so the request-scoped
     // `useLogger` is unavailable here; `console` matches the lib's Logger shape.
     logger: console,

@@ -11,6 +11,25 @@ import { DEFAULTS } from '../defaults'
 export class UnsupportedRequestError extends Error {}
 
 /**
+ * Raw parts of a request handlers sometimes need (binary bodies, repeated params).
+ */
+export interface RawRequest {
+  bytes: Uint8Array
+  contentType: string
+  params: URLSearchParams
+}
+
+export const rawRequests = new WeakMap<C8yRequest, RawRequest>()
+
+/**
+ * The raw parts of a request.
+ * @param call - The request
+ */
+export function raw(call: C8yRequest): RawRequest {
+  return rawRequests.get(call) ?? { bytes: new Uint8Array(), contentType: '', params: new URLSearchParams(call.query) }
+}
+
+/**
  * Base URL used in `self`/`next` links.
  */
 export function baseUrl(): string {

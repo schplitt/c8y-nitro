@@ -2,16 +2,19 @@ import { Buffer } from 'node:buffer'
 import type { C8YTenantOptionKey } from 'c8y-nitro/types'
 import { serverFetch as nitroServerFetch } from 'nitro'
 import type { C8yRequest, C8yRequestHandler, C8yTestState, C8yTestSubscription, C8yTestUser, C8yUnhandledRequest } from './types'
-import type { C8yDb, C8yManagedObjectInput, C8yRef, C8ySeed } from './data'
-import { applySeed, createDb, createFromInput, newRef } from './data'
+import type { C8yBinaryInput, C8yDb, C8yManagedObjectInput, C8yRef, C8ySeed } from './data'
+import { applySeed, createBinaryFromInput, createDb, createFromInput, newRef } from './data'
 import { platform } from './platform'
 import { compileRoute, matchRoute, splitPath } from './router'
 import { DEFAULTS } from './defaults'
 import { arrange, assertActiveTest } from './scope'
+import type { FakeSubscription } from './realtime'
+import { realtime } from './realtime'
 
 export type * from './types'
-export type { C8yAlarmInput, C8yDb, C8yDbCollection, C8yDbFilter, C8yEventInput, C8yIdInput, C8yManagedObjectInput, C8yMeasurementInput, C8yOperationInput, C8yRef, C8ySeed } from './data'
+export type { C8yAlarmInput, C8yBinaryContent, C8yBinaryInput, C8yDb, C8yDbCollection, C8yDbFilter, C8yEventInput, C8yIdInput, C8yManagedObjectInput, C8yMeasurementInput, C8yOperationInput, C8yRef, C8ySeed } from './data'
 export type { C8yAlarmSeverity, C8yAlarmStatus, C8yOperationStatus } from './capabilities.generated'
+export type { FakeSubscription as C8yNotificationSubscription } from './realtime'
 
 type TenantOptionKeyInput = C8YTenantOptionKey | (string & {})
 
@@ -153,6 +156,22 @@ export const c8y = {
   },
 
   /**
+   * Creates an inventory binary (a file) in the fake tenant (in the current
+   * scope). Returns a ref whose `id` is available while a test runs.
+   *
+   * @example
+   * ```ts
+   * const manual = c8y.binary({ name: 'manual.txt', content: 'Turn it off and on again.' })
+   * ```
+   * @param input - Name, content, optional content type, tenant, and fragments
+   */
+  binary(input: C8yBinaryInput): C8yRef {
+    const ref = newRef(`c8y.binary(${JSON.stringify(input.name)})`)
+    arrange('c8y.binary()', () => createBinaryFromInput(ref, input))
+    return ref
+  },
+
+  /**
    * Seeds measurements, events, alarms, and operations (in the current scope).
    * They are validated like API writes (required fields, enums, existing
    * source), and alarms are deduplicated like on the platform.
@@ -276,6 +295,54 @@ export const c8y = {
    */
   apply(state: Partial<Omit<C8yTestState, 'user'>>): void {
     arrange('c8y.apply()', () => platform.apply(state))
+  },
+
+  /**
+   * Notification 2.0 (realtime) in the fake tenant. Writes from your service,
+   * `c8y.seed()`/`c8y.device()` inside a test, and `c8y.db.operations.update()`
+   * are published to the subscriptions your service created.
+   */
+  notifications: {
+    /**
+     * Waits until every notification delivered to your service's realtime
+     * handlers has been processed (acknowledged), including notifications
+     * caused by the handlers' own writes.
+     *
+     * @example
+     * ```ts
+     * c8y.seed({ measurements: [{ source: pump, type: 'c8y_Temperature', c8y_Temperature: { T: { value: 95, unit: 'C' } } }] })
+     * await c8y.notifications.settled()
+     * expect(c8y.db.alarms.find({ source: pump })).toHaveLength(1)
+     * ```
+     * @param options - Options
+     * @param options.timeout - Milliseconds to wait before failing (default 5000)
+     */
+    async settled(options: { timeout?: number } = {}): Promise<void> {
+      const timeout = options.timeout ?? 5000
+      const start = Date.now()
+      const tick = () => new Promise<void>((resolve) => {
+        setTimeout(resolve, 1)
+      })
+      // give subscriptions created just now a moment to get a consumer
+      while (Date.now() - start < 500 && realtime.subscriptions.some((item) => ![...realtime.tokens.values()].some((token) => token.tenant === item.tenant && token.subscription === item.subscription))) {
+        await tick()
+      }
+      let quietTicks = 0
+      while (quietTicks < 3) {
+        await tick()
+        quietTicks = realtime.pending() === 0 ? quietTicks + 1 : 0
+        if (Date.now() - start > timeout) {
+          throw new Error(`c8y.notifications.settled(): ${realtime.pending()} notification(s) still not processed after ${timeout} ms`)
+        }
+      }
+    },
+
+    /**
+     * Notification 2.0 subscriptions your service created (all tenants).
+     */
+    subscriptions(): readonly FakeSubscription[] {
+      return realtime.subscriptions
+    },
   },
 
   /**

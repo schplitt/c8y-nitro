@@ -7,7 +7,7 @@ import { DEFAULTS } from './defaults'
 import { compileRoute, matchRoute, splitPath } from './router'
 import { store } from './store'
 import { platformApi, UnsupportedRequestError } from './api'
-import { apiError } from './api/http'
+import { apiError, rawRequests } from './api/http'
 
 interface RegisteredHandler {
   route: CompiledRoute
@@ -33,6 +33,24 @@ export const platform = {
   calls: [] as C8yRequest[],
   unhandled: [] as C8yUnhandledRequest[],
   onUnhandledRequest: 'error' as UnhandledRequestStrategy,
+  /**
+   * Requests being answered right now.
+   */
+  inflight: 0,
+
+  /**
+   * Sets the deployed tenant, subscriptions, and default user from the
+   * baseline before the Nitro app starts, so plugins that run at startup (e.g.
+   * realtime subscriptions) find credentials. Tenant options are applied by
+   * `reset()` once the app's runtime config exists.
+   * @param baseline - Plugin options
+   */
+  prepare(baseline: C8yTestState) {
+    this.baseline = baseline
+    this.tenant = baseline.tenant ?? DEFAULTS.tenant
+    this.subscriptions = (baseline.subscriptions ?? [defaultSubscription(this.tenant)]).map((subscription) => ({ ...subscription }))
+    this.setUser(baseline.user === undefined ? DEFAULTS.user : baseline.user)
+  },
 
   /**
    * Restores the baseline from the plugin config.
@@ -107,12 +125,24 @@ export const platform = {
    * @param request - Request built by the patched FetchClient
    */
   async fetch(request: Request): Promise<Response> {
+    this.inflight++
+    try {
+      return await this.answer(request)
+    } finally {
+      this.inflight--
+    }
+  },
+
+  async answer(request: Request): Promise<Response> {
     const url = new URL(request.url)
     const method = request.method.toUpperCase()
     const segments = splitPath(url.pathname).map(decodeURIComponent)
     const path = `/${segments.join('/')}`
     const caller = parseBasicAuth(request.headers.get('authorization'))
-    const text = request.body ? await request.text() : ''
+    const bytes = request.body ? new Uint8Array(await request.arrayBuffer()) : new Uint8Array()
+    const contentType = request.headers.get('content-type') ?? ''
+    const isBinary = contentType.startsWith('multipart/') || contentType.includes('octet-stream')
+    const text = bytes.length > 0 && !isBinary ? new TextDecoder().decode(bytes) : ''
     let body: unknown = text || undefined
     try {
       body = text ? JSON.parse(text) : undefined
@@ -130,6 +160,7 @@ export const platform = {
       params: {},
     }
     this.calls.push(call)
+    rawRequests.set(call, { bytes, contentType, params: url.searchParams })
 
     // user handlers first, most recently registered wins
     for (let i = this.handlers.length - 1; i >= 0; i--) {
@@ -152,7 +183,7 @@ export const platform = {
 
     let reason = 'endpoint not emulated'
     try {
-      const response = platformApi(call, segments, store.tenant(call.tenant))
+      const response = await platformApi(call, segments, store.tenant(call.tenant))
       if (response) {
         return response
       }

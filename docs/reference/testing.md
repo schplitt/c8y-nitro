@@ -35,6 +35,7 @@ Arrange calls (marked _scoped_) apply to the scope they are called in: file, `de
 | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | `c8y.device(input?)`                                                              | _Scoped._ Creates a device (`c8y_IsDevice`). Returns a `C8yRef`.                           |
 | `c8y.managedObject(input?)`                                                       | _Scoped._ Creates a managed object. Returns a `C8yRef`.                                    |
+| `c8y.binary({ name, content, contentType?, tenant? })`                            | _Scoped._ Creates an inventory binary (a file). Returns a `C8yRef`.                        |
 | `c8y.seed({ measurements?, events?, alarms?, operations?, tenant? })`             | _Scoped._ Creates measurements, events, alarms, and operations, validated like API writes. |
 | `c8y.tenantOptions.set(key, value, scope?)`                                       | _Scoped._ Sets an option. `scope`: `{ category?, tenant? }`.                               |
 | `c8y.tenantOptions.delete(key, scope?)`                                           | _Scoped._ Deletes an option.                                                               |
@@ -66,18 +67,22 @@ import { definePersona, serverFetch } from 'c8y-nitro/testing'
 
 ### Assert
 
-| Member                                                                            | Description                                                                         |
-| --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `c8y.db.managedObjects` / `.measurements` / `.events` / `.alarms` / `.operations` | `get(idOrRef)` and `find(filter?)`: the platform's data as the API would return it. |
-| `c8y.db.operations.update(id, { status, failureReason? })`                        | Updates an operation like a device would.                                           |
-| `c8y.db.externalIds.find(managedObject?)`                                         | External IDs, optionally of one managed object.                                     |
-| `c8y.db.tenant(tenant)`                                                           | The same views for another tenant.                                                  |
-| `c8y.tenantOptions.get(key, scope?)`                                              | Current value of an option.                                                         |
-| `c8y.subscriptions.list()`                                                        | Current subscriptions.                                                              |
-| `c8y.tenant`                                                                      | Deployed tenant id.                                                                 |
-| `c8y.calls` / `c8y.callsTo(pattern)`                                              | Platform requests of the current test (for debugging and caching checks).           |
-| `c8y.unhandled`                                                                   | Requests of the current test the fake could not answer, with `reason`.              |
-| `expect(c8y).toHaveReceived(pattern, { times? })`                                 | Asserts a matching platform request was sent.                                       |
+| Member                                                                            | Description                                                                                |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `c8y.db.managedObjects` / `.measurements` / `.events` / `.alarms` / `.operations` | `get(idOrRef)` and `find(filter?)`: the platform's data as the API would return it.        |
+| `c8y.db.operations.update(id, { status, failureReason? })`                        | Updates an operation like a device would.                                                  |
+| `c8y.db.externalIds.find(managedObject?)`                                         | External IDs, optionally of one managed object.                                            |
+| `c8y.db.binaries.get(id)` / `.find()` / `.content(id)`                            | Binaries, and their content (`name`, `contentType`, `bytes`, `text()`).                    |
+| `c8y.db.events.attachment(eventId)`                                               | An event's attachment (`name`, `contentType`, `bytes`, `text()`).                          |
+| `await c8y.notifications.settled({ timeout? })`                                   | Waits until every notification delivered to your service's realtime handlers is processed. |
+| `c8y.notifications.subscriptions()`                                               | Notification 2.0 subscriptions your service created.                                       |
+| `c8y.db.tenant(tenant)`                                                           | The same views for another tenant.                                                         |
+| `c8y.tenantOptions.get(key, scope?)`                                              | Current value of an option.                                                                |
+| `c8y.subscriptions.list()`                                                        | Current subscriptions.                                                                     |
+| `c8y.tenant`                                                                      | Deployed tenant id.                                                                        |
+| `c8y.calls` / `c8y.callsTo(pattern)`                                              | Platform requests of the current test (for debugging and caching checks).                  |
+| `c8y.unhandled`                                                                   | Requests of the current test the fake could not answer, with `reason`.                     |
+| `expect(c8y).toHaveReceived(pattern, { times? })`                                 | Asserts a matching platform request was sent.                                              |
 
 ## Override Patterns
 
@@ -97,7 +102,7 @@ The handler receives the request: `method`, `path`, `params`, `query`, `body` (p
 All types are exported from `c8y-nitro/testing`:
 
 - **Plugin and state:** `C8yTestOptions`, `C8yTestState`, `C8yTestUser`, `C8yServerFetchInit`, `C8yTestRole`, `C8yTestSubscription`.
-- **Data model:** `C8yRef`, `C8yIdInput`, `C8yManagedObjectInput`, `C8ySeed`, `C8yMeasurementInput`, `C8yEventInput`, `C8yAlarmInput`, `C8yOperationInput`.
-- **Inspection:** `C8yDb`, `C8yDbCollection`, `C8yDbFilter`.
+- **Data model:** `C8yRef`, `C8yIdInput`, `C8yManagedObjectInput`, `C8yBinaryInput`, `C8yBinaryContent`, `C8ySeed`, `C8yMeasurementInput`, `C8yEventInput`, `C8yAlarmInput`, `C8yOperationInput`.
+- **Inspection:** `C8yDb`, `C8yDbCollection`, `C8yDbFilter`, `C8yNotificationSubscription`.
 - **Requests:** `C8yRequest`, `C8yUnhandledRequest`, `C8yRequestContext`, `C8yRequestHandler`, `UnhandledRequestStrategy`.
 - **Enums from the spec:** `C8yAlarmSeverity`, `C8yAlarmStatus`, `C8yOperationStatus`.

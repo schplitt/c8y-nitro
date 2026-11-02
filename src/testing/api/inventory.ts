@@ -3,6 +3,7 @@ import type { ChildKind, StoredDocument, TenantData } from '../store'
 import { addChild, CHILD_KINDS, childIds, deleteManagedObject, PARENT_KIND, parentIds, removeChild, store } from '../store'
 import { apiError, baseUrl, checkQuery, flag, paged } from './http'
 import { applyOrderBy, parseQuery, QuerySyntaxError } from './query'
+import { notify } from '../notify'
 
 const SERVER_FIELDS = ['id', 'self', 'creationTime', 'lastUpdated', ...CHILD_KINDS, ...Object.values(PARENT_KIND)]
 
@@ -56,6 +57,7 @@ export function createManagedObject(data: TenantData, body: Record<string, unkno
     document.owner = body.owner
   }
   data.managedObjects.set(document.id, document)
+  notify(data, 'managedobjects', 'CREATE', renderManagedObject(data, document), document.id)
   return document
 }
 
@@ -181,11 +183,16 @@ function inventoryRequest(call: C8yRequest, segments: string[], data: TenantData
         }
       }
       document.lastUpdated = store.now()
+      notify(data, 'managedobjects', 'UPDATE', renderManagedObject(data, document), document.id)
       return Response.json(render(document))
     }
     if (method === 'DELETE') {
       checkQuery('DELETE /inventory/managedObjects/{id}', call, [])
-      return deleteManagedObject(data, id) ? new Response(null, { status: 204 }) : notFound(id)
+      if (!deleteManagedObject(data, id)) {
+        return notFound(id)
+      }
+      notify(data, 'managedobjects', 'DELETE', { id }, id)
+      return new Response(null, { status: 204 })
     }
     return undefined
   }

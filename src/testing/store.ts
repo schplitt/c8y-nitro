@@ -33,6 +33,7 @@ export interface ExternalId {
 }
 
 export interface TenantData {
+  tenant: string
   managedObjects: Map<string, StoredDocument>
   /**
    * parent id → kind → child ids, in insertion order
@@ -43,12 +44,30 @@ export interface TenantData {
   events: Map<string, StoredDocument>
   alarms: Map<string, StoredDocument>
   operations: Map<string, StoredDocument>
+  /**
+   * inventory binary id → content
+   */
+  binaries: Map<string, BinaryContent>
+  /**
+   * event id → attachment
+   */
+  eventBinaries: Map<string, BinaryContent>
+}
+
+/**
+ * Stored file content of a binary or an event attachment.
+ */
+export interface BinaryContent {
+  bytes: Uint8Array
+  contentType: string
+  name: string
 }
 
 export type DocumentCollection = 'managedObjects' | 'measurements' | 'events' | 'alarms' | 'operations'
 
-function emptyTenant(): TenantData {
+function emptyTenant(tenant: string): TenantData {
   return {
+    tenant,
     managedObjects: new Map(),
     children: new Map(),
     externalIds: [],
@@ -56,6 +75,8 @@ function emptyTenant(): TenantData {
     events: new Map(),
     alarms: new Map(),
     operations: new Map(),
+    binaries: new Map(),
+    eventBinaries: new Map(),
   }
 }
 
@@ -66,6 +87,10 @@ export const store = {
    * Refs from `c8y.device()`/`c8y.managedObject()` → ids in the current test.
    */
   refs: new Map<object, string>(),
+  /**
+   * True while a test's arranged data is rebuilt: no notifications then.
+   */
+  silent: false,
 
   reset() {
     this.nextId = 1
@@ -76,7 +101,7 @@ export const store = {
   tenant(tenant: string): TenantData {
     let data = this.tenants.get(tenant)
     if (!data) {
-      data = emptyTenant()
+      data = emptyTenant(tenant)
       this.tenants.set(tenant, data)
     }
     return data
@@ -171,5 +196,6 @@ export function deleteManagedObject(data: TenantData, id: string): boolean {
     }
   }
   data.externalIds = data.externalIds.filter((entry) => entry.managedObjectId !== id)
+  data.binaries.delete(id)
   return true
 }

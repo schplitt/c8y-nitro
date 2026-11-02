@@ -11,6 +11,10 @@ const exclude = [...configDefaults.exclude, '**/.claude/**']
 export default defineConfig({
   test: {
     projects: [
+      // The playground is a consumer project with its own vitest.config.ts
+      // (nitro() + c8yTest()): its tests check that people can test their
+      // services with c8y-nitro/testing as documented.
+      'playground',
       {
         test: {
           name: 'unit',

@@ -8,7 +8,9 @@
  * real tenant to verify the fake. When a scenario fails there, the fake is
  * wrong.
  */
+import { Buffer } from 'node:buffer'
 import type { Client } from '@c8y/client'
+import { EventBinaryService } from '@c8y/client'
 import { expect } from 'vitest'
 
 export interface ContractContext {
@@ -216,6 +218,87 @@ export const scenarios: ContractScenario[] = [
       expect(list.map((item) => item.id)).toEqual([operation.id])
 
       expect((await rejection(client.operation.update({ id: operation.id, status: 'DONE' } as any))).res.status).toBe(422)
+    },
+  },
+  {
+    name: 'measurements: series with aggregation, bulk delete',
+    async run({ client, unique }) {
+      const { data: device } = await client.inventory.create({ name: `s-${unique}`, c8y_IsDevice: {} })
+      for (const [minute, value] of [[1, 10], [20, 30], [70, 50]] as const) {
+        await client.measurement.create({ source: { id: device.id }, type: 'c8y_Temperature', time: time(minute), c8y_Temperature: { T: { value, unit: 'C' } } } as any)
+      }
+      const range = { source: device.id, dateFrom: time(0), dateTo: time(120) }
+
+      const { data: raw } = await client.measurement.listSeries({ ...range, series: 'c8y_Temperature.T' } as any)
+      expect(raw.series).toEqual([{ name: 'T', type: 'c8y_Temperature', unit: 'C' }])
+      expect(Object.values(raw.values)).toEqual([[{ min: 10, max: 10 }], [{ min: 30, max: 30 }], [{ min: 50, max: 50 }]])
+
+      const { data: hourly } = await client.measurement.listSeries({ ...range, aggregationType: 'HOURLY' } as any)
+      expect(hourly.values).toEqual({
+        [time(0)]: [{ min: 10, max: 30 }],
+        [time(60)]: [{ min: 50, max: 50 }],
+      })
+
+      const res = await client.core.fetch(`/measurement/measurements?source=${device.id}&dateTo=${encodeURIComponent(time(30))}`, { method: 'DELETE' })
+      expect(res.status).toBe(204)
+      expect((await client.measurement.list({ source: device.id })).data).toHaveLength(1)
+    },
+  },
+  {
+    name: 'events: attachments and bulk delete',
+    async run({ client, unique }) {
+      const { data: device } = await client.inventory.create({ name: `ea-${unique}`, c8y_IsDevice: {} })
+      const { data: event } = await client.event.create({ source: { id: device.id }, type: `att-${unique}`, text: 'with file', time: time(1) } as any)
+      const binaries = new EventBinaryService(client.core)
+
+      const { res: uploaded } = await binaries.upload(Buffer.from('hello attachment'), event.id!)
+      expect(uploaded.status).toBe(201)
+      expect((await rejection(binaries.upload(Buffer.from('again'), event.id!))).res.status).toBe(409)
+      const download = await binaries.download(event.id!)
+      expect(await (download as unknown as Response).text()).toBe('hello attachment')
+
+      await client.event.create({ source: { id: device.id }, type: `att-${unique}`, text: 'second', time: time(2) } as any)
+      const res = await client.core.fetch(`/event/events?source=${device.id}&type=att-${unique}`, { method: 'DELETE' })
+      expect(res.status).toBe(204)
+      expect((await client.event.list({ source: device.id })).data).toEqual([])
+    },
+  },
+  {
+    name: 'inventory binaries: upload, download, list, delete',
+    async run({ client, unique }) {
+      const { data: binary, res } = await client.inventoryBinary.create(Buffer.from('file content'), { name: `file-${unique}.txt`, fileName: `file-${unique}.txt` } as any)
+      expect(res.status).toBe(201)
+      expect(binary).toMatchObject({ name: `file-${unique}.txt`, c8y_IsBinary: expect.anything(), length: 12 })
+
+      const download = await client.inventoryBinary.download(binary.id!)
+      expect(await (download as unknown as Response).text()).toBe('file content')
+
+      const { data: list } = await client.inventoryBinary.list({ pageSize: 100 } as any)
+      expect(list.map((item) => item.id)).toContain(binary.id)
+
+      await client.inventoryBinary.delete(binary.id!)
+      expect((await rejection(client.inventory.detail(binary.id!))).res.status).toBe(404)
+    },
+  },
+  {
+    name: 'notification2: subscriptions and tokens',
+    async run({ client, unique }) {
+      const { data: device } = await client.inventory.create({ name: `n-${unique}`, c8y_IsDevice: {} })
+      const subscription = { context: 'mo', subscription: `sub${unique}`, source: { id: device.id }, subscriptionFilter: { apis: ['measurements'] } }
+      const post = (path: string, body: unknown) => client.core.fetch(path, { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json', 'accept': 'application/json' } })
+
+      const created = await post('/notification2/subscriptions', subscription)
+      expect(created.status).toBe(201)
+      const { id } = await created.json()
+      expect((await post('/notification2/subscriptions', subscription)).status).toBe(409)
+
+      const list = await (await client.core.fetch(`/notification2/subscriptions?subscription=sub${unique}`)).json()
+      expect(list.subscriptions.map((item: any) => item.id)).toEqual([id])
+
+      const token = await (await post('/notification2/token', { subscription: `sub${unique}`, subscriber: `sub${unique}Consumer` })).json()
+      expect(token.token).toEqual(expect.any(String))
+
+      expect((await client.core.fetch(`/notification2/subscriptions/${id}`, { method: 'DELETE' })).status).toBe(204)
     },
   },
   {

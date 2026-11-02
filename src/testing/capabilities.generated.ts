@@ -276,6 +276,122 @@ export const C8Y_ENDPOINTS = {
       'status',
     ],
   },
+  'DELETE /measurement/measurements': {
+    query: [
+      'dateFrom',
+      'dateTo',
+      'fragmentType',
+      'source',
+      'type',
+    ],
+  },
+  'GET /measurement/measurements/series': {
+    query: [
+      'aggregationFunction',
+      'aggregationInterval',
+      'aggregationType',
+      'dateFrom',
+      'dateTo',
+      'revert',
+      'series',
+      'source',
+    ],
+  },
+  'DELETE /event/events': {
+    query: [
+      'createdFrom',
+      'createdTo',
+      'dateFrom',
+      'dateTo',
+      'fragmentType',
+      'source',
+      'type',
+    ],
+  },
+  'POST /event/events/{id}/binaries': {
+    query: [],
+  },
+  'GET /event/events/{id}/binaries': {
+    query: [],
+  },
+  'PUT /event/events/{id}/binaries': {
+    query: [],
+  },
+  'DELETE /event/events/{id}/binaries': {
+    query: [],
+  },
+  'POST /inventory/binaries': {
+    query: [],
+    required: [
+      'file',
+      'object',
+    ],
+  },
+  'GET /inventory/binaries': {
+    query: [
+      'childAdditionId',
+      'childAssetId',
+      'childDeviceId',
+      'currentPage',
+      'ids',
+      'owner',
+      'pageSize',
+      'type',
+      'withTotalPages',
+    ],
+  },
+  'GET /inventory/binaries/{id}': {
+    query: [],
+  },
+  'PUT /inventory/binaries/{id}': {
+    query: [],
+  },
+  'DELETE /inventory/binaries/{id}': {
+    query: [],
+  },
+  'POST /notification2/subscriptions': {
+    query: [],
+    required: [
+      'context',
+      'subscription',
+    ],
+  },
+  'GET /notification2/subscriptions': {
+    query: [
+      'context',
+      'currentPage',
+      'pageSize',
+      'source',
+      'subscription',
+      'typeFilter',
+      'withTotalElements',
+      'withTotalPages',
+    ],
+  },
+  'DELETE /notification2/subscriptions': {
+    query: [
+      'context',
+      'source',
+    ],
+  },
+  'GET /notification2/subscriptions/{id}': {
+    query: [],
+  },
+  'DELETE /notification2/subscriptions/{id}': {
+    query: [],
+  },
+  'POST /notification2/token': {
+    query: [],
+    required: [
+      'subscriber',
+      'subscription',
+    ],
+  },
+  'POST /notification2/unsubscribe': {
+    query: [
+      'token',
+    ],
+  },
 } as const satisfies Record<string, { query: readonly string[], required?: readonly string[] }>
 
 /**
@@ -298,6 +414,20 @@ export const C8Y_ENUMS = {
     'FAILED',
     'EXECUTING',
     'PENDING',
+  ],
+  seriesAggregationType: [
+    'DAILY',
+    'HOURLY',
+    'MINUTELY',
+  ],
+  seriesAggregationFunction: [
+    'min',
+    'max',
+    'avg',
+    'sum',
+    'count',
+    'stdDevPop',
+    'stdDevSamp',
   ],
 } as const
 

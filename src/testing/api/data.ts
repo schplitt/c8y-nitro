@@ -3,8 +3,10 @@ import type { C8yEndpoint } from '../capabilities.generated'
 import type { DocumentCollection, StoredDocument, TenantData } from '../store'
 import { C8Y_ENUMS } from '../capabilities.generated'
 import { store } from '../store'
-import { apiError, baseUrl, byTime, checkQuery, checkRequired, flag, inRange, paged, sourceId } from './http'
+import { apiError, baseUrl, byTime, checkQuery, checkRequired, flag, inRange, paged, raw, sourceId } from './http'
 import { moSelf } from './inventory'
+import type { RealtimeApi } from '../realtime'
+import { notify } from '../notify'
 
 interface Resource {
   collection: Exclude<DocumentCollection, 'managedObjects'>
@@ -43,6 +45,12 @@ export function renderDocument(data: TenantData, resource: Resource, document: S
     rendered.deviceName = data.managedObjects.get(document.deviceId)?.name
   }
   return rendered
+}
+
+function publish(data: TenantData, resource: Resource, action: 'CREATE' | 'UPDATE' | 'DELETE', document: StoredDocument): void {
+  const source = resource.collection === 'operations' ? document.deviceId as string | undefined : sourceId(document)
+  const payload = action === 'DELETE' ? { id: document.id } : renderDocument(data, resource, document)
+  notify(data, resource.collection as RealtimeApi, action, payload, source)
 }
 
 function notFound(resource: Resource, id: string): Response {
@@ -96,6 +104,7 @@ export function createDocument(data: TenantData, resource: Resource, body: Recor
       existing.count = (existing.count as number) + 1
       existing.time = body.time
       existing.lastUpdated = now
+      publish(data, resource, 'UPDATE', existing)
       return existing
     }
   }
@@ -121,17 +130,19 @@ export function createDocument(data: TenantData, resource: Resource, body: Recor
     delete document.failureReason
   }
   data[resource.collection].set(document.id, document)
+  publish(data, resource, 'CREATE', document)
   return document
 }
 
 /**
  * Applies an update to a stored document (fragments merged, `null` removes).
+ * @param data
  * @param resource - The resource
  * @param document - Stored document
  * @param body - Update
  * @returns An error response, if invalid
  */
-export function updateDocument(resource: Resource, document: StoredDocument, body: Record<string, unknown>): Response | undefined {
+export function updateDocument(data: TenantData, resource: Resource, document: StoredDocument, body: Record<string, unknown>): Response | undefined {
   const readOnly = resource.collection === 'operations' ? ['deviceId'] : ['source', 'time', 'type']
   if (resource.collection === 'alarms') {
     const error = checkEnum('severity', body.severity, C8Y_ENUMS.alarmSeverity) ?? checkEnum('status', body.status, C8Y_ENUMS.alarmStatus)
@@ -158,6 +169,7 @@ export function updateDocument(resource: Resource, document: StoredDocument, bod
   if (resource.collection !== 'measurements') {
     document.lastUpdated = store.now()
   }
+  publish(data, resource, 'UPDATE', document)
   return undefined
 }
 
@@ -240,7 +252,23 @@ export function documents(call: C8yRequest, segments: string[], data: TenantData
     return undefined
   }
 
+  if (id === 'series' && resource.collection === 'measurements' && method === 'GET') {
+    return series(call, data)
+  }
+
   if (id === undefined) {
+    if (method === 'DELETE' && (resource.collection === 'measurements' || resource.collection === 'events')) {
+      const supported = resource.collection === 'measurements'
+        ? ['dateFrom', 'dateTo', 'fragmentType', 'source', 'type']
+        : ['createdFrom', 'createdTo', 'dateFrom', 'dateTo', 'fragmentType', 'source', 'type']
+      checkQuery(`DELETE ${resource.path}` as C8yEndpoint, call, supported)
+      for (const document of list(call, data, resource)) {
+        collection.delete(document.id)
+        data.eventBinaries.delete(document.id)
+        publish(data, resource, 'DELETE', document)
+      }
+      return new Response(null, { status: 204 })
+    }
     if (method === 'GET') {
       checkQuery(`GET ${resource.path}` as C8yEndpoint, call, resource.listParams)
       return paged(call, resource.collection, list(call, data, resource).map((document) => renderDocument(data, resource, document)), resource.path)
@@ -265,7 +293,7 @@ export function documents(call: C8yRequest, segments: string[], data: TenantData
     if (method === 'PUT' && resource.collection === 'alarms') {
       checkQuery('PUT /alarm/alarms', call, ['createdFrom', 'createdTo', 'dateFrom', 'dateTo', 'resolved', 'severity', 'source', 'status'])
       for (const alarm of list(call, data, resource)) {
-        const error = updateDocument(resource, alarm, body)
+        const error = updateDocument(data, resource, alarm, body)
         if (error) {
           return error
         }
@@ -289,12 +317,140 @@ export function documents(call: C8yRequest, segments: string[], data: TenantData
     if (resource.collection === 'operations' && body.status === undefined) {
       return invalid('Following mandatory fields should be included: status')
     }
-    const error = updateDocument(resource, document, body)
+    const error = updateDocument(data, resource, document, body)
     return error ?? Response.json(renderDocument(data, resource, document))
   }
   if (method === 'DELETE' && (resource.collection === 'measurements' || resource.collection === 'events')) {
     checkQuery(`DELETE ${detail}` as C8yEndpoint, call, [])
-    return collection.delete(id) ? new Response(null, { status: 204 }) : notFound(resource, id)
+    if (!document || !collection.delete(id)) {
+      return notFound(resource, id)
+    }
+    data.eventBinaries.delete(id)
+    publish(data, resource, 'DELETE', document)
+    return new Response(null, { status: 204 })
   }
   return undefined
+}
+
+const INTERVAL_MS: Record<string, number> = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000, w: 604_800_000 }
+const AGGREGATION_TYPES: Record<string, string> = { MINUTELY: '1m', HOURLY: '1h', DAILY: '1d' }
+
+/**
+ * Start of the aggregation bucket a time falls into (UTC; weeks start at the
+ * Unix epoch's weekday, months/quarters/years on calendar boundaries).
+ * @param time - Epoch milliseconds
+ * @param interval - e.g. `15m`, `1h`, `1M`
+ */
+function bucketStart(time: number, interval: string): number {
+  const match = /^([1-9]\d{0,2})([smhdwMqy])$/.exec(interval)
+  if (!match) {
+    throw new TypeError(interval)
+  }
+  const amount = Number(match[1])
+  const unit = match[2]!
+  if (unit in INTERVAL_MS) {
+    const size = amount * INTERVAL_MS[unit]!
+    return Math.floor(time / size) * size
+  }
+  const date = new Date(time)
+  const months = { M: amount, q: amount * 3, y: amount * 12 }[unit as 'M' | 'q' | 'y']
+  const index = date.getUTCFullYear() * 12 + date.getUTCMonth()
+  const start = Math.floor(index / months) * months
+  return Date.UTC(Math.floor(start / 12), start % 12, 1)
+}
+
+function aggregate(values: number[], fn: string): number {
+  const sum = values.reduce((total, value) => total + value, 0)
+  const avg = sum / values.length
+  const variance = (divisor: number) => values.reduce((total, value) => total + (value - avg) ** 2, 0) / divisor
+  switch (fn) {
+    case 'min': return Math.min(...values)
+    case 'max': return Math.max(...values)
+    case 'sum': return sum
+    case 'avg': return avg
+    case 'count': return values.length
+    case 'stdDevPop': return Math.sqrt(variance(values.length))
+    default: return values.length > 1 ? Math.sqrt(variance(values.length - 1)) : 0
+  }
+}
+
+/**
+ * `GET /measurement/measurements/series`: values of a source's series in a
+ * period, optionally aggregated per interval.
+ * @param call - The request
+ * @param data - Tenant data
+ */
+function series(call: C8yRequest, data: TenantData): Response {
+  checkQuery('GET /measurement/measurements/series', call, ['aggregationFunction', 'aggregationInterval', 'aggregationType', 'dateFrom', 'dateTo', 'revert', 'series', 'source'])
+  const { query } = call
+  const params = raw(call).params
+  const missing = ['source', 'dateFrom', 'dateTo'].filter((name) => !query[name])
+  if (missing.length > 0) {
+    return apiError(422, 'measurement/Invalid Data', `Missing mandatory parameters: ${missing.join(', ')}`)
+  }
+  const functions = params.getAll('aggregationFunction')
+  const interval = query.aggregationInterval ?? (query.aggregationType ? AGGREGATION_TYPES[query.aggregationType] : undefined)
+  if (query.aggregationType && !C8Y_ENUMS.seriesAggregationType.includes(query.aggregationType as any)) {
+    return apiError(422, 'measurement/Invalid Data', `Invalid aggregationType '${query.aggregationType}'`)
+  }
+  if (functions.length > 0 && !query.aggregationInterval) {
+    return apiError(400, 'measurement/Bad Request', 'aggregationFunction requires aggregationInterval')
+  }
+  const unknownFunction = functions.find((fn) => !C8Y_ENUMS.seriesAggregationFunction.includes(fn as any))
+  if (unknownFunction) {
+    return apiError(422, 'measurement/Invalid Data', `Invalid aggregationFunction '${unknownFunction}'`)
+  }
+  if (interval && !/^[1-9]\d{0,2}[smhdwMqy]$/.test(interval)) {
+    return apiError(422, 'measurement/Invalid Data', `Invalid aggregationInterval '${interval}'`)
+  }
+  const wanted = params.getAll('series')
+
+  // series = fragment.series pairs with a numeric `value`
+  const points: Array<{ time: number, key: string, value: number, unit?: string, type: string, name: string }> = []
+  for (const measurement of data.measurements.values()) {
+    if (sourceId(measurement) !== query.source || !inRange(measurement.time, query.dateFrom, query.dateTo)) {
+      continue
+    }
+    for (const [fragment, fragmentValue] of Object.entries(measurement)) {
+      if (!fragmentValue || typeof fragmentValue !== 'object' || Array.isArray(fragmentValue) || fragment === 'source') {
+        continue
+      }
+      for (const [name, entry] of Object.entries(fragmentValue as Record<string, any>)) {
+        if (entry && typeof entry === 'object' && typeof entry.value === 'number') {
+          const key = `${fragment}.${name}`
+          if (wanted.length === 0 || wanted.includes(key)) {
+            points.push({ time: Date.parse(String(measurement.time)), key, value: entry.value, unit: entry.unit, type: fragment, name })
+          }
+        }
+      }
+    }
+  }
+  const seriesList: Array<{ key: string, name: string, type: string, unit?: string }> = []
+  for (const point of points) {
+    if (!seriesList.some((item) => item.key === point.key)) {
+      seriesList.push({ key: point.key, name: point.name, type: point.type, unit: point.unit })
+    }
+  }
+  const buckets = new Map<number, Map<string, number[]>>()
+  for (const point of points) {
+    const time = interval ? bucketStart(point.time, interval) : point.time
+    const bucket = buckets.get(time) ?? new Map<string, number[]>()
+    bucket.set(point.key, [...(bucket.get(point.key) ?? []), point.value])
+    buckets.set(time, bucket)
+  }
+  const times = [...buckets.keys()].sort((a, b) => flag(call, 'revert') ? b - a : a - b)
+  const fns = functions.length > 0 ? functions : ['min', 'max']
+  const values: Record<string, Array<Record<string, number> | null>> = {}
+  for (const time of times) {
+    const bucket = buckets.get(time)!
+    values[new Date(time).toISOString()] = seriesList.map((item) => {
+      const numbers = bucket.get(item.key)
+      return numbers ? Object.fromEntries(fns.map((fn) => [fn, aggregate(numbers, fn)])) : null
+    })
+  }
+  return Response.json({
+    values,
+    series: seriesList.map(({ name, type, unit }) => ({ name, type, ...(unit !== undefined ? { unit } : {}) })),
+    truncated: false,
+  })
 }

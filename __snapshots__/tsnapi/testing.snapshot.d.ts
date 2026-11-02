@@ -7,10 +7,28 @@ export interface C8yAlarmInput extends SourcedInput {
   severity?: C8yAlarmSeverity;
   status?: C8yAlarmStatus;
 }
+export interface C8yBinaryContent {
+  name: string;
+  contentType: string;
+  bytes: Uint8Array;
+  text: () => string;
+}
+export interface C8yBinaryInput {
+  name: string;
+  content: string | Uint8Array;
+  contentType?: string;
+  tenant?: string;
+  [fragment: string]: unknown;
+}
 export interface C8yDb {
   managedObjects: C8yDbCollection<Record<string, any>>;
   measurements: C8yDbCollection<Record<string, any>>;
-  events: C8yDbCollection<Record<string, any>>;
+  events: C8yDbCollection<Record<string, any>> & {
+    attachment: (_: C8yIdInput) => C8yBinaryContent | undefined;
+  };
+  binaries: C8yDbCollection<Record<string, any>> & {
+    content: (_: C8yIdInput) => C8yBinaryContent | undefined;
+  };
   alarms: C8yDbCollection<Record<string, any>>;
   operations: C8yDbCollection<Record<string, any>> & {
     update: (_: C8yIdInput, _: {
@@ -47,6 +65,21 @@ export interface C8yManagedObjectInput {
   [fragment: string]: unknown;
 }
 export interface C8yMeasurementInput extends SourcedInput {}
+export interface C8yNotificationSubscription {
+  id: string;
+  tenant: string;
+  context: 'mo' | 'tenant';
+  subscription: string;
+  source?: {
+    id: string;
+  };
+  subscriptionFilter?: {
+    apis?: string[];
+    typeFilter?: string;
+  };
+  fragmentsToCopy?: string[];
+  nonPersistent?: boolean;
+}
 export interface C8yOperationInput {
   deviceId: C8yIdInput;
   status?: C8yOperationStatus;
@@ -138,6 +171,7 @@ export declare const c8y: {
   db: C8yDb;
   managedObject(input?: C8yManagedObjectInput): C8yRef;
   device(input?: C8yManagedObjectInput): C8yRef;
+  binary(input: C8yBinaryInput): C8yRef;
   seed(seed: C8ySeed): void;
   subscriptions: {
     list(): readonly C8yTestSubscription[];
@@ -154,6 +188,12 @@ export declare const c8y: {
     once?: boolean;
   }): void;
   apply(state: Partial<Omit<C8yTestState, "user">>): void;
+  notifications: {
+    settled(options?: {
+      timeout?: number;
+    }): Promise<void>;
+    subscriptions(): readonly FakeSubscription[];
+  };
   callsTo(pattern: string): C8yRequest[];
 };
 // #endregion

@@ -77,6 +77,16 @@ describe('relations', () => {
   })
 })
 
+describe('binaries', () => {
+  const manual = c8y.binary({ name: 'manual.txt', content: 'Turn it off and on again.' })
+
+  it('serves seeded files to the service', async () => {
+    expect((await fetchJson(`/files/${manual.id}`)).json).toEqual({ content: 'Turn it off and on again.' })
+    expect(c8y.db.binaries.get(manual)).toMatchObject({ name: 'manual.txt', contentType: 'text/plain', length: 25 })
+    expect(c8y.db.binaries.content(manual)!.text()).toBe('Turn it off and on again.')
+  })
+})
+
 describe('multiple tenants', () => {
   c8y.subscriptions.add({ tenant: 't99999', user: 'service_t99999', password: 'pw' })
   c8y.device({ name: 'Other tenant pump', tenant: 't99999' })
@@ -84,7 +94,7 @@ describe('multiple tenants', () => {
   it('keeps data per tenant and answers each service user with its own tenant', async () => {
     const { json } = await fetchJson('/devices/count-per-tenant')
 
-    // t12345 has the 3 file-level devices, t99999 only its own
+    // t12345 has the 3 file-level devices (binaries are not devices), t99999 only its own
     expect(json).toEqual({ t12345: 3, t99999: 1 })
     expect(c8y.db.tenant('t99999').managedObjects.find()).toMatchObject([{ name: 'Other tenant pump' }])
   })

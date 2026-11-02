@@ -1,4 +1,5 @@
 import { beforeEach, TestRunner } from 'vitest'
+import { store } from './store'
 
 /**
  * Scope-aware arrange calls.
@@ -30,7 +31,13 @@ export function arrange(name: string, operation: () => void): void {
       if (context.task.concurrent) {
         throw new Error(`${name} cannot be used in concurrent tests ("${context.task.name}"): the fake Cumulocity tenant is shared by all tests of a file. Run these tests sequentially.`)
       }
-      operation()
+      // rebuilding arranged data is not a change the service should be notified about
+      store.silent = true
+      try {
+        operation()
+      } finally {
+        store.silent = false
+      }
     })
     return
   }
