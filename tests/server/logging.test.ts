@@ -16,7 +16,7 @@ describe('logging', () => {
     logs.clear()
   })
 
-  it.sequential('logs the wide event context for the success path', async () => {
+  it('logs the wide event context for the success path', async () => {
     const { res, json } = await fetchJson('/logging/success')
 
     expect(res.status).toBe(200)
@@ -30,7 +30,7 @@ describe('logging', () => {
     expect(logs.output()).toContain('user_123')
   })
 
-  it.sequential('accepts the useRequest() ServerRequest in useLogger (no H3Event)', async () => {
+  it('accepts the useRequest() ServerRequest in useLogger (no H3Event)', async () => {
     const { res, json } = await fetchJson('/logging/via-request')
 
     expect(res.status).toBe(200)
@@ -43,7 +43,7 @@ describe('logging', () => {
     expect(logs.output()).toContain('user_789')
   })
 
-  it.sequential('logs the error wide event and returns structured error JSON', async () => {
+  it('logs the error wide event and returns structured error JSON', async () => {
     const { res, json } = await fetchJson('/logging/error')
 
     expect(res.status).toBe(400)
@@ -58,7 +58,7 @@ describe('logging', () => {
     expect(logs.output()).toContain('user_456')
   })
 
-  it.sequential('does not log liveness and readiness probe requests', async () => {
+  it('does not log liveness and readiness probe requests', async () => {
     expect((await serverFetch('/_c8y_nitro/liveness')).status).toBe(200)
     expect((await serverFetch('/_c8y_nitro/readiness')).status).toBe(200)
     expect((await serverFetch('/hello')).status).toBe(200)

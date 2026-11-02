@@ -33,7 +33,7 @@ describe('scheduled tasks', () => {
     logs.clear()
   })
 
-  it.sequential('runs a one-shot job after its delay', async () => {
+  it('runs a one-shot job after its delay', async () => {
     const marker = `marker-${Date.now()}`
 
     const { res, json } = await fetchJson(`/schedule-job?marker=${marker}&schedule=0.2`)
@@ -59,7 +59,7 @@ describe('scheduled tasks', () => {
     expect(logOutput()).toContain(`scheduled-task:${marker}`)
   })
 
-  it.sequential('runs distinct jobs of the same task in parallel when their windows overlap', async () => {
+  it('runs distinct jobs of the same task in parallel when their windows overlap', async () => {
     // Job 1 fires at +1 s, job 2 at +1.3 s. Both run `sleep-log` with different
     // payloads and overlap from 1.3 s to 2 s. Distinct jobs are independent, so
     // both must complete with their own marker.
@@ -80,7 +80,7 @@ describe('scheduled tasks', () => {
     expect(logOutput()).toContain(`sleep-log:${marker}-2`)
   }, 10_000)
 
-  it.sequential('does not run a cancelled job', async () => {
+  it('does not run a cancelled job', async () => {
     const marker = `cancel-${Date.now()}`
 
     const { res, json } = await fetchJson(`/cancel-job?marker=${marker}`)
