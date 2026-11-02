@@ -38,5 +38,11 @@ export default defineConfig([
     // DTS OFF!
     dts: false,
     exports: false,
+    // Runtime files that need shared module state (e.g. the tenant option
+    // fetcher registry) import `c8y-nitro/utils`; keep it external so Nitro
+    // bundles a single copy for user routes and runtime handlers.
+    deps: {
+      neverBundle: [...mainConfig.deps!.neverBundle as string[], 'c8y-nitro/utils'],
+    },
   },
 ])
