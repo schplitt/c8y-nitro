@@ -87,7 +87,6 @@ const cachedSubscribedTenantCredentials = defineCachedFunction(async () => {
   swr: false,
 })
 
-// TODO: Remove this explicit type once Nitro's `defineCachedFunction()` return type includes ocache helper methods.
 export const useSubscribedTenantCredentials: (() => Promise<TenantCredentials>) & {
   invalidate: () => Promise<void>
   refresh: () => Promise<TenantCredentials>
@@ -123,7 +122,6 @@ export const useSubscribedTenantCredentials: (() => Promise<TenantCredentials>) 
  * const freshCreds = await useDeployedTenantCredentials.refresh()
  * @note This function is not cached separately. It uses the cache of `useSubscribedTenantCredentials()`. Invalidating or refreshing one will refresh `useDeployedTenantCredentials()`s cache.
  */
-// TODO: Remove this explicit type once Nitro's `defineCachedFunction()` return type includes ocache helper methods.
 export const useDeployedTenantCredentials: (() => Promise<ICredentials>) & {
   invalidate: () => Promise<void>
   refresh: () => Promise<ICredentials>

@@ -18,6 +18,19 @@ pnpm add -D nitro@3.0.261029-rc
 Nitro now requires Node.js `>=22.22.0`. `c8y-nitro` already requires Node.js 24, so
 this does not affect you if you already meet that requirement.
 
+#### 2. Add your builder
+
+Nitro no longer installs a builder as its own dependency. Add the one you configure
+(`builder: 'rolldown'` in the recommended setup) to your dev dependencies:
+
+```sh
+pnpm add -D rolldown
+```
+
+Without it, the first `nitro dev` or `nitro build` asks to install it, and in CI
+installs it automatically. Either way, your `package.json` and lockfile change in the
+middle of a build.
+
 ### Recommended changes
 
 #### Use `defineConfig` from `nitro`

@@ -23,6 +23,7 @@ Or install into an existing Nitro service:
 
 ```sh
 pnpm add c8y-nitro nitro@latest
+pnpm add -D rolldown
 ```
 
 ## Enable the Module
