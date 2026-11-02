@@ -142,7 +142,7 @@ c8y.seed({
 
 Seeds get the same treatment as writes from your service:
 
-- **Validation:** required fields, enum values such as alarm severities, and the source must exist.
+- **Validation:** required fields, enum values such as operation statuses, and the source must exist. Like the platform, alarm severity and status are not validated.
 - **Defaults:** `time` defaults to now, `text` to the type, and alarm `severity` to `MAJOR`.
 - **Platform behavior:** alarms are deduplicated, and operations start as `PENDING`.
 
@@ -344,7 +344,7 @@ These details behave like the platform, checked against a real tenant: exact mat
 - **IDs** are sequential numbers, starting at `1` in every test. Timestamps come from `Date`, so `vi.useFakeTimers()` controls them.
 - **`owner`** is the calling user.
 - **Groups:** `bygroupid()` matches the group's direct child assets. `isinhierarchyof()` follows child assets, devices, and additions recursively.
-- **Paging:** pages are 1-based, the default page size is 5, and `next` is present when a page is full.
+- **Paging:** pages are 1-based, the default page size is 5, `next` is always present (also past the last page), and `prev` after the first page.
 - **Sort orders:** measurements, events, and alarms newest first (`revert=false` gives measurements oldest first), operations by ascending ID, inventory by ID, series values oldest first.
 - **Date ranges:** the `…From` end is inclusive, the `…To` end is exclusive.
 - **Alarm deduplication:** an `ACTIVE` or `ACKNOWLEDGED` alarm with the same source and type increments `count` and updates `time`.
@@ -355,8 +355,11 @@ These details behave like the platform, checked against a real tenant: exact mat
 - **Deleting a managed object** removes its references, external IDs, and binary content. Its measurements, events, alarms, and operations stay.
 - **Tenant options:** default values from your manifest's settings are not applied. Set the options your test needs.
 - **Bulk deletes** apply immediately. On the platform they run asynchronously and take effect within about a second.
-- **Series:** values are bucketed in UTC. Without aggregation, every measurement is its own entry with `min` = `max`. Entries are oldest first unless `revert=true`.
-- **Notifications:** a DELETE notification's payload is `{ id }`. Tokens can be created for any subscription name. Persistent subscriptions keep notifications until a consumer connects.
+- **Single measurements** cannot be read (`GET /measurement/measurements/{id}` answers 405, as with the platform's default time series persistence), but they can be deleted.
+- **Binaries** cannot be deleted through `/inventory/managedObjects/{id}` (422). Use the binaries API.
+- **Text search** (`text`) splits the value into tokens at whitespace, `/`, `-`, and `.`, and matches objects that contain any token. A value in double quotes matches the exact phrase.
+- **Series:** values are bucketed in UTC. `aggregationFunction` without `aggregationInterval` answers 422 (the API docs say 400). Without aggregation, every measurement is its own entry with `min` = `max`. Entries are oldest first unless `revert=true`.
+- **Notifications:** a DELETE notification's payload is not JSON but an opaque string, as on the platform. Read the deleted object's ID from `notification.description.sourceId`. Tokens can be created for any subscription name. Persistent subscriptions keep notifications until a consumer connects.
 - **No permission checks:** roles only matter in your own middleware, like `hasUserRequiredRole()`.
 
 If you find a difference from the real platform, please [open an issue](https://github.com/schplitt/c8y-nitro/issues).

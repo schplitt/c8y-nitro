@@ -97,10 +97,8 @@ export function createDocument(data: TenantData, resource: Resource, body: Recor
   }
 
   if (resource.collection === 'alarms') {
-    const error = checkEnum('severity', body.severity, C8Y_ENUMS.alarmSeverity) ?? checkEnum('status', body.status, C8Y_ENUMS.alarmStatus)
-    if (error) {
-      return error
-    }
+    // The platform does not validate alarm severity/status values (verified:
+    // 'SEVERE' and 'BOGUS' are stored as given), so neither does the fake.
     // Deduplication: an active or acknowledged alarm of the same source and
     // type is updated (count, time) instead of creating a new one.
     const existing = [...data.alarms.values()].find((alarm) =>
@@ -167,12 +165,6 @@ function hasAgent(data: TenantData, deviceId: string, seen = new Set<string>()):
  */
 export function updateDocument(data: TenantData, resource: Resource, document: StoredDocument, body: Record<string, unknown>): Response | undefined {
   const readOnly = resource.collection === 'operations' ? ['deviceId'] : ['source', 'time', 'type']
-  if (resource.collection === 'alarms') {
-    const error = checkEnum('severity', body.severity, C8Y_ENUMS.alarmSeverity) ?? checkEnum('status', body.status, C8Y_ENUMS.alarmStatus)
-    if (error) {
-      return error
-    }
-  }
   if (resource.collection === 'operations') {
     const error = checkEnum('status', body.status, C8Y_ENUMS.operationStatus)
     if (error) {
@@ -338,6 +330,10 @@ export function documents(call: C8yRequest, segments: string[], data: TenantData
   const detail = `${resource.path}/{id}`
   if (method === 'GET') {
     checkQuery(`GET ${detail}` as C8yEndpoint, call, [])
+    if (resource.collection === 'measurements') {
+      // verified: time series persistence (the default) cannot read single measurements
+      return apiError(405, 'measurement/Method Not Allowed', 'Reading a single measurement is not supported with time series persistence')
+    }
     return document ? Response.json(renderDocument(data, resource, document)) : notFound(resource, id)
   }
   if (method === 'PUT' && resource.collection !== 'measurements') {
@@ -425,7 +421,8 @@ function series(call: C8yRequest, data: TenantData): Response {
     return apiError(422, 'measurement/Invalid Data', `Invalid aggregationType '${query.aggregationType}'`)
   }
   if (functions.length > 0 && !query.aggregationInterval) {
-    return apiError(400, 'measurement/Bad Request', 'aggregationFunction requires aggregationInterval')
+    // verified: 422 (the docs say 400)
+    return apiError(422, 'measurements/Invalid Data', 'Cannot specify aggregation functions if `aggregationType` is not provided!')
   }
   const unknownFunction = functions.find((fn) => !C8Y_ENUMS.seriesAggregationFunction.includes(fn as any))
   if (unknownFunction) {

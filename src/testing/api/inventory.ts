@@ -68,15 +68,30 @@ function omit(body: Record<string, unknown>, fields: string[]): Record<string, u
   return Object.fromEntries(Object.entries(body).filter(([key]) => !fields.includes(key)))
 }
 
+/**
+ * Full-text search as documented (and verified): the value is split into
+ * tokens at whitespace and `/`, `-`, `.`; an object matches if any examined
+ * property (id, type, name, owner, external ids) contains any of the tokens.
+ * A value in double quotes searches for the exact phrase.
+ * @param data - Tenant data
+ * @param document - Managed object
+ * @param text - Search value
+ */
 function searchText(data: TenantData, document: StoredDocument, text: string): boolean {
-  const haystack = [
+  const values = [
     document.id,
     document.type,
     document.name,
     document.owner,
     ...data.externalIds.filter((entry) => entry.managedObjectId === document.id).map((entry) => entry.externalId),
-  ].filter((value) => typeof value === 'string').join(' ').toLowerCase()
-  return text.toLowerCase().split(/\s+/).filter(Boolean).every((token) => haystack.includes(token))
+  ].filter((value): value is string => typeof value === 'string').map((value) => value.toLowerCase())
+  const phrase = /^"(.*)"$/.exec(text.trim())
+  if (phrase) {
+    return values.some((value) => value.includes(phrase[1]!.toLowerCase()))
+  }
+  const tokenize = (value: string) => value.toLowerCase().split(/[\s/.-]+/).filter(Boolean)
+  const tokens = new Set(values.flatMap(tokenize))
+  return tokenize(text).some((token) => tokens.has(token))
 }
 
 function listManagedObjects(call: C8yRequest, data: TenantData, documents: StoredDocument[]): StoredDocument[] {
@@ -192,6 +207,10 @@ function inventoryRequest(call: C8yRequest, segments: string[], data: TenantData
     }
     if (method === 'DELETE') {
       checkQuery('DELETE /inventory/managedObjects/{id}', call, [])
+      if (document?.c8y_IsBinary !== undefined) {
+        // verified against the platform
+        return apiError(422, 'inventory/Invalid Data', 'Cannot delete managed object. :  Cannot change binary metadata through inventory api.')
+      }
       if (!deleteManagedObject(data, id)) {
         return notFound(id)
       }
@@ -227,7 +246,7 @@ function inventoryRequest(call: C8yRequest, segments: string[], data: TenantData
       return notFound(id)
     }
     const body = (call.body ?? {}) as Record<string, any>
-    const contentType = call.headers['content-type'] ?? ''
+    const contentType = (call.headers['content-type'] ?? '').toLowerCase()
     // createChild: a new managed object, created and attached
     if (contentType.includes('managedobject+json')) {
       const child = createManagedObject(data, body, call.user ?? 'test-user')

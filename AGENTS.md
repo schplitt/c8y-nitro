@@ -196,7 +196,7 @@ When you emulate a new endpoint, add it to `ENDPOINTS` in `scripts/generate-test
 pnpm test:contract
 ```
 
-Credentials come from the environment or `.env` / `playground/.env` (`C8Y_CONTRACT_BASEURL/TENANT/USER/PASSWORD`, else `C8Y_BASEURL` + `C8Y_DEVELOPMENT_*`). Never print or read them in agent sessions; the runner loads them itself. Every scenario names its data with a unique run id and the runner deletes it afterwards. Not part of `pnpm test` or CI. Run it after changing fake behavior; a failure there means the fake is wrong. Scenarios must pass on both: use `eventually()` for writes the platform applies asynchronously (bulk deletes).
+Credentials come from the environment or `.env` / `playground/.env` (`C8Y_CONTRACT_BASEURL/TENANT/USER/PASSWORD`, else `C8Y_BASEURL` + `C8Y_DEVELOPMENT_*`). Never print or read them in agent sessions; the runner loads them itself. Every scenario names its data with a unique run id and the runner deletes it afterwards. Not part of `pnpm test` or CI. Run it after changing fake behavior; a failure there means the fake is wrong. Scenarios must pass on both: use `eventually()` for writes the platform applies asynchronously (bulk deletes, parent indexing). The real platform differs from the API docs in places (e.g. 422 instead of 400, unvalidated alarm severities, `next` links past the end): when a real-tenant run disagrees with the docs, the platform wins — fix the fake, mark the code with `verified against the platform`, and note it in the guide's assumptions. The runner's cleanup deletes binaries through `/inventory/binaries` (the inventory API refuses them).
 
 ### Testing the Playground
 

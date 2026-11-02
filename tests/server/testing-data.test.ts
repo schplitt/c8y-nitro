@@ -112,7 +112,7 @@ describe('multiple tenants', () => {
 
 describe('seeding errors', () => {
   it('validates seeds like the platform validates writes', () => {
-    expect(() => c8y.seed({ alarms: [{ source: pump, type: 'x', severity: 'SEVERE' as any }] })).toThrow(/Invalid value 'SEVERE' for severity/)
     expect(() => c8y.seed({ events: [{ source: 'does-not-exist', type: 'x' }] })).toThrow(/Source with id 'does-not-exist' does not exist/)
+    expect(() => c8y.seed({ operations: [{ deviceId: pump }] })).toThrow(/Agent for device .* does not exist in inventory/)
   })
 })

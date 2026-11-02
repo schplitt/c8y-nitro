@@ -174,10 +174,14 @@ export const realtime = {
     }
     for (const name of names) {
       const ackId = String(this.nextAck++)
-      const payload = action === 'DELETE' ? { id: document.id } : document
+      // verified: a DELETE notification's payload is not JSON but an opaque
+      // Java object string; the deleted object's id is only in the description
+      const payload = action === 'DELETE'
+        ? `com.cumulocity.notification.service.RealtimeDeletedObject$1@${(this.nextAck * 2654435761 >>> 0).toString(16)}`
+        : JSON.stringify(document)
       const frame: Frame = {
         ackId,
-        text: `${ackId}\n/${tenant}/${api}/${sourceId ?? document.id}\n${action}\n\n${JSON.stringify(payload)}`,
+        text: `${ackId}\n/${tenant}/${api}/${sourceId ?? document.id}\n${action}\n\n${payload}`,
       }
       const consumers = [...this.sockets].filter((socket) => socket.token?.tenant === tenant && socket.token.subscription === name)
       if (consumers.length > 0) {

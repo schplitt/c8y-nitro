@@ -91,7 +91,7 @@ export function flag(call: C8yRequest, name: string, fallback = false): boolean 
 
 /**
  * Builds a paged collection response like Cumulocity's: `statistics`, `self`,
- * and `next`/`prev` links (`next` only when the page is full).
+ * and `next`/`prev` links (`next` always, `prev` after the first page).
  * @param call - The request (paging params)
  * @param collection - Property name, e.g. `managedObjects`
  * @param items - All matching items, in result order
@@ -116,7 +116,8 @@ export function paged(call: C8yRequest, collection: string, items: unknown[], pa
     self: link(currentPage),
     [collection]: page,
     statistics,
-    ...(page.length === pageSize ? { next: link(currentPage + 1) } : {}),
+    // verified: the platform always links the next page, even past the end
+    next: link(currentPage + 1),
     ...(currentPage > 1 ? { prev: link(currentPage - 1) } : {}),
   })
 }

@@ -11,6 +11,9 @@
 import { existsSync } from 'node:fs'
 import process from 'node:process'
 import { BasicAuth, Client } from '@c8y/client'
+import { createRealtimeClient } from 'c8y-realtime'
+import type { RealtimeClient, WebSocketFactory } from 'c8y-realtime'
+import { WebSocket } from 'ws'
 import { afterEach, describe, it } from 'vitest'
 import { scenarios } from './scenarios'
 
@@ -42,6 +45,7 @@ const configured = Boolean(baseUrl && credentials.tenant && credentials.user && 
 
 const client = configured ? new Client(new BasicAuth(credentials), baseUrl) : undefined
 let current: string | undefined
+const realtimeClients: RealtimeClient[] = []
 
 /**
  * Deletes everything a scenario created (all names contain the run id).
@@ -55,7 +59,9 @@ async function cleanup(unique: string) {
     }
   }
   for (const mo of data) {
-    await client!.core.fetch(`/inventory/managedObjects/${mo.id}`, { method: 'DELETE' }).catch(() => {})
+    // binaries can only be deleted through the binaries API
+    const path = (mo as Record<string, unknown>).c8y_IsBinary !== undefined ? `/inventory/binaries/${mo.id}` : `/inventory/managedObjects/${mo.id}`
+    await client!.core.fetch(path, { method: 'DELETE' }).catch(() => {})
   }
   const subscriptions = await (await client!.core.fetch('/notification2/subscriptions?pageSize=2000')).json().catch(() => ({ subscriptions: [] }))
   for (const subscription of subscriptions.subscriptions ?? []) {
@@ -67,6 +73,7 @@ async function cleanup(unique: string) {
 
 describe.skipIf(!configured)('contract scenarios against a real tenant', () => {
   afterEach(async () => {
+    await Promise.all(realtimeClients.splice(0).map((client) => client.close()))
     if (current) {
       await cleanup(current)
       current = undefined
@@ -75,8 +82,26 @@ describe.skipIf(!configured)('contract scenarios against a real tenant', () => {
 
   for (const scenario of scenarios) {
     it(scenario.name, async () => {
-      current = `ctr${Date.now()}`
-      await scenario.run({ client: client!, unique: current })
+      const unique = `ctr${Date.now()}`
+      current = unique
+      await scenario.run({
+        client: client!,
+        unique,
+        tenant: credentials.tenant!,
+        realtime: () => {
+          const realtime = createRealtimeClient({
+            baseUrl: baseUrl!,
+            tenant: credentials.tenant!,
+            user: credentials.user!,
+            password: credentials.password!,
+            name: unique,
+            webSocketImpl: WebSocket as unknown as WebSocketFactory,
+            subscription: { nonPersistent: true },
+          })
+          realtimeClients.push(realtime)
+          return realtime
+        },
+      })
     }, 60_000)
   }
 })

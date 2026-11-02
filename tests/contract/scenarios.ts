@@ -11,6 +11,7 @@
 import { Buffer } from 'node:buffer'
 import type { Client } from '@c8y/client'
 import { EventBinaryService } from '@c8y/client'
+import type { RealtimeClient } from 'c8y-realtime'
 import { expect } from 'vitest'
 
 export interface ContractContext {
@@ -19,6 +20,15 @@ export interface ContractContext {
    * Unique per scenario run, to keep data apart on a shared tenant.
    */
   unique: string
+  /**
+   * Tenant id of the credentials.
+   */
+  tenant: string
+  /**
+   * A c8y-realtime client for the same tenant and user (closed after the
+   * scenario). Against the fake it uses the fake tenant's WebSocket.
+   */
+  realtime: () => RealtimeClient
 }
 
 export interface ContractScenario {
@@ -339,6 +349,270 @@ export const scenarios: ContractScenario[] = [
       expect(token.token).toEqual(expect.any(String))
 
       expect((await client.core.fetch(`/notification2/subscriptions/${id}`, { method: 'DELETE' })).status).toBe(204)
+    },
+  },
+  {
+    name: 'realtime: notifications for measurements, alarms, and managed objects',
+    async run({ client, unique, realtime }) {
+      const { data: device } = await client.inventory.create({ name: `rt-${unique}`, c8y_IsDevice: {} })
+      const received: Array<{ api: string, action: string, source: string, payload: any }> = []
+      const record = (payload: any, notification: any) => {
+        received.push({ api: notification.description.type, action: notification.action, source: notification.description.sourceId, payload })
+      }
+      const rt = realtime()
+      rt.measurements.onCreate(device.id, record)
+      rt.alarms.onCreate(device.id, record)
+      rt.alarms.onUpdate(device.id, record)
+      rt.managedObjects.onUpdate(device.id, record)
+      rt.managedObjects.onDelete(device.id, record)
+
+      // the subscriptions exist, then give the consumers a moment to connect
+      await eventually(async () => {
+        const list = await (await client.core.fetch(`/notification2/subscriptions?source=${device.id}&pageSize=100`)).json()
+        expect(list.subscriptions.length).toBeGreaterThanOrEqual(3)
+      })
+      await new Promise((resolve) => {
+        setTimeout(resolve, 2000)
+      })
+
+      const { data: measurement } = await client.measurement.create({ source: { id: device.id }, type: 'c8y_Temperature', time: new Date().toISOString(), c8y_Temperature: { T: { value: 21, unit: 'C' } } } as any)
+      await eventually(async () => {
+        expect(received).toContainEqual(expect.objectContaining({ api: 'measurements', action: 'CREATE', source: device.id, payload: expect.objectContaining({ id: measurement.id, type: 'c8y_Temperature' }) }))
+      }, 15_000)
+
+      const alarm = { source: { id: device.id }, type: `rt-${unique}`, text: 'Too hot', severity: 'MAJOR', time: new Date().toISOString() }
+      const { data: created } = await client.alarm.create(alarm as any)
+      await client.alarm.create({ ...alarm, time: new Date().toISOString() } as any)
+      await eventually(async () => {
+        expect(received).toContainEqual(expect.objectContaining({ api: 'alarms', action: 'CREATE', source: device.id, payload: expect.objectContaining({ id: created.id }) }))
+        // deduplication is published as an update with the new count
+        expect(received).toContainEqual(expect.objectContaining({ api: 'alarms', action: 'UPDATE', payload: expect.objectContaining({ id: created.id, count: 2 }) }))
+      }, 15_000)
+
+      await client.inventory.update({ id: device.id, c8y_Notes: { text: 'updated' } } as any)
+      await eventually(async () => {
+        expect(received).toContainEqual(expect.objectContaining({ api: 'managedobjects', action: 'UPDATE', source: device.id, payload: expect.objectContaining({ c8y_Notes: { text: 'updated' } }) }))
+      }, 15_000)
+
+      await client.inventory.delete(device.id)
+      await eventually(async () => {
+        const deletion = received.find((item) => item.api === 'managedobjects' && item.action === 'DELETE')
+        // the id is only in the description; the payload is an opaque string
+        expect(deletion?.source).toBe(device.id)
+        expect(typeof deletion?.payload).toBe('string')
+      }, 15_000)
+    },
+  },
+  {
+    name: 'tenant options: upsert, bulk set, list, delete',
+    async run({ client, unique }) {
+      const category = `ctr${unique}`
+      const json = { 'content-type': 'application/json', 'accept': 'application/json' }
+      try {
+        // PUT creates a missing option (c8y-nitro's useTenantOption().set() relies on it)
+        const put = await client.core.fetch(`/tenant/options/${category}/alpha`, { method: 'PUT', headers: json, body: JSON.stringify({ value: 'one' }) })
+        expect(put.status).toBe(200)
+        expect(await (await client.core.fetch(`/tenant/options/${category}/alpha`)).json()).toMatchObject({ category, key: 'alpha', value: 'one' })
+
+        const bulk = await client.core.fetch(`/tenant/options/${category}`, { method: 'PUT', headers: json, body: JSON.stringify({ beta: 'two', gamma: 'three' }) })
+        expect(bulk.status).toBe(200)
+        expect(await (await client.core.fetch(`/tenant/options/${category}`)).json()).toEqual({ alpha: 'one', beta: 'two', gamma: 'three' })
+
+        expect((await client.core.fetch(`/tenant/options/${category}/alpha`, { method: 'DELETE' })).status).toBe(204)
+        expect((await client.core.fetch(`/tenant/options/${category}/alpha`)).status).toBe(404)
+      } finally {
+        for (const key of ['alpha', 'beta', 'gamma']) {
+          await client.core.fetch(`/tenant/options/${category}/${key}`, { method: 'DELETE' }).catch(() => {})
+        }
+      }
+    },
+  },
+  {
+    name: 'alarms: severity and resolved filters, acknowledged deduplication, unvalidated severity',
+    async run({ client, unique }) {
+      const { data: device } = await client.inventory.create({ name: `al2-${unique}`, c8y_IsDevice: {} })
+      const alarm = (type: string, severity: string) => ({ source: { id: device.id }, type, text: type, severity, time: time(1) })
+      const { data: major } = await client.alarm.create(alarm(`major-${unique}`, 'MAJOR') as any)
+      const { data: minor } = await client.alarm.create(alarm(`minor-${unique}`, 'MINOR') as any)
+
+      const ids = async (filter: Record<string, unknown>) => (await client.alarm.list({ source: device.id, pageSize: 100, ...filter } as any)).data.map((item) => item.id).sort()
+      expect(await ids({ severity: 'MAJOR' })).toEqual([major.id])
+
+      await client.alarm.update({ id: major.id, status: 'ACKNOWLEDGED' } as any)
+      const { data: again } = await client.alarm.create(alarm(`major-${unique}`, 'MAJOR') as any)
+      expect(again.id).toBe(major.id)
+      expect(again.count).toBe(2)
+      expect(again.status).toBe('ACKNOWLEDGED')
+
+      await client.alarm.update({ id: minor.id, status: 'CLEARED' } as any)
+      expect(await ids({ resolved: true })).toEqual([minor.id])
+      expect(await ids({ resolved: false })).toEqual([major.id])
+
+      // the platform does not validate severity values
+      const { res: unknown, data: stored } = await client.alarm.create(alarm(`bad-${unique}`, 'SEVERE') as any)
+      expect(unknown.status).toBe(201)
+      expect(stored.severity).toBe('SEVERE')
+    },
+  },
+  {
+    name: 'events: fragment and creation-time filters, update, attachment replace and delete',
+    async run({ client, unique }) {
+      const { data: device } = await client.inventory.create({ name: `ev2-${unique}`, c8y_IsDevice: {} })
+      const { data: flagged } = await client.event.create({ source: { id: device.id }, type: `ev-${unique}`, text: 'flagged', time: time(1), c8y_Flag: {} } as any)
+      await client.event.create({ source: { id: device.id }, type: `ev-${unique}`, text: 'plain', time: time(2) } as any)
+
+      const texts = async (filter: Record<string, unknown>) => (await client.event.list({ source: device.id, pageSize: 100, ...filter } as any)).data.map((item) => item.text).sort()
+      expect(await texts({ fragmentType: 'c8y_Flag' })).toEqual(['flagged'])
+      expect(await texts({ createdFrom: '2000-01-01T00:00:00Z' })).toEqual(['flagged', 'plain'])
+      expect(await texts({ createdTo: '2000-01-01T00:00:00Z' })).toEqual([])
+
+      const { data: updated } = await client.event.update({ id: flagged.id, text: 'changed', c8y_Extra: { a: 1 } } as any)
+      expect(updated).toMatchObject({ text: 'changed', c8y_Flag: {}, c8y_Extra: { a: 1 } })
+
+      const binaries = new EventBinaryService(client.core)
+      await binaries.upload(Buffer.from('first'), flagged.id!)
+      const replaced = await client.core.fetch(`/event/events/${flagged.id}/binaries`, { method: 'PUT', headers: { 'content-type': 'text/plain' }, body: 'second' })
+      expect(replaced.status).toBe(201)
+      expect(await (await binaries.download(flagged.id!) as unknown as Response).text()).toBe('second')
+      await binaries.delete(flagged.id!)
+      expect((await client.core.fetch(`/event/events/${flagged.id}/binaries`)).status).toBe(404)
+    },
+  },
+  {
+    name: 'inventory: assets, additions, createChild, remove, onlyRoots, text, paging past the end',
+    async run({ client, unique }) {
+      const { data: parent } = await client.inventory.create({ name: `root-${unique}`, type: `tree-${unique}` })
+      const { data: asset } = await client.inventory.create({ name: `asset-${unique}`, type: `tree-${unique}` })
+      const { data: addition } = await client.inventory.create({ name: `addition-${unique}`, type: `tree-${unique}` })
+      await client.inventory.childAssetsAdd(asset.id, parent.id)
+      await client.inventory.childAdditionsAdd(addition.id, parent.id)
+      const { data: created } = await client.inventory.childDevicesCreate({ name: `created-${unique}`, type: `tree-${unique}`, c8y_IsDevice: {} } as any, parent.id)
+      expect(created.name).toBe(`created-${unique}`)
+
+      expect((await client.inventory.childAssetsList(parent.id)).data.map((mo) => mo.id)).toEqual([asset.id])
+      expect((await client.inventory.childAdditionsList(parent.id)).data.map((mo) => mo.id)).toEqual([addition.id])
+      expect((await client.inventory.childDevicesList(parent.id)).data.map((mo) => mo.id)).toEqual([created.id])
+
+      const ids = [parent.id, asset.id, addition.id, created.id].join(',')
+      // parent links are indexed asynchronously on the platform
+      await eventually(async () => {
+        const roots = await client.inventory.list({ ids, onlyRoots: true, pageSize: 100 } as any)
+        expect(roots.data.map((mo) => mo.id)).toEqual([parent.id])
+      })
+
+      await client.inventory.childAssetsRemove(asset.id, parent.id)
+      expect((await client.inventory.childAssetsList(parent.id)).data).toEqual([])
+
+      // text search matches ANY token ("asset", the run id); a quoted value matches the phrase
+      const anyToken = await client.inventory.list({ text: `asset-${unique}`, pageSize: 100 } as any)
+      expect(anyToken.data.map((mo) => mo.id).sort()).toEqual([parent.id, asset.id, addition.id, created.id].sort())
+      const phrase = await client.inventory.list({ text: `"asset-${unique}"`, pageSize: 100 } as any)
+      expect(phrase.data.map((mo) => mo.id)).toEqual([asset.id])
+
+      const past = await client.inventory.list({ type: `tree-${unique}`, pageSize: 2, currentPage: 99 } as any)
+      expect(past.data).toEqual([])
+      // the platform links a next page even past the end
+      expect(past.paging?.nextPage).toBe(100)
+    },
+  },
+  {
+    name: 'measurements: collection create, value fragment filters, detail and delete, interval functions',
+    async run({ client, unique }) {
+      const { data: device } = await client.inventory.create({ name: `m2-${unique}`, c8y_IsDevice: {} })
+      const created = await client.core.fetch('/measurement/measurements', {
+        method: 'POST',
+        headers: { 'content-type': 'application/vnd.com.nsn.cumulocity.measurementcollection+json', 'accept': 'application/json' },
+        body: JSON.stringify({
+          measurements: [
+            { source: { id: device.id }, type: 'c8y_Climate', time: time(1), c8y_Climate: { T: { value: 10, unit: 'C' }, H: { value: 40, unit: '%' } } },
+            { source: { id: device.id }, type: 'c8y_Climate', time: time(2), c8y_Climate: { T: { value: 20, unit: 'C' } } },
+            { source: { id: device.id }, type: 'c8y_Power', time: time(3), c8y_Power: { P: { value: 5, unit: 'W' } } },
+          ],
+        }),
+      })
+      expect(created.status).toBe(201)
+      const { measurements } = await created.json()
+      expect(measurements).toHaveLength(3)
+
+      const types = async (filter: Record<string, unknown>) => (await client.measurement.list({ source: device.id, pageSize: 100, ...filter } as any)).data.map((item: any) => item.type).sort()
+      expect(await types({ valueFragmentType: 'c8y_Climate' })).toEqual(['c8y_Climate', 'c8y_Climate'])
+      expect(await types({ valueFragmentType: 'c8y_Climate', valueFragmentSeries: 'H' })).toEqual(['c8y_Climate'])
+
+      // time series persistence: single measurements cannot be read, but deleted
+      expect((await rejection(client.measurement.detail(measurements[2].id))).res.status).toBe(405)
+      await client.measurement.delete(measurements[2].id)
+      await eventually(async () => {
+        expect(await types({})).toEqual(['c8y_Climate', 'c8y_Climate'])
+      })
+
+      const series = await (await client.core.fetch(`/measurement/measurements/series?source=${device.id}&dateFrom=${encodeURIComponent(time(0))}&dateTo=${encodeURIComponent(time(60))}&series=c8y_Climate.T&aggregationInterval=1h&aggregationFunction=avg&aggregationFunction=count`)).json()
+      expect(Object.values(series.values)).toEqual([[{ avg: 15, count: 2 }]])
+
+      const invalid = await client.core.fetch(`/measurement/measurements/series?source=${device.id}&dateFrom=${encodeURIComponent(time(0))}&dateTo=${encodeURIComponent(time(60))}&aggregationFunction=avg`)
+      // the platform answers 422 (the docs say 400)
+      expect(invalid.status).toBe(422)
+    },
+  },
+  {
+    name: 'inventory: query language hierarchy, not, or, multi-field order, dates',
+    async run({ client, unique }) {
+      const { data: group } = await client.inventory.create({ name: `g-${unique}`, type: `h-${unique}`, c8y_IsDeviceGroup: {} } as any)
+      const { data: sub } = await client.inventory.create({ name: `s-${unique}`, type: `h-${unique}`, c8y_IsDeviceGroup: {} } as any)
+      const { data: leaf } = await client.inventory.create({ name: `l-${unique}`, type: `h-${unique}`, c8y_IsDevice: {} } as any)
+      await client.inventory.childAssetsAdd(sub.id, group.id)
+      await client.inventory.childAssetsAdd(leaf.id, sub.id)
+      const names = async (query: string) => (await client.inventory.list({ query, pageSize: 100 })).data.map((mo) => mo.name)
+
+      expect((await names(`$filter=(isinhierarchyof(${group.id}))`)).sort()).toEqual([`g-${unique}`, `l-${unique}`, `s-${unique}`])
+      expect((await names(`$filter=(isinhierarchyof(${sub.id}))`)).sort()).toEqual([`l-${unique}`, `s-${unique}`])
+      expect(await names(`$filter=(type eq 'h-${unique}' and not(has(c8y_IsDeviceGroup)))`)).toEqual([`l-${unique}`])
+      expect((await names(`$filter=(name eq 'g-${unique}' or name eq 'l-${unique}')`)).sort()).toEqual([`g-${unique}`, `l-${unique}`])
+      expect(await names(`$filter=(type eq 'h-${unique}') $orderby=c8y_IsDevice desc, name asc`)).toHaveLength(3)
+      expect(await names(`$filter=(type eq 'h-${unique}' and creationTime.date gt '2000-01-01T00:00:00Z') $orderby=name desc`)).toEqual([`s-${unique}`, `l-${unique}`, `g-${unique}`])
+      expect(await names(`$filter=(type eq 'h-${unique}' and creationTime.date lt '2000-01-01T00:00:00Z')`)).toEqual([])
+    },
+  },
+  {
+    name: 'operations: devices below an agent, failure reason, status filter',
+    async run({ client, unique }) {
+      const { data: agent } = await client.inventory.create({ name: `ag-${unique}`, c8y_IsDevice: {}, com_cumulocity_model_Agent: {} } as any)
+      const { data: child } = await client.inventory.create({ name: `ch-${unique}`, c8y_IsDevice: {} })
+      await client.inventory.childDevicesAdd(child.id, agent.id)
+
+      const { data: operation } = await client.operation.create({ deviceId: child.id, c8y_Command: { text: 'reboot' } } as any)
+      expect(operation.status).toBe('PENDING')
+
+      const { data: failed } = await client.operation.update({ id: operation.id, status: 'FAILED', failureReason: 'Device offline' } as any)
+      expect(failed).toMatchObject({ status: 'FAILED', failureReason: 'Device offline' })
+
+      const { data: list } = await client.operation.list({ deviceId: child.id, status: 'FAILED' } as any)
+      expect(list.map((item) => item.id)).toEqual([operation.id])
+      expect((await client.operation.list({ deviceId: child.id, status: 'PENDING' } as any)).data).toEqual([])
+    },
+  },
+  {
+    name: 'inventory binaries: replace content, no deletes through the inventory API',
+    async run({ client, unique }) {
+      const { data: binary } = await client.inventoryBinary.create(Buffer.from('version 1'), { name: `bin-${unique}.txt`, fileName: `bin-${unique}.txt` } as any)
+      const replaced = await client.core.fetch(`/inventory/binaries/${binary.id}`, { method: 'PUT', headers: { 'content-type': 'text/plain' }, body: 'version 2' })
+      expect(replaced.status).toBe(201)
+      expect(await (await client.inventoryBinary.download(binary.id!) as unknown as Response).text()).toBe('version 2')
+
+      // binaries cannot be deleted through the inventory API
+      expect((await rejection(client.inventory.delete(binary.id!))).res.status).toBe(422)
+      await client.inventoryBinary.delete(binary.id!)
+      expect((await client.core.fetch(`/inventory/binaries/${binary.id}`)).status).toBe(404)
+    },
+  },
+  {
+    name: 'current user and tenant',
+    async run({ client, tenant }) {
+      const user = await (await client.core.fetch('/user/currentUser')).json()
+      expect(user.userName).toEqual(expect.any(String))
+      expect(Array.isArray(user.effectiveRoles)).toBe(true)
+
+      const current = await (await client.core.fetch('/tenant/currentTenant')).json()
+      expect(current.name).toBe(tenant)
     },
   },
   {
