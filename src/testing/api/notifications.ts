@@ -9,17 +9,23 @@ const APIS = ['*', 'managedobjects', 'measurements', 'events', 'alarms', 'operat
 const UNSUPPORTED_APIS = ['alarmsWithChildren', 'eventsWithChildren']
 
 function render(subscription: FakeSubscription) {
-  const { tenant: _tenant, ...rest } = subscription
+  const { tenant, ...rest } = subscription
   return {
+    nonPersistent: false,
     ...rest,
     self: `${baseUrl()}/notification2/subscriptions/${subscription.id}`,
-    ...(subscription.source ? { source: { id: subscription.source.id, self: moSelf(subscription.source.id) } } : {}),
+    // verified: a tenant subscription's source is the tenant
+    source: subscription.source
+      ? { id: subscription.source.id, self: moSelf(subscription.source.id) }
+      : { id: tenant, self: `${baseUrl()}/tenant/tenants/${tenant}` },
   }
 }
 
 function notFound(id: string): Response {
-  return apiError(404, 'notification2/Not Found', `Subscription with id '${id}' not found`)
+  return apiError(404, 'reliable-notification/Not Found', `Subscription with id '${id}' not found`)
 }
+
+const NAME = /^[a-z0-9]+$/i
 
 /**
  * Notification 2.0 API: subscriptions, tokens, and unsubscribing consumers.
@@ -46,18 +52,28 @@ export function notifications(call: C8yRequest, segments: string[], data: Tenant
       if (unsupported.length > 0) {
         throw new UnsupportedRequestError(`subscription api "${unsupported.join(', ')}" is not emulated`)
       }
-      if (apis.some((api) => !APIS.includes(api))) {
-        return apiError(422, 'notification2/Invalid Data', `Invalid subscription filter apis: ${apis.join(', ')}`)
+      // verified against the platform: names are alphanumeric, `*` stands alone
+      if (apis.some((api) => !APIS.includes(api)) || (apis.includes('*') && apis.length > 1)) {
+        return apiError(422, 'reliable-notification/Invalid Data', `Invalid subscription filter apis: ${apis.join(', ')}`)
+      }
+      if (!NAME.test(String(body.subscription))) {
+        return apiError(422, 'reliable-notification/Invalid Data', 'The subscription name must be alphanumeric')
       }
       if (body.context !== 'mo' && body.context !== 'tenant') {
-        return apiError(422, 'notification2/Invalid Data', `Invalid context '${body.context}'`)
+        return apiError(422, 'reliable-notification/Invalid Data', `Invalid context '${body.context}'`)
       }
-      if (body.context === 'mo' && !data.managedObjects.has(String(body.source?.id))) {
-        return apiError(422, 'notification2/Invalid Data', `Source with id '${body.source?.id}' does not exist`)
+      if (body.context === 'tenant' && body.source !== undefined) {
+        return apiError(422, 'reliable-notification/Invalid Data', 'A tenant subscription has no source')
+      }
+      if (body.context === 'mo' && body.source?.id === undefined) {
+        return apiError(422, 'reliable-notification/Invalid Data', 'A managed object subscription needs a source')
+      }
+      if (body.context === 'mo' && !data.managedObjects.has(String(body.source.id))) {
+        return apiError(404, 'inventory/Not Found', `Finding device data from database failed : No managedObject for id '${body.source.id}'!`)
       }
       const sourceId = body.context === 'mo' ? String(body.source.id) : undefined
       if (realtime.subscriptions.some((item) => item.tenant === tenant && item.subscription === body.subscription && item.source?.id === sourceId)) {
-        return apiError(409, 'notification2/Conflict', `Subscription '${body.subscription}' already exists`)
+        return apiError(409, 'reliable-notification/Duplicate', `Subscription '${body.subscription}' already exists`)
       }
       const created = realtime.createSubscription({
         tenant,
@@ -109,19 +125,27 @@ export function notifications(call: C8yRequest, segments: string[], data: Tenant
     if (!body.subscriber || !body.subscription) {
       return apiError(422, 'undefined/validationError', 'Following mandatory fields should be included: subscriber,subscription')
     }
+    if (!NAME.test(String(body.subscriber))) {
+      // verified against the platform
+      return apiError(422, 'reliable-notification/Invalid Data', 'The subscriber name must be alphanumeric')
+    }
     return Response.json({ token: realtime.createToken({ tenant, subscription: body.subscription, subscriber: body.subscriber }) })
   }
 
   if (resource === 'unsubscribe' && method === 'POST' && segments.length === 2) {
+    // verified: 422 without a token, 500 for an unknown token or one without
+    // a connected consumer
     const token = call.query.token ?? ''
-    if (!realtime.tokens.has(token)) {
-      return apiError(404, 'notification2/Not Found', 'Unknown token')
+    if (!token) {
+      return apiError(422, 'reliable-notification/Invalid Data', 'Missing token')
+    }
+    const consumers = [...realtime.sockets].filter((socket) => new URL(socket.url).searchParams.get('token') === token)
+    if (!realtime.tokens.has(token) || consumers.length === 0) {
+      return apiError(500, 'reliable-notification/Internal Server Error', 'Unsubscribing the consumer failed')
     }
     realtime.tokens.delete(token)
-    for (const socket of realtime.sockets) {
-      if (new URL(socket.url).searchParams.get('token') === token) {
-        socket.close()
-      }
+    for (const socket of consumers) {
+      socket.close()
     }
     return Response.json({ result: 'DONE' })
   }

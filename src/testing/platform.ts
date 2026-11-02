@@ -252,8 +252,24 @@ function toResponse(result: unknown): Response {
   return Response.json(result)
 }
 
-function notFound(): Response {
-  return Response.json({ error: 'not found', message: 'Not Found' }, { status: 404 })
+function optionNotFound(category: string, key: string): Response {
+  return apiError(404, 'options/Not Found', `Unable to find option by given key: ${category}/${key}`)
+}
+
+/**
+ * `credentials.` options are encrypted: reads show `<<Encrypted>>`, except for
+ * the microservice's own settings category, which the platform decrypts for
+ * the service (verified against the platform for other categories).
+ * @param category - Option category
+ * @param key - Option key
+ * @param value - Stored value
+ */
+function readableOption(category: string, key: string, value: string): string {
+  return key.startsWith('credentials.') && category !== ownCategory() ? '<<Encrypted>>' : value
+}
+
+function encrypted(key: string, value: string): string {
+  return key.startsWith('credentials.') ? Buffer.from(`fake-cipher:${value}`).toString('hex') : value
 }
 
 /**
@@ -294,32 +310,38 @@ function builtInRoute(call: C8yRequest, segments: string[]): Response | undefine
       return method === 'PUT' ? Response.json({ editable: Boolean((call.body as any)?.editable) }) : undefined
     }
     if (key !== undefined && segments.length === 4) {
+      const self = `${new URL(process.env.C8Y_BASEURL || DEFAULTS.baseUrl).origin}/tenant/options/${encodeURIComponent(category)}/${encodeURIComponent(key)}`
       if (method === 'GET') {
         const value = platform.getOption(key, scope)
-        return value === undefined ? notFound() : Response.json({ category, key, value })
+        return value === undefined ? optionNotFound(category, key) : Response.json({ self, category, key, value: readableOption(category, key, value) })
       }
       if (method === 'PUT') {
         const value = String((call.body as any)?.value ?? '')
         platform.setOption(key, value, scope)
-        return Response.json({ category, key, value })
+        return Response.json({ self, category, key, value: encrypted(key, value) })
       }
       if (method === 'DELETE') {
-        return platform.deleteOption(key, scope) ? new Response(null, { status: 204 }) : notFound()
+        return platform.deleteOption(key, scope) ? new Response(null, { status: 204 }) : optionNotFound(category, key)
       }
       return undefined
     }
     if (segments.length === 3) {
       if (method === 'PUT') {
+        // verified: the response lists only the keys that were sent
+        const result: Record<string, string> = {}
         for (const [k, v] of Object.entries((call.body as Record<string, string>) ?? {})) {
           platform.setOption(k, String(v), scope)
+          result[k] = encrypted(k, String(v))
         }
+        return Response.json(result)
       }
-      if (method === 'GET' || method === 'PUT') {
+      if (method === 'GET') {
         const prefix = optionId(call.tenant, category, '')
         const result: Record<string, string> = {}
         for (const [id, value] of platform.options) {
           if (id.startsWith(prefix)) {
-            result[id.slice(prefix.length)] = value
+            const key = id.slice(prefix.length)
+            result[key] = readableOption(category, key, value)
           }
         }
         return Response.json(result)

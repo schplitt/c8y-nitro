@@ -1,6 +1,6 @@
 import type { C8yRequest } from '../types'
 import type { BinaryContent, StoredDocument, TenantData } from '../store'
-import { CHILD_KINDS, childIds, deleteManagedObject, store } from '../store'
+import { deleteManagedObject, store } from '../store'
 import { notify } from '../notify'
 import { apiError, baseUrl, checkQuery, paged, raw } from './http'
 import { createManagedObject, notFound, renderManagedObject } from './inventory'
@@ -45,7 +45,13 @@ async function readUpload(call: C8yRequest): Promise<Upload | Response> {
 }
 
 function download(content: BinaryContent): Response {
-  return new Response(content.bytes as unknown as Blob, { headers: { 'content-type': content.contentType, 'content-length': String(content.bytes.length) } })
+  return new Response(content.bytes as unknown as Blob, {
+    headers: {
+      'content-type': content.contentType,
+      'content-length': String(content.bytes.length),
+      'content-disposition': `attachment; filename="${content.name}"`,
+    },
+  })
 }
 
 /**
@@ -93,15 +99,15 @@ export async function inventoryBinaries(call: C8yRequest, segments: string[], da
       checkQuery('GET /inventory/binaries', call, supported)
       const { query } = call
       const ids = query.ids?.split(',')
-      const items = [...data.managedObjects.values()].filter((document) => document.c8y_IsBinary !== undefined
-        && (ids === undefined || ids.includes(document.id))
-        && (query.owner === undefined || document.owner === query.owner)
-        && (query.type === undefined || document.type === query.type)
-        && CHILD_KINDS.every((kind, index) => {
-          const parent = query[['childDeviceId', 'childAssetId', 'childAdditionId'][index]!]
-          return parent === undefined || childIds(data, document.id, kind).includes(parent)
-        }))
-      return paged(call, 'managedObjects', items.map((document) => renderManagedObject(data, document)), '/inventory/binaries')
+      // verified: the child id filters never match a binary
+      const childFilter = ['childDeviceId', 'childAssetId', 'childAdditionId'].some((name) => query[name] !== undefined)
+      const items = childFilter
+        ? []
+        : [...data.managedObjects.values()].filter((document) => document.c8y_IsBinary !== undefined
+          && (ids === undefined || ids.includes(document.id))
+          && (query.owner === undefined || document.owner === query.owner)
+          && (query.type === undefined || document.type === query.type))
+      return paged(call, 'managedObjects', items.map((document) => renderManagedObject(data, document)), '/inventory/binaries', { statistics: 'binaries' })
     }
     return undefined
   }
@@ -110,7 +116,12 @@ export async function inventoryBinaries(call: C8yRequest, segments: string[], da
   const content = data.binaries.get(id)
   if (method === 'GET') {
     checkQuery('GET /inventory/binaries/{id}', call, [])
-    return content ? download(content) : notFound(id)
+    if (!document || !content) {
+      return notFound(id)
+    }
+    // verified: the content type is the object's type when it is a media type
+    const type = typeof document.type === 'string' && /^[\w.+-]+\/[\w.+-]+/.test(document.type) ? document.type : 'application/octet-stream'
+    return download({ ...content, contentType: type })
   }
   if (method === 'PUT') {
     checkQuery('PUT /inventory/binaries/{id}', call, [])
@@ -121,22 +132,28 @@ export async function inventoryBinaries(call: C8yRequest, segments: string[], da
     if (upload instanceof Response) {
       return upload
     }
+    // verified: type and content type follow the request, 201 without a body
     data.binaries.set(id, { ...upload.content, name: content.name })
+    document.type = upload.content.contentType
     document.contentType = upload.content.contentType
     document.length = upload.content.bytes.length
     document.lastUpdated = store.now()
-    const rendered = renderManagedObject(data, document)
-    notify(data, 'managedobjects', 'UPDATE', rendered, id)
-    return Response.json(rendered, { status: 201 })
+    notify(data, 'managedobjects', 'UPDATE', renderManagedObject(data, document), id)
+    return new Response(null, { status: 201 })
   }
   if (method === 'DELETE') {
     checkQuery('DELETE /inventory/binaries/{id}', call, [])
-    if (!content || !deleteManagedObject(data, id)) {
+    // verified: the binaries API deletes any managed object
+    if (!deleteManagedObject(data, id)) {
       return notFound(id)
     }
     data.binaries.delete(id)
     notify(data, 'managedobjects', 'DELETE', { id }, id)
     return new Response(null, { status: 204 })
+  }
+  if (method === 'POST') {
+    // verified against the platform
+    return apiError(405, 'general/Method Not Allowed', 'Request method \'POST\' is not supported')
   }
   return undefined
 }
@@ -147,7 +164,6 @@ function renderAttachment(eventId: string, content: BinaryContent) {
     source: eventId,
     name: content.name,
     type: content.contentType,
-    length: content.bytes.length,
   }
 }
 
@@ -160,32 +176,41 @@ function renderAttachment(eventId: string, content: BinaryContent) {
 export async function eventBinaries(call: C8yRequest, eventId: string, data: TenantData): Promise<Response | undefined> {
   const { method } = call
   if (!data.events.has(eventId)) {
-    return apiError(404, 'event/Not Found', `Finding event from database failed : No event for id '${eventId}'!`)
+    return apiError(404, 'event/Not Found', `Finding event from database failed : No event for gid '${eventId}'!`)
   }
   const existing = data.eventBinaries.get(eventId)
 
   if (method === 'POST' || method === 'PUT') {
     checkQuery(`${method} /event/events/{id}/binaries` as 'POST /event/events/{id}/binaries', call, [])
     if (method === 'POST' && existing) {
-      return apiError(409, 'event/Conflict', `Event '${eventId}' already has an attachment`)
+      return apiError(409, 'event/Duplicate', 'Binary already exists.')
+    }
+    // verified against the platform: a raw JSON body is not an upload; raw
+    // uploads are named after the event; no content type means text/plain
+    const { contentType } = raw(call)
+    if (/^application\/json/i.test(contentType)) {
+      return apiError(400, 'event/Bad Request', 'Unsupported content type for an attachment: application/json')
     }
     const upload = await readUpload(call)
     if (upload instanceof Response) {
       return upload
     }
-    const content = { ...upload.content, name: method === 'PUT' && existing ? existing.name : upload.content.name }
+    const multipart = contentType.startsWith('multipart/')
+    const content = {
+      ...upload.content,
+      contentType: contentType ? upload.content.contentType : 'text/plain;charset=UTF-8',
+      name: multipart ? upload.content.name : eventId,
+    }
     data.eventBinaries.set(eventId, content)
     return Response.json(renderAttachment(eventId, content), { status: 201 })
   }
   if (method === 'GET') {
     checkQuery('GET /event/events/{id}/binaries', call, [])
-    return existing ? download(existing) : apiError(404, 'event/Not Found', `Event '${eventId}' has no attachment`)
+    return existing ? download(existing) : apiError(404, 'event/Not Found', 'Attachment not found')
   }
   if (method === 'DELETE') {
     checkQuery('DELETE /event/events/{id}/binaries', call, [])
-    if (!existing) {
-      return apiError(404, 'event/Not Found', `Event '${eventId}' has no attachment`)
-    }
+    // verified: deleting a missing attachment succeeds
     data.eventBinaries.delete(eventId)
     return new Response(null, { status: 204 })
   }

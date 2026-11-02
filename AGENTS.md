@@ -85,7 +85,7 @@ src/
       ├── tenantOptionFetchers.ts # Internal tenant option fetcher registry for runtime handlers
       └── tenant.ts           # Internal current-user tenant resolution and cache helpers
 tests/
-├── contract/scenarios.ts       # Contract scenarios for the fake tenant (real @c8y/client; written to also run against a real tenant)
+├── contract/                   # Contract scenarios for the fake tenant (scenarios/<area>.ts; run against the fake and, via pnpm test:contract, a real tenant)
 ├── unit/                       # Unit tests for individual functions
 │   ├── apiClient.test.ts       # API client generation tests
 │   ├── c8yzip.test.ts          # Zip creation tests
@@ -190,13 +190,13 @@ When you emulate a new endpoint, add it to `ENDPOINTS` in `scripts/generate-test
 
 ### Contract scenarios against a real tenant (`test:contract`)
 
-`tests/contract/scenarios.ts` runs against the fake in `pnpm test` (`tests/server/contract.test.ts`) and against a **real tenant** with:
+`tests/contract/scenarios/*.ts` (one file per API area, combined in `tests/contract/scenarios.ts`, shared helpers in `tests/contract/helpers.ts`) run against the fake in `pnpm test` (`tests/server/contract.test.ts`) and against a **real tenant** with:
 
 ```sh
 pnpm test:contract
 ```
 
-Credentials come from the environment or `.env` / `playground/.env` (`C8Y_CONTRACT_BASEURL/TENANT/USER/PASSWORD`, else `C8Y_BASEURL` + `C8Y_DEVELOPMENT_*`). Never print or read them in agent sessions; the runner loads them itself. Every scenario names its data with a unique run id and the runner deletes it afterwards. Not part of `pnpm test` or CI. Run it after changing fake behavior; a failure there means the fake is wrong. Scenarios must pass on both: use `eventually()` for writes the platform applies asynchronously (bulk deletes, parent indexing). The real platform differs from the API docs in places (e.g. 422 instead of 400, unvalidated alarm severities, `next` links past the end): when a real-tenant run disagrees with the docs, the platform wins — fix the fake, mark the code with `verified against the platform`, and note it in the guide's assumptions. The runner's cleanup deletes binaries through `/inventory/binaries` (the inventory API refuses them).
+Credentials come from the environment or `.env` / `playground/.env` (`C8Y_CONTRACT_BASEURL/TENANT/USER/PASSWORD`, else `C8Y_BASEURL` + `C8Y_DEVELOPMENT_*`). Never print or read them in agent sessions; the runner loads them itself. Every scenario names its data with a unique run id and the runner deletes it afterwards. Not part of `pnpm test` or CI. Run it after changing fake behavior; a failure there means the fake is wrong. **Coverage rule:** the fake runner fails if any emulated endpoint (the generated table plus the built-in endpoints) is never called by a scenario. Run `C8Y_CONTRACT_COVERAGE=1 npx vitest run --project server tests/server/contract.test.ts --disableConsoleIntercept` to print untested endpoints and spec query parameters. A new emulated endpoint or parameter needs a scenario that passes against both. Scenarios must pass on both: use `eventually()` for writes the platform applies asynchronously (bulk deletes, parent indexing). The real platform differs from the API docs in places (e.g. 422 instead of 400, unvalidated alarm severities, `next` links past the end): when a real-tenant run disagrees with the docs, the platform wins — fix the fake, mark the code with `verified against the platform`, and note it in the guide's assumptions. The runner's cleanup deletes binaries through `/inventory/binaries` (the inventory API refuses them).
 
 ### Testing the Playground
 

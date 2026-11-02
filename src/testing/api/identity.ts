@@ -1,7 +1,7 @@
 import type { C8yRequest } from '../types'
 import type { ExternalId, TenantData } from '../store'
-import { apiError, baseUrl, checkQuery, paged } from './http'
-import { moSelf, notFound } from './inventory'
+import { apiError, baseUrl, checkQuery } from './http'
+import { moSelf } from './inventory'
 
 function renderExternalId(entry: ExternalId) {
   return {
@@ -21,7 +21,8 @@ function renderExternalId(entry: ExternalId) {
  */
 export function addExternalId(data: TenantData, managedObjectId: string, type: string, externalId: string): Response | ExternalId {
   if (!data.managedObjects.has(managedObjectId)) {
-    return notFound(managedObjectId)
+    // verified against the platform
+    return apiError(404, 'identity/Not Found', `Global id not found; global id = ${managedObjectId}`)
   }
   const existing = data.externalIds.find((entry) => entry.type === type && entry.externalId === externalId)
   if (existing) {
@@ -67,19 +68,19 @@ export function identity(call: C8yRequest, segments: string[], data: TenantData)
   if (resource === 'globalIds' && a !== undefined && b === 'externalIds' && segments.length === 4) {
     if (method === 'GET') {
       checkQuery('GET /identity/globalIds/{id}/externalIds', call, [])
-      if (!data.managedObjects.has(a)) {
-        return notFound(a)
-      }
-      const items = data.externalIds.filter((entry) => entry.managedObjectId === a).map(renderExternalId)
-      return paged(call, 'externalIds', items, `/identity/globalIds/${a}/externalIds`)
+      // verified: no paging, and unknown objects have no external ids (200)
+      const externalIds = data.externalIds.filter((entry) => entry.managedObjectId === a).map(renderExternalId)
+      return Response.json({ self: `${baseUrl()}/identity/globalIds/${a}/externalIds`, externalIds })
     }
     if (method === 'POST') {
       checkQuery('POST /identity/globalIds/{id}/externalIds', call, [])
       const body = (call.body ?? {}) as { type?: string, externalId?: string }
-      if (!body.type || !body.externalId) {
-        return apiError(422, 'undefined/validationError', 'Following mandatory fields should be included: externalId,type')
+      const missing = (['type', 'externalId'] as const).find((field) => !body[field])
+      if (missing) {
+        // verified: empty strings count as missing
+        return apiError(422, 'undefined/validationError', `post.input.${missing}: must not be empty`)
       }
-      const result = addExternalId(data, a, body.type, body.externalId)
+      const result = addExternalId(data, a, body.type!, body.externalId!)
       return result instanceof Response ? result : Response.json(renderExternalId(result), { status: 201 })
     }
   }

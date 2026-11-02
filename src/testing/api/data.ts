@@ -54,7 +54,38 @@ function publish(data: TenantData, resource: Resource, action: 'CREATE' | 'UPDAT
 }
 
 function notFound(resource: Resource, id: string): Response {
-  return apiError(404, `${resource.domain}/Not Found`, `Finding ${resource.collection.slice(0, -1)} from database failed : No ${resource.collection.slice(0, -1)} for id '${id}'!`)
+  const name = resource.collection.slice(0, -1)
+  return apiError(404, `${resource.domain}/Not Found`, `Finding ${name} from database failed : No ${name} for gid '${id}'!`)
+}
+
+const DATE_PARAMS = ['dateFrom', 'dateTo', 'createdFrom', 'createdTo', 'lastUpdatedFrom', 'lastUpdatedTo']
+
+/**
+ * 422 for date query parameters that are not dates (verified for measurements and events).
+ * @param call - The request
+ */
+function checkDates(call: C8yRequest): Response | undefined {
+  for (const name of DATE_PARAMS) {
+    const value = call.query[name]
+    if (value !== undefined && Number.isNaN(Date.parse(value))) {
+      return apiError(422, `${value} is not a valid date./Invalid Data`, `${value} is not a valid date.`)
+    }
+  }
+  return undefined
+}
+
+/**
+ * Date range match: from inclusive, to exclusive; equal bounds match exactly
+ * that instant (verified against the platform).
+ * @param value - ISO date of the document
+ * @param from - Range start
+ * @param to - Range end
+ */
+function inDateRange(value: unknown, from: string | undefined, to: string | undefined): boolean {
+  if (from !== undefined && to !== undefined && Date.parse(from) === Date.parse(to)) {
+    return Date.parse(String(value)) === Date.parse(from)
+  }
+  return inRange(value, from, to)
 }
 
 function invalid(message: string): Response {
@@ -81,14 +112,42 @@ function omitServerFields(body: Record<string, unknown>): Record<string, unknown
  */
 export function createDocument(data: TenantData, resource: Resource, body: Record<string, unknown>): StoredDocument | Response {
   const endpoint = `POST ${resource.path}` as C8yEndpoint
+  if (resource.collection === 'events' && (body.source === undefined || body.source === null)) {
+    // verified: a missing event source is reported before other fields
+    return apiError(422, 'event/Invalid Data', 'Source of the event must not be null')
+  }
   const missing = checkRequired(endpoint, body)
   if (missing) {
     return missing
   }
+  if (resource.collection !== 'operations' && Number.isNaN(Date.parse(String(body.time)))) {
+    // verified: an unparseable time fails JSON parsing on the platform
+    return apiError(400, `${resource.domain}/Bad Request`, 'Failed to parse JSON string')
+  }
+  if (resource.collection !== 'measurements') {
+    // verified: the platform owns these fields, sending them is an error
+    const owned = resource.collection === 'operations' ? ['id', 'creationTime', 'status', 'failureReason'] : ['id', 'creationTime']
+    const field = owned.find((name) => body[name] !== undefined)
+    if (field) {
+      return apiError(422, 'undefined/validationError', `post.input.${field}: is not allowed here`)
+    }
+  }
+  if (resource.collection === 'operations') {
+    // verified: at least one property besides the device (the description counts)
+    if (Object.keys(body).every((key) => key === 'deviceId')) {
+      return apiError(422, 'devicecontrol/Invalid Data', 'At least one weak-typed property must be included')
+    }
+  }
   const now = store.now()
   const source = resource.collection === 'operations' ? body.deviceId as string : sourceId(body)
-  if (source !== undefined && !data.managedObjects.has(String(source))) {
-    return invalid(`Source with id '${String(source)}' does not exist`)
+  if (source === undefined && resource.collection !== 'operations') {
+    return apiError(422, `${resource.domain}/Invalid Data`, 'Source id must not be null')
+  }
+  if (!data.managedObjects.has(String(source)) && resource.collection !== 'operations') {
+    // verified: 404 for alarms, 422 for measurements and events
+    return resource.collection === 'alarms'
+      ? apiError(404, 'inventory/Not Found', `Finding device data from database failed : No managedObject for id '${String(source)}'!`)
+      : apiError(422, `${resource.domain}/Unprocessable Entity`, 'Source object does not exist in inventory.')
   }
 
   if (resource.collection === 'operations' && !hasAgent(data, String(source))) {
@@ -104,6 +163,8 @@ export function createDocument(data: TenantData, resource: Resource, body: Recor
     const existing = [...data.alarms.values()].find((alarm) =>
       sourceId(alarm) === source && alarm.type === body.type && alarm.status !== 'CLEARED')
     if (existing && body.status !== 'CLEARED') {
+      // verified: text and severity stay, the first occurrence is recorded
+      existing.firstOccurrenceTime ??= existing.time
       existing.count = (existing.count as number) + 1
       existing.time = body.time
       existing.lastUpdated = now
@@ -126,7 +187,6 @@ export function createDocument(data: TenantData, resource: Resource, body: Recor
   if (resource.collection === 'alarms') {
     document.status ??= 'ACTIVE'
     document.count = 1
-    document.firstOccurrenceTime = body.time
   }
   if (resource.collection === 'operations') {
     document.status = 'PENDING'
@@ -164,15 +224,40 @@ function hasAgent(data: TenantData, deviceId: string, seen = new Set<string>()):
  * @returns An error response, if invalid
  */
 export function updateDocument(data: TenantData, resource: Resource, document: StoredDocument, body: Record<string, unknown>): Response | undefined {
-  const readOnly = resource.collection === 'operations' ? ['deviceId'] : ['source', 'time', 'type']
+  const readOnly = resource.collection === 'operations' ? ['deviceId', 'deviceName'] : ['source', 'time', 'type']
   if (resource.collection === 'operations') {
     const error = checkEnum('status', body.status, C8Y_ENUMS.operationStatus)
     if (error) {
       return error
     }
   }
+  if (resource.collection === 'operations') {
+    // verified against the platform
+    const fixed = ['creationTime'].find((field) => body[field] !== undefined)
+      ?? (body.deviceId !== undefined && String(body.deviceId) !== document.deviceId ? 'deviceId' : undefined)
+    if (fixed) {
+      return apiError(422, 'undefined/validationError', `put.operation.${fixed}: is not allowed here`)
+    }
+    if (body.failureReason !== undefined && body.failureReason !== null && body.status !== 'FAILED') {
+      return apiError(422, 'devicecontrol/Invalid Data', 'failureReason can only be set for the status FAILED')
+    }
+    if (body.status !== undefined && body.status !== 'FAILED') {
+      delete document.failureReason
+    }
+  }
+  if (resource.collection === 'alarms') {
+    // verified: these are rejected; source, id, and self are ignored
+    const fixed = ['type', 'time', 'count', 'creationTime', 'lastUpdated', 'firstOccurrenceTime'].find((field) => body[field] !== undefined)
+    if (fixed) {
+      return apiError(422, 'undefined/validationError', `put.alarm.${fixed}: is not allowed here`)
+    }
+  }
   for (const [key, value] of Object.entries(omitServerFields(body))) {
     if (readOnly.includes(key)) {
+      continue
+    }
+    if (value === null && key === 'text' && resource.collection === 'events') {
+      // verified: `text: null` keeps the text
       continue
     }
     if (value === null) {
@@ -185,6 +270,30 @@ export function updateDocument(data: TenantData, resource: Resource, document: S
     document.lastUpdated = store.now()
   }
   publish(data, resource, 'UPDATE', document)
+  return undefined
+}
+
+/**
+ * Event updates the platform rejects (verified against the platform).
+ * @param call - The request
+ * @param id - Event id from the URL
+ * @param body - Update
+ */
+function checkEventUpdate(call: C8yRequest, id: string, body: Record<string, unknown>): Response | undefined {
+  const contentType = call.headers['content-type'] ?? ''
+  if (contentType && !/json/i.test(contentType)) {
+    return apiError(415, 'general/Unsupported Media Type', `Content type '${contentType}' not supported`)
+  }
+  if (body.id !== undefined && String(body.id) !== id) {
+    return apiError(422, 'event/Invalid Data', 'Id from representation must be the same like in url')
+  }
+  if (body.source !== undefined) {
+    return apiError(422, 'event/Invalid Data', 'Invalid value for source argument! : Value must be null!')
+  }
+  const forbidden = ['time', 'type', 'creationTime', 'lastUpdated'].find((field) => body[field] !== undefined)
+  if (forbidden) {
+    return apiError(422, 'undefined/validationError', `put.eventRepresentation.${forbidden}: is not allowed here`)
+  }
   return undefined
 }
 
@@ -204,7 +313,8 @@ function list(call: C8yRequest, data: TenantData, resource: Resource): StoredDoc
     items = items.filter((document) => types.includes(String(document.type)))
   }
   if (query.status) {
-    const statuses = values('status')!
+    // operations: one status only (lists are rejected in documents())
+    const statuses = resource.collection === 'operations' ? [query.status] : values('status')!
     items = items.filter((document) => statuses.includes(String(document.status)))
   }
   if (query.severity) {
@@ -226,28 +336,31 @@ function list(call: C8yRequest, data: TenantData, resource: Resource): StoredDoc
   }
   const timeField = resource.collection === 'operations' ? 'creationTime' : 'time'
   if (query.dateFrom !== undefined || query.dateTo !== undefined) {
-    items = items.filter((document) => inRange(document[timeField], query.dateFrom, query.dateTo))
+    items = items.filter((document) => inDateRange(document[timeField], query.dateFrom, query.dateTo))
   }
   if (query.createdFrom !== undefined || query.createdTo !== undefined) {
-    items = items.filter((document) => inRange(document.creationTime, query.createdFrom, query.createdTo))
+    items = items.filter((document) => inDateRange(document.creationTime, query.createdFrom, query.createdTo))
   }
   if (query.lastUpdatedFrom !== undefined || query.lastUpdatedTo !== undefined) {
-    items = items.filter((document) => inRange(document.lastUpdated, query.lastUpdatedFrom, query.lastUpdatedTo))
+    items = items.filter((document) => inDateRange(document.lastUpdated, query.lastUpdatedFrom, query.lastUpdatedTo))
   }
 
-  // Default orders: measurements newest first (time series persistence,
-  // verified against the platform; `revert=false` gives oldest first), events
-  // and alarms newest first, operations by ascending id.
+  // Orders (verified against the platform): measurements and events newest
+  // first; `revert` only matters together with a date range (measurements:
+  // revert=false → oldest first, events: revert=true → oldest first). Alarms
+  // newest first, operations by ascending id.
   const revert = flag(call, 'revert')
+  const hasRange = query.dateFrom !== undefined || query.dateTo !== undefined
   switch (resource.collection) {
     case 'measurements':
-      return byTime(items, 'time', call.query.revert === undefined ? true : revert)
+      return byTime(items, 'time', !(hasRange && query.revert === 'false'))
     case 'events':
-      return byTime(items, 'time', !revert)
+      return byTime(items, 'time', !(hasRange && revert))
     case 'alarms':
       return byTime(items, 'time', true)
     default:
-      return revert ? [...items].reverse() : items
+      // verified: operations are ascending by id; revert needs a date range
+      return hasRange && revert ? [...items].reverse() : items
   }
 }
 
@@ -278,6 +391,10 @@ export function documents(call: C8yRequest, segments: string[], data: TenantData
         ? ['dateFrom', 'dateTo', 'fragmentType', 'source', 'type']
         : ['createdFrom', 'createdTo', 'dateFrom', 'dateTo', 'fragmentType', 'source', 'type']
       checkQuery(`DELETE ${resource.path}` as C8yEndpoint, call, supported)
+      const dateError = checkDates(call)
+      if (dateError) {
+        return dateError
+      }
       if (resource.collection === 'measurements') {
         // verified against the platform
         const unaligned = ['dateFrom', 'dateTo'].some((name) => call.query[name] !== undefined && Date.parse(call.query[name]!) % 3_600_000 !== 0)
@@ -285,7 +402,13 @@ export function documents(call: C8yRequest, segments: string[], data: TenantData
           return apiError(422, 'measurement/Invalid Data', 'Date from and date to parameters used for delete filter must be truncated to hour!')
         }
       }
-      for (const document of list(call, data, resource)) {
+      let target = call
+      const { dateFrom, dateTo } = call.query
+      if (resource.collection === 'measurements' && dateFrom !== undefined && dateFrom === dateTo) {
+        // verified: equal bounds delete the whole hour
+        target = { ...call, query: { ...call.query, dateTo: new Date(Date.parse(dateFrom) + 3_600_000).toISOString() } }
+      }
+      for (const document of list(target, data, resource)) {
         collection.delete(document.id)
         data.eventBinaries.delete(document.id)
         publish(data, resource, 'DELETE', document)
@@ -294,6 +417,14 @@ export function documents(call: C8yRequest, segments: string[], data: TenantData
     }
     if (method === 'GET') {
       checkQuery(`GET ${resource.path}` as C8yEndpoint, call, resource.listParams)
+      const dateError = checkDates(call)
+      if (dateError) {
+        return dateError
+      }
+      if (resource.collection === 'operations' && call.query.status !== undefined && !C8Y_ENUMS.operationStatus.includes(call.query.status as any)) {
+        // verified: a single, known status
+        return apiError(422, 'devicecontrol/Invalid Data', `Invalid status value: ${call.query.status}`)
+      }
       return paged(call, resource.collection, list(call, data, resource).map((document) => renderDocument(data, resource, document)), resource.path)
     }
     if (method === 'POST') {
@@ -315,8 +446,16 @@ export function documents(call: C8yRequest, segments: string[], data: TenantData
     }
     if (method === 'PUT' && resource.collection === 'alarms') {
       checkQuery('PUT /alarm/alarms', call, ['createdFrom', 'createdTo', 'dateFrom', 'dateTo', 'resolved', 'severity', 'source', 'status'])
+      const dateError = checkDates(call)
+      if (dateError) {
+        return dateError
+      }
+      // verified: the status is mandatory and the only field applied
+      if (body.status === undefined) {
+        return apiError(422, 'alarm/Invalid Data', 'Missing status for bulk alarm update')
+      }
       for (const alarm of list(call, data, resource)) {
-        const error = updateDocument(data, resource, alarm, body)
+        const error = updateDocument(data, resource, alarm, { status: body.status })
         if (error) {
           return error
         }
@@ -334,7 +473,15 @@ export function documents(call: C8yRequest, segments: string[], data: TenantData
       // verified: time series persistence (the default) cannot read single measurements
       return apiError(405, 'measurement/Method Not Allowed', 'Reading a single measurement is not supported with time series persistence')
     }
-    return document ? Response.json(renderDocument(data, resource, document)) : notFound(resource, id)
+    if (!document) {
+      return notFound(resource, id)
+    }
+    const rendered = renderDocument(data, resource, document)
+    if (resource.collection === 'operations') {
+      // verified: a single read has no device name
+      delete rendered.deviceName
+    }
+    return Response.json(rendered)
   }
   if (method === 'PUT' && resource.collection !== 'measurements') {
     checkQuery(`PUT ${detail}` as C8yEndpoint, call, [])
@@ -343,6 +490,12 @@ export function documents(call: C8yRequest, segments: string[], data: TenantData
     }
     if (resource.collection === 'operations' && body.status === undefined) {
       return invalid('Following mandatory fields should be included: status')
+    }
+    if (resource.collection === 'events') {
+      const error = checkEventUpdate(call, id, body)
+      if (error) {
+        return error
+      }
     }
     const error = updateDocument(data, resource, document, body)
     return error ?? Response.json(renderDocument(data, resource, document))
@@ -411,32 +564,36 @@ function series(call: C8yRequest, data: TenantData): Response {
   checkQuery('GET /measurement/measurements/series', call, ['aggregationFunction', 'aggregationInterval', 'aggregationType', 'dateFrom', 'dateTo', 'revert', 'series', 'source'])
   const { query } = call
   const params = raw(call).params
-  const missing = ['source', 'dateFrom', 'dateTo'].filter((name) => !query[name])
-  if (missing.length > 0) {
-    return apiError(422, 'measurement/Invalid Data', `Missing mandatory parameters: ${missing.join(', ')}`)
+  // validation order and messages verified against the platform
+  if (['source', 'dateFrom', 'dateTo'].some((name) => !query[name])) {
+    return apiError(400, 'measurement/Bad Request', 'The query parameters source, dateFrom and dateTo are required for this request.')
+  }
+  const dateError = checkDates(call)
+  if (dateError) {
+    return dateError
   }
   const functions = params.getAll('aggregationFunction')
-  const interval = query.aggregationInterval ?? (query.aggregationType ? AGGREGATION_TYPES[query.aggregationType] : undefined)
-  if (query.aggregationType && !C8Y_ENUMS.seriesAggregationType.includes(query.aggregationType as any)) {
-    return apiError(422, 'measurement/Invalid Data', `Invalid aggregationType '${query.aggregationType}'`)
-  }
-  if (functions.length > 0 && !query.aggregationInterval) {
-    // verified: 422 (the docs say 400)
-    return apiError(422, 'measurements/Invalid Data', 'Cannot specify aggregation functions if `aggregationType` is not provided!')
+  if (query.aggregationType && !Object.hasOwn(AGGREGATION_TYPES, query.aggregationType)) {
+    return apiError(400, 'measurement/Bad Request', `Invalid value '${query.aggregationType}' for aggregationType. Allowed values: HOURLY, DAILY, MINUTELY`)
   }
   const unknownFunction = functions.find((fn) => !C8Y_ENUMS.seriesAggregationFunction.includes(fn as any))
   if (unknownFunction) {
-    return apiError(422, 'measurement/Invalid Data', `Invalid aggregationFunction '${unknownFunction}'`)
+    return apiError(400, 'measurement/Bad Request', `Invalid value '${unknownFunction}' for aggregationFunction. Allowed values: min, max, avg, sum, count, stdDevPop, stdDevSamp`)
+  }
+  const interval = query.aggregationInterval ?? (query.aggregationType ? AGGREGATION_TYPES[query.aggregationType] : undefined)
+  if (functions.length > 0 && !interval) {
+    // verified: 422 (the docs say 400)
+    return apiError(422, 'measurements/Invalid Data', 'Cannot specify aggregation functions if `aggregationType` is not provided!')
   }
   if (interval && !/^[1-9]\d{0,2}[smhdwMqy]$/.test(interval)) {
-    return apiError(422, 'measurement/Invalid Data', `Invalid aggregationInterval '${interval}'`)
+    return apiError(422, 'measurement/Invalid Data', `Invalid aggregation interval: ${interval}`)
   }
   const wanted = params.getAll('series')
 
   // series = fragment.series pairs with a numeric `value`
   const points: Array<{ time: number, key: string, value: number, unit?: string, type: string, name: string }> = []
   for (const measurement of data.measurements.values()) {
-    if (sourceId(measurement) !== query.source || !inRange(measurement.time, query.dateFrom, query.dateTo)) {
+    if (sourceId(measurement) !== query.source || !inDateRange(measurement.time, query.dateFrom, query.dateTo)) {
       continue
     }
     for (const [fragment, fragmentValue] of Object.entries(measurement)) {
@@ -466,15 +623,19 @@ function series(call: C8yRequest, data: TenantData): Response {
     bucket.set(point.key, [...(bucket.get(point.key) ?? []), point.value])
     buckets.set(time, bucket)
   }
-  // oldest first unless revert=true (verified against the platform)
-  const times = [...buckets.keys()].sort((a, b) => flag(call, 'revert') ? b - a : a - b)
+  // always oldest first, `revert` is ignored (verified against the platform)
+  const times = [...buckets.keys()].sort((a, b) => a - b)
   const fns = functions.length > 0 ? functions : ['min', 'max']
   const values: Record<string, Array<Record<string, number> | null>> = {}
   for (const time of times) {
     const bucket = buckets.get(time)!
     values[new Date(time).toISOString()] = seriesList.map((item) => {
       const numbers = bucket.get(item.key)
-      return numbers ? Object.fromEntries(fns.map((fn) => [fn, aggregate(numbers, fn)])) : null
+      if (numbers) {
+        return Object.fromEntries(fns.map((fn) => [fn, aggregate(numbers, fn)]))
+      }
+      // verified: empty buckets give 0 for sum and count, null otherwise
+      return fns.every((fn) => fn === 'sum' || fn === 'count') ? Object.fromEntries(fns.map((fn) => [fn, 0])) : null
     })
   }
   return Response.json({

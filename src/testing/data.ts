@@ -242,6 +242,9 @@ function seedInto(data: TenantData, collection: Exclude<DocumentCollection, 'man
   }
   if (collection === 'operations') {
     delete body.time
+    // applied as an update below: the platform rejects them on create
+    delete body.status
+    delete body.failureReason
     body.deviceId = resolveId(input.deviceId as C8yIdInput)
   }
   const result = createDocument(data, resource, body)

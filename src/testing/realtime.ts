@@ -61,6 +61,25 @@ const OPEN = 1
 const CLOSING = 2
 const CLOSED = 3
 
+/**
+ * Standard properties, which `fragmentsToCopy` always keeps (verified for
+ * events; assumed for the other APIs).
+ */
+const STANDARD_FIELDS = new Set(['id', 'self', 'type', 'text', 'time', 'source', 'creationTime', 'lastUpdated', 'severity', 'status', 'count', 'firstOccurrenceTime', 'deviceId', 'deviceName', 'description', 'failureReason', 'name', 'owner'])
+
+/**
+ * With `fragmentsToCopy`, the platform delivers only the named fragments next
+ * to the standard properties.
+ * @param document - The rendered object
+ * @param fragments - The subscription's `fragmentsToCopy`
+ */
+function copyFragments(document: StoredDocument, fragments: string[] | undefined): StoredDocument {
+  if (!fragments || fragments.length === 0) {
+    return document
+  }
+  return Object.fromEntries(Object.entries(document).filter(([key]) => STANDARD_FIELDS.has(key) || fragments.includes(key))) as StoredDocument
+}
+
 function typesOf(typeFilter: string | undefined): string[] | undefined {
   if (!typeFilter) {
     return undefined
@@ -154,7 +173,7 @@ export const realtime = {
    * @param sourceId - Device id the notification is about
    */
   publish(tenant: string, api: RealtimeApi, action: 'CREATE' | 'UPDATE' | 'DELETE', document: StoredDocument, sourceId: string | undefined): void {
-    const names = new Set<string>()
+    const names = new Map<string, FakeSubscription>()
     for (const subscription of this.subscriptions) {
       if (subscription.tenant !== tenant) {
         continue
@@ -170,15 +189,15 @@ export const realtime = {
       if (types && !types.includes(String(document.type))) {
         continue
       }
-      names.add(subscription.subscription)
+      names.set(subscription.subscription, subscription)
     }
-    for (const name of names) {
+    for (const [name, subscription] of names) {
       const ackId = String(this.nextAck++)
       // verified: a DELETE notification's payload is not JSON but an opaque
       // Java object string; the deleted object's id is only in the description
       const payload = action === 'DELETE'
         ? `com.cumulocity.notification.service.RealtimeDeletedObject$1@${(this.nextAck * 2654435761 >>> 0).toString(16)}`
-        : JSON.stringify(document)
+        : JSON.stringify(copyFragments(document, subscription.fragmentsToCopy))
       const frame: Frame = {
         ackId,
         text: `${ackId}\n/${tenant}/${api}/${sourceId ?? document.id}\n${action}\n\n${payload}`,
@@ -189,8 +208,7 @@ export const realtime = {
           this.deliver(socket, frame)
         }
       } else {
-        const subscription = this.subscriptions.find((item) => item.tenant === tenant && item.subscription === name)
-        if (!subscription?.nonPersistent) {
+        if (!subscription.nonPersistent) {
           const key = this.key(tenant, name)
           this.backlog.set(key, [...(this.backlog.get(key) ?? []), frame])
         }

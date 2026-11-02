@@ -96,28 +96,42 @@ export function flag(call: C8yRequest, name: string, fallback = false): boolean 
  * @param collection - Property name, e.g. `managedObjects`
  * @param items - All matching items, in result order
  * @param path - Collection path, e.g. `/inventory/managedObjects`
+ * @param options - Paging options
+ * @param options.statistics - `binaries`: always `totalPages`, never `totalElements`
  */
-export function paged(call: C8yRequest, collection: string, items: unknown[], path: string): Response {
-  const pageSize = Math.min(Math.max(Number.parseInt(call.query.pageSize ?? '5', 10) || 5, 1), 2000)
-  const currentPage = Math.max(Number.parseInt(call.query.currentPage ?? '1', 10) || 1, 1)
+export function paged(call: C8yRequest, collection: string, items: unknown[], path: string, options: { statistics?: 'requested' | 'binaries' } = {}): Response {
+  for (const name of ['pageSize', 'currentPage']) {
+    const value = call.query[name]
+    if (value !== undefined && !/^-?\d+$/.test(value)) {
+      // verified against the platform
+      return apiError(422, 'undefined/validationError', `Parameter '${name}' must have an integer value!`)
+    }
+  }
+  // verified: 0 means 1, at most 2000
+  const pageSize = Math.min(Math.max(Number.parseInt(call.query.pageSize ?? '5', 10), 1), 2000)
+  const currentPage = Math.max(Number.parseInt(call.query.currentPage ?? '1', 10), 1)
   const page = items.slice((currentPage - 1) * pageSize, currentPage * pageSize)
   const link = (pageNumber: number) => {
     const params = new URLSearchParams({ ...call.query, pageSize: String(pageSize), currentPage: String(pageNumber) })
     return `${baseUrl()}${path}?${params}`
   }
   const statistics: Record<string, number> = { currentPage, pageSize }
-  if (flag(call, 'withTotalPages')) {
-    statistics.totalPages = Math.ceil(items.length / pageSize)
+  const totalPages = Math.ceil(items.length / pageSize)
+  // verified: the binaries list always has totalPages and never totalElements
+  const withTotalPages = options.statistics === 'binaries' || flag(call, 'withTotalPages')
+  if (withTotalPages) {
+    statistics.totalPages = totalPages
   }
-  if (flag(call, 'withTotalElements')) {
+  if (options.statistics !== 'binaries' && flag(call, 'withTotalElements')) {
     statistics.totalElements = items.length
   }
   return Response.json({
     self: link(currentPage),
     [collection]: page,
     statistics,
-    // verified: the platform always links the next page, even past the end
-    next: link(currentPage + 1),
+    // verified: the next page is linked even past the end, unless the total
+    // page count is known
+    ...(withTotalPages && currentPage >= totalPages ? {} : { next: link(currentPage + 1) }),
     ...(currentPage > 1 ? { prev: link(currentPage - 1) } : {}),
   })
 }

@@ -321,7 +321,7 @@ The fake implements a documented subset of the Cumulocity REST API. Request and 
 | Tenant options               | read, write, delete, and list per category and tenant                                                                                                                                                                                                                                                                    |
 | Inventory                    | create, read, update (fragments merge, `null` removes), delete; list by `type`, `fragmentType`, `ids`, `owner`, `text`, `childDeviceId`/`childAssetId`/`childAdditionId`, `onlyRoots`, and `query`/`q` (see below); child devices, assets, and additions with parent references                                          |
 | Binaries                     | upload (multipart), download, replace, delete, list                                                                                                                                                                                                                                                                      |
-| Notification 2.0             | subscriptions (`mo` and `tenant` context, `apis`, `typeFilter`), tokens, unsubscribe, and the consumer WebSocket of c8y-nitro's realtime client                                                                                                                                                                          |
+| Notification 2.0             | subscriptions (`mo` and `tenant` context, `apis`, `typeFilter`, `fragmentsToCopy`), tokens, unsubscribe, and the consumer WebSocket of c8y-nitro's realtime client                                                                                                                                                                          |
 | Identity                     | external IDs: create, read, delete, list per managed object                                                                                                                                                                                                                                                              |
 | Measurements                 | create (single or collection), read, delete, bulk delete by filter, list by `source`, `type`, `valueFragmentType`/`valueFragmentSeries`, `dateFrom`/`dateTo`, `revert`; `series` with `aggregationInterval`/`aggregationType` and `aggregationFunction` (`min`, `max`, `avg`, `sum`, `count`, `stdDevPop`, `stdDevSamp`) |
 | Events                       | create, read, update, delete, bulk delete by filter, list by `source`, `type`, `fragmentType`, date ranges, `revert`; attachments (upload, download, replace, delete)                                                                                                                                                    |
@@ -332,34 +332,40 @@ All lists support `pageSize`, `currentPage`, `withTotalPages`, and `withTotalEle
 
 - `eq`, `gt`, `ge`, `lt`, `le`, `and`, `or`, `not()`, parentheses, and `$orderby`
 - `has()`, `hasany()`, `bygroupid()`, and `isinhierarchyof()`
-- values: strings, `*` wildcards, integers, decimals with an `f`/`d` suffix, `null`, and date-times with `.date`
+- values: strings, `*` wildcards, integers, decimals with an `f`/`d` suffix, `true`/`false`, `null`, and date-times with `.date`
 - `eq` on array properties and on objects in arrays
 
-These details behave like the platform, checked against a real tenant: exact matches are case-sensitive, wildcards case-insensitive, decimals without a suffix are compared as strings, `type` is ignored when a query is given, and anything outside the language (such as `ne`) is rejected with 422.
+These details behave like the platform, checked against a real tenant:
+
+- Exact matches are case-sensitive, wildcards case-insensitive.
+- Values are typed: a number never matches a string property (`num eq '5'` does not match `5`), decimals without a suffix are strings, and `true`/`false` match booleans only.
+- `null` matches a stored `null`, never a missing property.
+- `$orderby` puts objects without the property first when ascending and last when descending, and numbers before strings.
+- `type` is ignored when a query is given, and anything outside the language (such as `ne`) is rejected with 422.
 
 **Not emulated:** `withLatestValues`, `withGroups`, `withSourceAssets` and similar `withSource*` parameters, `fragmentValue`, cascade deletes, `alarmsWithChildren`/`eventsWithChildren` subscriptions, bulk operations, user management, audit records, and all other APIs. These fail loudly instead of returning wrong results. Unknown query parameters are ignored, as on the platform.
 
 **Assumptions:** where the spec doesn't define behavior, the fake assumes the following:
 
 - **IDs** are sequential numbers, starting at `1` in every test. Timestamps come from `Date`, so `vi.useFakeTimers()` controls them.
-- **`owner`** is the calling user.
+- **`owner`** is the user of the request's credentials, unless the body sets it.
 - **Groups:** `bygroupid()` matches the group's direct child assets. `isinhierarchyof()` follows child assets, devices, and additions recursively.
-- **Paging:** pages are 1-based, the default page size is 5, `next` is always present (also past the last page), and `prev` after the first page.
-- **Sort orders:** measurements, events, and alarms newest first (`revert=false` gives measurements oldest first), operations by ascending ID, inventory by ID, series values oldest first.
-- **Date ranges:** the `…From` end is inclusive, the `…To` end is exclusive.
-- **Alarm deduplication:** an `ACTIVE` or `ACKNOWLEDGED` alarm with the same source and type increments `count` and updates `time`.
-- **Operations** need an agent: the device has `com_cumulocity_model_Agent`, or one of its device parents does. Otherwise the platform answers 422. They start as `PENDING`, and only your tests change their status, for example with `c8y.db.operations.update()`.
-- **Validation:** writes that reference a missing source or device fail with 422.
-- **External IDs:** creating an existing external ID again for the same object succeeds; for another object it fails with 409.
+- **Paging:** pages are 1-based, the default page size is 5, `pageSize=0` means 1 (at most 2000), and a non-integer `pageSize` answers 422. `next` is present on every page, also past the last one, unless `withTotalPages=true` and the page is the last one or beyond. `prev` appears after the first page. The binaries list always reports `totalPages` and never `totalElements`.
+- **Sort orders:** measurements, events, and alarms newest first; operations by ascending ID; inventory by ID; series values always oldest first. `revert` only has an effect together with a date range: `revert=false` gives measurements oldest first, `revert=true` gives events oldest first and operations newest first.
+- **Date ranges:** the `…From` end is inclusive, the `…To` end is exclusive. Equal bounds select exactly that time; for a measurement bulk delete they select the whole hour. A value that is not a date answers 422.
+- **Alarms:** an `ACTIVE` or `ACKNOWLEDGED` alarm with the same source and type is deduplicated: `count` and `time` change, `text` and `severity` stay, and `firstOccurrenceTime` is set on the first duplicate. An update cannot change `type`, `time`, `count`, or the server timestamps (422). A bulk update needs `status` and applies only the status.
+- **Operations** need an agent: the device has `com_cumulocity_model_Agent`, or one of its device parents does. Otherwise the platform answers 422. They need at least one property besides `deviceId`. They start as `PENDING`, and only your tests change their status, for example with `c8y.db.operations.update()`. Any status can follow any other. `failureReason` is only accepted with `FAILED` and is removed when the status changes again. A single read has no `deviceName`.
+- **Validation:** writes that reference a missing source fail with 422 (alarms: 404). Sending `id` or `creationTime` on create fails with 422, and a `time` that is not a date with 400. Updates of events reject `source`, `type`, and `time`.
+- **External IDs:** creating an existing external ID again for the same object succeeds; for another object it fails with 409. Listing the external IDs of an unknown object returns an empty list.
 - **Parent references** (`deviceParents`, `assetParents`, `additionParents`) are only filled with `withParents=true`. `c8y.db` always shows them.
 - **Deleting a managed object** removes its references, external IDs, and binary content. Its measurements, events, alarms, and operations stay.
-- **Tenant options:** default values from your manifest's settings are not applied. Set the options your test needs.
+- **Tenant options:** default values from your manifest's settings are not applied. Set the options your test needs. `credentials.` options read as `<<Encrypted>>`, except in your microservice's own settings category, where the service gets the clear value.
 - **Bulk deletes** apply immediately. On the platform they run asynchronously and take effect within about a second.
 - **Single measurements** cannot be read (`GET /measurement/measurements/{id}` answers 405, as with the platform's default time series persistence), but they can be deleted.
-- **Binaries** cannot be deleted through `/inventory/managedObjects/{id}` (422). Use the binaries API.
+- **Binaries** cannot be deleted through `/inventory/managedObjects/{id}` (422). Use the binaries API. A download has the object's `type` as its content type when it is a media type, otherwise `application/octet-stream`. Event attachments without a content type are stored as `text/plain;charset=UTF-8`.
 - **Text search** (`text`) splits the value into tokens at whitespace, `/`, `-`, and `.`, and matches objects that contain any token. A value in double quotes matches the exact phrase.
-- **Series:** values are bucketed in UTC. `aggregationFunction` without `aggregationInterval` answers 422 (the API docs say 400). Without aggregation, every measurement is its own entry with `min` = `max`. Entries are oldest first unless `revert=true`.
-- **Notifications:** a DELETE notification's payload is not JSON but an opaque string, as on the platform. Read the deleted object's ID from `notification.description.sourceId`. Tokens can be created for any subscription name. Persistent subscriptions keep notifications until a consumer connects.
+- **Series:** values are bucketed in UTC. `aggregationFunction` without `aggregationInterval` answers 422 (the API docs say 400). Without aggregation, every measurement is its own entry with `min` = `max`. Entries are always oldest first. Buckets without values of a series give `0` for `sum` and `count`, otherwise `null`.
+- **Notifications:** a DELETE notification's payload is not JSON but an opaque string, as on the platform. Read the deleted object's ID from `notification.description.sourceId`. Tokens can be created for any subscription name. Subscription and subscriber names must be alphanumeric. Persistent subscriptions keep notifications until a consumer connects. `fragmentsToCopy` keeps the standard properties and the named fragments (checked for events, assumed for the other APIs).
 - **No permission checks:** roles only matter in your own middleware, like `hasUserRequiredRole()`.
 
 If you find a difference from the real platform, please [open an issue](https://github.com/schplitt/c8y-nitro/issues).

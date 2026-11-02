@@ -10,9 +10,12 @@ import { CHILD_KINDS, childIds } from '../store'
  * - `has(fragment)`, `hasany(a, b)`, `bygroupid(id, …)`, `isinhierarchyof(id, …)`
  * - strings in single quotes; `*` wildcards match case-insensitively, exact
  *   matches are case-sensitive
- * - numbers: integers; decimals need an `f`/`d` suffix (`3.5d`), otherwise
- *   they are compared as strings
- * - `null`, and date-times via `.date` (`creationTime.date gt '2026-…'`)
+ * - numbers: integers (`5`, `05`, `5d`); decimals need an `f`/`d` suffix
+ *   (`3.5d`), otherwise they are strings. Values are typed: a number never
+ *   matches a string property and a quoted value never matches a number
+ * - `true`/`false` match booleans only; `null` matches a stored `null` only,
+ *   never a missing property
+ * - date-times via `.date` (`creationTime.date gt '2026-…'`)
  * - `eq` on array properties matches any element (`customers.id eq '1'`)
  * - `$orderby=field [asc|desc], …`
  *
@@ -28,7 +31,7 @@ export interface ParsedQuery {
  */
 export class QuerySyntaxError extends Error {}
 
-type Literal = string | number | null
+type Literal = string | number | boolean | null
 interface Token { kind: 'word' | 'string' | 'punct', value: string }
 
 const COMPARISONS = new Set(['eq', 'gt', 'ge', 'lt', 'le'])
@@ -77,8 +80,11 @@ function literal(token: Token): Literal {
   if (token.value === 'null') {
     return null
   }
-  if (/^-?\d+$/.test(token.value)) {
-    return Number(token.value)
+  if (token.value === 'true' || token.value === 'false') {
+    return token.value === 'true'
+  }
+  if (/^-?\d+[fd]?$/i.test(token.value)) {
+    return Number.parseInt(token.value, 10)
   }
   const decimal = /^(-?\d+\.\d+)[fd]$/i.exec(token.value)
   if (decimal) {
@@ -116,9 +122,25 @@ export function readPath(document: Record<string, unknown>, path: string): unkno
 
 function compareOne(actual: unknown, operator: string, expected: Literal, asDate: boolean): boolean {
   if (expected === null) {
-    return operator === 'eq' && (actual === null || actual === undefined)
+    // verified: only a stored null, never a missing property
+    return operator === 'eq' && actual === null
   }
   if (actual === null || actual === undefined || typeof actual === 'object') {
+    return false
+  }
+  if (asDate) {
+    const left = Date.parse(String(actual))
+    const right = Date.parse(String(expected))
+    switch (operator) {
+      case 'eq': return left === right
+      case 'gt': return left > right
+      case 'ge': return left >= right
+      case 'lt': return left < right
+      default: return left <= right
+    }
+  }
+  // verified: values are typed (numbers, strings, booleans never match each other)
+  if (typeof actual !== typeof expected) {
     return false
   }
   if (operator === 'eq') {
@@ -126,14 +148,13 @@ function compareOne(actual: unknown, operator: string, expected: Literal, asDate
       const pattern = expected.split('*').map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')
       return new RegExp(`^${pattern}$`, 'i').test(String(actual))
     }
-    return typeof expected === 'number' ? Number(actual) === expected : String(actual) === expected
+    return actual === expected
   }
-  let left: number | string = typeof expected === 'number' ? Number(actual) : String(actual)
-  let right: number | string = expected
-  if (asDate) {
-    left = Date.parse(String(actual))
-    right = Date.parse(String(expected))
+  if (typeof expected === 'boolean') {
+    return false
   }
+  const left = actual as number | string
+  const right = expected
   switch (operator) {
     case 'gt': return left > right
     case 'ge': return left >= right
@@ -303,15 +324,23 @@ export function applyOrderBy<T extends Record<string, unknown>>(items: T[], orde
   if (orderBy.length === 0) {
     return items
   }
-  const key = (value: unknown) => (typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : value) as string | number
+  // verified against the platform: missing values first (ascending), then
+  // numbers, then strings (by character code). Ids are numeric on the platform.
+  const rank = (value: unknown) => value === undefined || value === null ? 0 : typeof value === 'number' ? 1 : 2
   return [...items].sort((a, b) => {
     for (const { field, descending } of orderBy) {
-      const left = readPath(a, field)
-      const right = readPath(b, field)
-      if (left === right) {
+      let left = readPath(a, field)
+      let right = readPath(b, field)
+      if (field === 'id') {
+        left = Number(left)
+        right = Number(right)
+      }
+      if (left === right || (rank(left) === 0 && rank(right) === 0)) {
         continue
       }
-      const result = left === undefined ? 1 : right === undefined ? -1 : key(left) < key(right) ? -1 : 1
+      const result = rank(left) !== rank(right)
+        ? rank(left) - rank(right)
+        : (left as number | string) < (right as number | string) ? -1 : 1
       return descending ? -result : result
     }
     return 0

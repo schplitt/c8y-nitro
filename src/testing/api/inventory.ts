@@ -41,8 +41,15 @@ export function renderManagedObject(data: TenantData, document: StoredDocument, 
     rendered[kind] = { self: `${self}/${kind}`, references: children.map((id) => reference(id, `${self}/${kind}/${id}`)) }
     const parentKind = PARENT_KIND[kind]
     // verified against the platform: parent references only with withParents=true
+    // and as `{ managedObject }` with the full parent (its own references empty)
     const parents = options.withParents ? parentIds(data, document.id, kind) : []
-    rendered[parentKind] = { self: `${self}/${parentKind}`, references: parents.map((id) => reference(id, `${moSelf(id)}/${kind}/${document.id}`)) }
+    rendered[parentKind] = {
+      self: `${self}/${parentKind}`,
+      references: parents.flatMap((id) => {
+        const parent = data.managedObjects.get(id)
+        return parent ? [{ managedObject: renderManagedObject(data, parent, { withChildren: false }) }] : []
+      }),
+    }
   }
   return rendered
 }
@@ -269,7 +276,13 @@ function inventoryRequest(call: C8yRequest, segments: string[], data: TenantData
   }
 
   if (childId !== undefined && method === 'DELETE') {
-    return removeChild(data, id, childKind, childId) ? new Response(null, { status: 204 }) : notFound(childId)
+    if (!document) {
+      return notFound(id)
+    }
+    // verified against the platform
+    return removeChild(data, id, childKind, childId)
+      ? new Response(null, { status: 204 })
+      : apiError(422, 'inventory/Invalid Data', `managedObject with id: ${childId}, is not a child of object with id: ${id} : Parent child relationship validation failed`)
   }
 
   return undefined
