@@ -9,11 +9,15 @@ export default defineConfig({
 
   experimental: {
     asyncContext: true,
+    openAPI: true,
   },
 
   c8y: {
     skipBootstrap: true, // skip auto-bootstrap for testing purposes
     enableTenantOptionsInvalidationRoute: true,
+    openapi: {
+      excludeRoutes: ['/hidden'],
+    },
     manifest: {
       roles: ['SOME_CUSTOM_ROLE', 'ANOTHER_ROLE'],
       settings: [
@@ -27,6 +31,8 @@ export default defineConfig({
       credentialsTTL: 400,
       tenantOptions: {
         myOption: 200,
+        // short TTL for the cache expiry test
+        cacheExpiryOption: 4,
       },
     },
   },

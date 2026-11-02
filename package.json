@@ -79,9 +79,11 @@
     "changelogithub": "catalog:",
     "eslint": "catalog:",
     "memfs": "catalog:",
+    "rolldown": "catalog:",
     "tsdown": "catalog:",
     "tsnapi": "catalog:",
     "typescript": "catalog:",
+    "vite": "catalog:",
     "vitepress": "catalog:",
     "vitepress-plugin-llms": "catalog:",
     "vitest": "catalog:"
