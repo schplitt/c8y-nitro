@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer'
 import type { C8YTenantOptionKey } from 'c8y-nitro/types'
-import { serverFetch } from 'nitro'
+import { serverFetch as nitroServerFetch } from 'nitro'
 import type { C8yRequest, C8yRequestHandler, C8yTestState, C8yTestSubscription, C8yTestUser, C8yUnhandledRequest } from './types'
 import type { C8yDb, C8yManagedObjectInput, C8yRef, C8ySeed } from './data'
 import { applySeed, createDb, createFromInput, newRef } from './data'
@@ -52,22 +52,6 @@ declare module 'vitest' {
 }
 
 /**
- * A user that calls your service in tests. Created with `c8y.persona()`.
- */
-export interface C8yPersona {
-  /**
-   * The user, or `null` for a caller without a valid login.
-   */
-  readonly user: C8yTestUser | null
-  /**
-   * Calls a route of your service as this user, like `serverFetch()` from
-   * `nitro`. The platform answers `GET /user/currentUser` with this user
-   * during the request.
-   */
-  fetch: (path: string, init?: Parameters<typeof serverFetch>[1]) => Promise<Response>
-}
-
-/**
  * The fake Cumulocity tenant your microservice talks to in tests. Requires the
  * `c8yTest()` plugin from `c8y-nitro/testing/vite`.
  *
@@ -84,15 +68,14 @@ export interface C8yPersona {
  *
  * @example
  * ```ts
- * import { serverFetch } from 'nitro'
- * import { c8y } from 'c8y-nitro/testing'
+ * import { c8y, definePersona, serverFetch } from 'c8y-nitro/testing'
  *
  * const pump = c8y.device({ name: 'Pump', externalIds: { c8y_Serial: 'SN-1' } })  // seed the platform
- * const visitor = c8y.persona({ userName: 'visitor', roles: [] })
+ * const visitor = definePersona({ userName: 'visitor', roles: [] })
  *
  * it('returns the pump', async () => {
- *   expect((await serverFetch('/pumps/SN-1')).status).toBe(200)   // as the default user
- *   expect((await visitor.fetch('/pumps/SN-1')).status).toBe(403) // as another user
+ *   expect((await serverFetch('/pumps/SN-1')).status).toBe(200)                  // as the default user
+ *   expect((await serverFetch('/pumps/SN-1', { as: visitor })).status).toBe(403) // as another user
  * })
  * ```
  */
@@ -185,45 +168,6 @@ export const c8y = {
    */
   seed(seed: C8ySeed): void {
     arrange('c8y.seed()', () => applySeed(seed))
-  },
-
-  /**
-   * Creates a persona: a user that calls your service. `persona.fetch()`
-   * calls a route as that user; plain `serverFetch()` calls as the default
-   * user from the `c8yTest()` config. `null` is a caller without a valid
-   * login (the platform answers `GET /user/currentUser` with 401).
-   *
-   * @example
-   * ```ts
-   * const operator = c8y.persona({ userName: 'operator', roles: ['ROLE_ALARM_ADMIN'] })
-   * const visitor = c8y.persona({ userName: 'visitor', roles: [], tenant: 't99999' })
-   *
-   * it('only lets operators run the check', async () => {
-   *   expect((await operator.fetch('/pumps/SN-1/check', { method: 'POST' })).status).toBe(200)
-   *   expect((await visitor.fetch('/pumps/SN-1/check', { method: 'POST' })).status).toBe(403)
-   * })
-   * ```
-   * @param user - The user, or `null`
-   */
-  persona(user: C8yTestUser | null): C8yPersona {
-    return {
-      user,
-      async fetch(path, init = {}) {
-        assertActiveTest('persona.fetch()')
-        const previous = platform.user
-        platform.setUser(user)
-        try {
-          const headers = new Headers(init.headers)
-          const login = user
-            ? `${user.tenant ?? platform.tenant}/${user.userName}:${DEFAULTS.developmentPassword}`
-            : `${platform.tenant}/anonymous:invalid`
-          headers.set('authorization', `Basic ${Buffer.from(login).toString('base64')}`)
-          return await serverFetch(path, { ...init, headers })
-        } finally {
-          platform.setUser(previous)
-        }
-      },
-    }
   },
 
   /**
@@ -327,7 +271,7 @@ export const c8y = {
 
   /**
    * Applies several arrange settings at once, in the current scope. Callers
-   * are not part of the state: use `c8y.persona()`.
+   * are not part of the state: use `serverFetch(path, { as })`.
    * @param state - Partial tenant state
    */
   apply(state: Partial<Omit<C8yTestState, 'user'>>): void {
@@ -343,4 +287,66 @@ export const c8y = {
     return platform.calls.filter((call) => matchRoute(route, call.method, splitPath(call.path)))
   },
 
+}
+
+/**
+ * Request options of `serverFetch()`: Nitro's options plus `as`.
+ */
+export type C8yServerFetchInit = NonNullable<Parameters<typeof nitroServerFetch>[1]> & {
+  /**
+   * The user calling the route, e.g. a persona from `definePersona()` or an
+   * inline user. `null` is a caller without a valid login. Without `as`, the
+   * default `user` from the `c8yTest()` config calls.
+   */
+  as?: C8yTestUser | null
+}
+
+/**
+ * Types a user that calls your service in tests, so it can be defined once
+ * and reused (role names autocomplete). Pass it to `serverFetch(path, { as })`.
+ *
+ * @example
+ * ```ts
+ * const operator = definePersona({ userName: 'operator', roles: ['ROLE_ALARM_ADMIN'] })
+ * const partner = definePersona({ userName: 'eve', roles: [], tenant: 't99999' })
+ * ```
+ * @param user - The user
+ */
+export function definePersona(user: C8yTestUser): C8yTestUser {
+  return user
+}
+
+/**
+ * Calls a route of your service, like `serverFetch()` from `nitro`. With
+ * `as`, the request is sent as that user: the platform answers
+ * `GET /user/currentUser` with it during the request.
+ *
+ * @example
+ * ```ts
+ * await serverFetch('/pumps/SN-1')                                           // default user
+ * await serverFetch('/pumps/SN-1/check', { method: 'POST', as: operator })   // a persona
+ * await serverFetch('/pumps/SN-1', { as: { userName: 'visitor', roles: [] } }) // inline
+ * await serverFetch('/user', { as: null })                                   // not logged in
+ * ```
+ * @param path - Route path, including the query
+ * @param init - Request options, plus `as`
+ */
+export async function serverFetch(path: string, init: C8yServerFetchInit = {}): Promise<Response> {
+  if (!('as' in init)) {
+    return nitroServerFetch(path, init)
+  }
+  const { as: user, ...requestInit } = init
+  assertActiveTest('serverFetch({ as })')
+  const previous = platform.user
+  platform.setUser(user ?? null)
+  try {
+    const headers = new Headers(requestInit.headers)
+    const login = user
+      ? `${user.tenant ?? platform.tenant}/${user.userName}:${DEFAULTS.developmentPassword}`
+      : `${platform.tenant}/anonymous:invalid`
+    headers.set('authorization', `Basic ${Buffer.from(login).toString('base64')}`)
+    return await nitroServerFetch(path, { ...requestInit, headers })
+  } finally {
+    platform.setUser(previous)
+  }
 }

@@ -1,12 +1,11 @@
-import { serverFetch } from 'nitro'
 import { describe, expect, it } from 'vitest'
-import { c8y } from 'c8y-nitro/testing'
+import { c8y, definePersona, serverFetch } from 'c8y-nitro/testing'
 
 // Seed the fake Cumulocity tenant: every test in this file starts with this pump
 const pump = c8y.device({ name: 'Pump 1', externalIds: { c8y_Serial: 'SN-1' } })
 
-// Users that call the service. Plain serverFetch() calls as the operator from vitest.config.ts.
-const visitor = c8y.persona({ userName: 'visitor', roles: [] })
+// A user without roles. Without `as`, requests come from the operator in vitest.config.ts.
+const visitor = definePersona({ userName: 'visitor', roles: [] })
 
 describe('GET /pumps/:serial', () => {
   c8y.seed({
@@ -29,8 +28,13 @@ describe('GET /pumps/:serial', () => {
     expect(res.status).toBe(404)
   })
 
+  it('fails for callers without a valid login', async () => {
+    // the platform rejects the caller; c8y-nitro turns that into a 500
+    expect((await serverFetch('/pumps/SN-1', { as: null })).status).toBe(500)
+  })
+
   it('requires the inventory role', async () => {
-    const res = await visitor.fetch('/pumps/SN-1')
+    const res = await serverFetch('/pumps/SN-1', { as: visitor })
 
     expect(res.status).toBe(403)
   })

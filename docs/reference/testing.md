@@ -55,12 +55,14 @@ Seed inputs reference managed objects as a ref, an id, or `{ id }`: `source` for
 
 ### Act
 
-Call your service with `serverFetch()` from `nitro` (as the default user), or with a persona:
+```ts
+import { definePersona, serverFetch } from 'c8y-nitro/testing'
+```
 
-| Member                       | Description                                                       |
-| ---------------------------- | ----------------------------------------------------------------- |
-| `c8y.persona(user \| null)`  | Creates a persona. `null` is a caller without a valid login.      |
-| `persona.fetch(path, init?)` | Calls a route of your service as that user, like `serverFetch()`. |
+| Member                     | Description                                                                                                                                                                                                        |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `serverFetch(path, init?)` | Calls a route of your service, like `serverFetch()` from `nitro`. `init.as` is the calling user: a persona, an inline user, or `null` (no valid login). Without `as`, the default user of the plugin config calls. |
+| `definePersona(user)`      | Types a user for reuse as `as` (role names autocomplete).                                                                                                                                                          |
 
 ### Assert
 
@@ -94,7 +96,7 @@ The handler receives the request: `method`, `path`, `params`, `query`, `body` (p
 
 All types are exported from `c8y-nitro/testing`:
 
-- **Plugin and state:** `C8yTestOptions`, `C8yTestState`, `C8yTestUser`, `C8yPersona`, `C8yTestRole`, `C8yTestSubscription`.
+- **Plugin and state:** `C8yTestOptions`, `C8yTestState`, `C8yTestUser`, `C8yServerFetchInit`, `C8yTestRole`, `C8yTestSubscription`.
 - **Data model:** `C8yRef`, `C8yIdInput`, `C8yManagedObjectInput`, `C8ySeed`, `C8yMeasurementInput`, `C8yEventInput`, `C8yAlarmInput`, `C8yOperationInput`.
 - **Inspection:** `C8yDb`, `C8yDbCollection`, `C8yDbFilter`.
 - **Requests:** `C8yRequest`, `C8yUnhandledRequest`, `C8yRequestContext`, `C8yRequestHandler`, `UnhandledRequestStrategy`.

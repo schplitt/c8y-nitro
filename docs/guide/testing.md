@@ -5,7 +5,7 @@
 A test works in three steps:
 
 1. **Arrange** the platform as data: the user calling your service, devices, measurements, alarms, tenant options, and so on.
-2. **Act**: call a route of your service with `serverFetch()` from `nitro`.
+2. **Act**: call a route of your service with `serverFetch()`, optionally as a specific user.
 3. **Assert** on what your service did: its response, and the data it changed in the platform.
 
 Your tests describe what your service does, not which Cumulocity endpoints it calls. You can refactor the service, for example from `inventory.detail()` to `inventory.list()`, without touching a test.
@@ -62,12 +62,11 @@ export default defineHandler({
 })
 ```
 
-The tests seed the fake Cumulocity tenant with a pump and its measurements, call the service with `serverFetch()`, and check the result. `c8y` is only the fake platform; your service is called like any Nitro route:
+The tests seed the fake Cumulocity tenant with a pump and its measurements, call the service with `serverFetch()`, and check the result. `c8y` is only the fake platform. `serverFetch()` from `c8y-nitro/testing` is Nitro's `serverFetch()` plus an `as` option for the calling user:
 
 ```ts [test/pumps.test.ts]
-import { serverFetch } from 'nitro'
 import { describe, expect, it } from 'vitest'
-import { c8y } from 'c8y-nitro/testing'
+import { c8y, definePersona, serverFetch } from 'c8y-nitro/testing'
 
 const pump = c8y.device({ name: 'Pump 1', externalIds: { c8y_Serial: 'SN-1' } })
 
@@ -101,9 +100,9 @@ describe('POST /pumps/:serial/check', () => {
   })
 
   it('requires the alarm admin role', async () => {
-    const visitor = c8y.persona({ userName: 'visitor', roles: [] })
+    const visitor = definePersona({ userName: 'visitor', roles: [] })
 
-    expect((await visitor.fetch('/pumps/SN-1/check', { method: 'POST' })).status).toBe(403)
+    expect((await serverFetch('/pumps/SN-1/check', { method: 'POST', as: visitor })).status).toBe(403)
   })
 })
 ```
@@ -174,21 +173,22 @@ it('reports devices per tenant', async () => {
 })
 ```
 
-Each request is answered with the data of the tenant it was sent to: the tenant of the credentials, or the `targetTenant` parameter. Personas can belong to any tenant (`c8y.persona({ ..., tenant: 't99999' })`), so you can also test what users of a subscribed tenant see.
+Each request is answered with the data of the tenant it was sent to: the tenant of the credentials, or the `targetTenant` parameter. Personas can belong to any tenant (`definePersona({ ..., tenant: 't99999' })`), so you can also test what users of a subscribed tenant see.
 
 ## Personas
 
-A persona is a user that calls your service. `persona.fetch()` calls a route as that user, so one test can compare different callers. Plain `serverFetch()` calls as the default `user` from the `c8yTest()` config.
+A persona is a user that calls your service. Pass it as `as` to `serverFetch()`, so one test can compare different callers. Define personas once with `definePersona()` for consistency, or write the user inline. Without `as`, the default `user` from the `c8yTest()` config calls.
 
 ```ts
-const operator = c8y.persona({ userName: 'operator', roles: ['ROLE_ALARM_ADMIN'] })
-const visitor = c8y.persona({ userName: 'visitor', roles: [] })
-const partner = c8y.persona({ userName: 'eve', roles: ['ROLE_ALARM_ADMIN'], tenant: 't99999' })
-const anonymous = c8y.persona(null) // no valid login
+import { definePersona, serverFetch } from 'c8y-nitro/testing'
+
+const operator = definePersona({ userName: 'operator', roles: ['ROLE_ALARM_ADMIN'] })
+const partner = definePersona({ userName: 'eve', roles: ['ROLE_ALARM_ADMIN'], tenant: 't99999' })
 
 it('only lets operators run the check', async () => {
-  expect((await operator.fetch('/pumps/SN-1/check', { method: 'POST' })).status).toBe(200)
-  expect((await visitor.fetch('/pumps/SN-1/check', { method: 'POST' })).status).toBe(403)
+  expect((await serverFetch('/pumps/SN-1/check', { method: 'POST', as: operator })).status).toBe(200)
+  expect((await serverFetch('/pumps/SN-1/check', { method: 'POST', as: { userName: 'visitor', roles: [] } })).status).toBe(403)
+  expect((await serverFetch('/pumps/SN-1/check', { method: 'POST', as: null })).status).toBe(500) // no valid login
 })
 ```
 
@@ -271,7 +271,7 @@ The fake implements a documented subset of the Cumulocity REST API. Request and 
 
 | API                          | Emulated                                                                                                                                                                                                                                                                        |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Current user, current tenant | from the calling persona and the request's credentials                                                                                                                                                                                                                          |
+| Current user, current tenant | from the calling user (`as`) and the request's credentials                                                                                                                                                                                                                      |
 | Microservice subscriptions   | from `c8y.subscriptions`                                                                                                                                                                                                                                                        |
 | Tenant options               | read, write, delete, and list per category and tenant                                                                                                                                                                                                                           |
 | Inventory                    | create, read, update (fragments merge, `null` removes), delete; list by `type`, `fragmentType`, `ids`, `owner`, `text`, `childDeviceId`/`childAssetId`/`childAdditionId`, `onlyRoots`, and `query`/`q` (see below); child devices, assets, and additions with parent references |

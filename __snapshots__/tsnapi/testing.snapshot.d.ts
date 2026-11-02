@@ -53,10 +53,6 @@ export interface C8yOperationInput {
   failureReason?: string;
   [fragment: string]: unknown;
 }
-export interface C8yPersona {
-  readonly user: C8yTestUser | null;
-  fetch: (_: string, _?: Parameters<typeof serverFetch>[1]) => Promise<Response>;
-}
 export interface C8yRef {
   readonly id: string;
 }
@@ -122,8 +118,16 @@ export type C8yIdInput = string | C8yRef | {
 };
 export type C8yOperationStatus = typeof C8Y_ENUMS.operationStatus[number];
 export type C8yRequestHandler = (_: C8yRequestContext) => unknown;
+export type C8yServerFetchInit = NonNullable<Parameters<typeof serverFetch$1>[1]> & {
+  as?: C8yTestUser | null;
+};
 export type C8yTestRole = keyof C8YRoles | C8YRole;
 export type UnhandledRequestStrategy = 'error' | 'warn' | 'ignore';
+// #endregion
+
+// #region Functions
+export declare function definePersona(_: C8yTestUser): C8yTestUser;
+export declare function serverFetch(_: string, _?: C8yServerFetchInit): Promise<Response>;
 // #endregion
 
 // #region Variables
@@ -135,7 +139,6 @@ export declare const c8y: {
   managedObject(input?: C8yManagedObjectInput): C8yRef;
   device(input?: C8yManagedObjectInput): C8yRef;
   seed(seed: C8ySeed): void;
-  persona(user: C8yTestUser | null): C8yPersona;
   subscriptions: {
     list(): readonly C8yTestSubscription[];
     add(subscription: C8yTestSubscription): void;

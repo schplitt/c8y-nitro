@@ -1,13 +1,14 @@
 import { vi } from 'vitest'
-import { serverFetch } from 'nitro'
+import { serverFetch } from 'c8y-nitro/testing'
+import type { C8yServerFetchInit } from 'c8y-nitro/testing'
 
 /**
  * Requests a route of the test file's Nitro app and parses the JSON body.
  *
  * @param path - Route path including query
- * @param init - Request options
+ * @param init - Request options, plus `as` (the calling user)
  */
-export async function fetchJson(path: string, init?: Parameters<typeof serverFetch>[1]) {
+export async function fetchJson(path: string, init?: C8yServerFetchInit) {
   const res = await serverFetch(path, init)
   const json = await res.json() as Record<string, any>
   return { res, json }
@@ -46,7 +47,7 @@ export function captureLogs() {
 /**
  * Parses a JSON response body.
  *
- * @param res - Response, e.g. from `persona.fetch()`
+ * @param res - Response
  */
 export async function readJson(res: Response) {
   return await res.json() as Record<string, any>

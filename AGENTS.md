@@ -270,13 +270,13 @@ tests/server/
 
 ```ts
 import { describe, expect, it } from 'vitest'
-import { c8y } from 'c8y-nitro/testing'
+import { c8y, definePersona, serverFetch } from 'c8y-nitro/testing'
 import { fetchJson } from './utils'
 
-const outsider = c8y.persona({ userName: 'testUser', roles: [], tenant: 't99999' }) // a caller
+const outsider = definePersona({ userName: 'testUser', roles: [], tenant: 't99999' }) // a caller
 
 it('is denied for users of other tenants', async () => {
-  expect((await outsider.fetch('/deployed-tenant-only')).status).toBe(403)
+  expect((await serverFetch('/deployed-tenant-only', { as: outsider })).status).toBe(403)
 })
 
 const pump = c8y.device({ name: 'Pump 1', externalIds: { c8y_Serial: 'SN-1' } }) // platform data
@@ -290,7 +290,7 @@ it('raises an overheating alarm', async () => {
 
 Key points:
 
-- **Test services, not the Cumulocity API.** Arrange platform data (`c8y.device()`, `c8y.seed()`, `c8y.tenantOptions`), call routes with `serverFetch()` from `nitro` or as a persona (`c8y.persona(user).fetch()`) — `c8y` is only the fake platform —, and assert on responses and `c8y.db`. Use `c8y.override()` only for failures and unemulated APIs, and `toHaveReceived`/`callsTo` only where the request itself is the behavior (e.g. caching). Tests of the fake's own API semantics belong in `tests/contract/scenarios.ts`.
+- **Test services, not the Cumulocity API.** Arrange platform data (`c8y.device()`, `c8y.seed()`, `c8y.tenantOptions`), call routes with `serverFetch(path, { as })` from `c8y-nitro/testing` (`as`: a `definePersona()` user, inline user, or `null`) — `c8y` is only the fake platform — and assert on responses and `c8y.db`. Use `c8y.override()` only for failures and unemulated APIs, and `toHaveReceived`/`callsTo` only where the request itself is the behavior (e.g. caching). Tests of the fake's own API semantics belong in `tests/contract/scenarios.ts`.
 - **Tests use the public API only** (`c8y-nitro/testing`, resolved from `dist`). If a test needs something the API cannot express, improve the API instead of adding a private workaround.
 - **One app per file.** Module options need a separate Vitest project, like `server-no-dev-user` (each project lists `nitro(...)` and `c8yTest()`). Everything read at request time (user, subscriptions, tenant options, handlers, dev env) can change per scope inside one file.
 - **Module state is shared.** Tests can import fixture modules directly, e.g. the credential hook recorder in `fixture/plugins/tenant-credentials-updated.ts`. Do not add fixture routes just to mutate platform state: use `c8y.*`.
