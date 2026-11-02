@@ -7,7 +7,7 @@ import type { C8yRealtimeOptions } from './realtime'
 
 export type * from './zip'
 export type { C8yDockerOptions } from './docker'
-export type { C8YManifestOptions, C8YManifest } from './manifest'
+export type { C8YManifestOptions, C8YManifest, ExposedMcpServer } from './manifest'
 export * from './apiClient'
 export type { C8yCacheOptions } from './cache'
 export type { C8yRealtimeOptions } from './realtime'

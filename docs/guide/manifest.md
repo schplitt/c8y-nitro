@@ -38,6 +38,43 @@ Health probe endpoints (`/_c8y_nitro/liveness` and `/_c8y_nitro/readiness`) are 
 
 If you define your own `httpGet` probes, the module respects those instead of generating defaults.
 
+To tune probe timing while keeping the generated endpoints, set only the timing fields. The module merges in the generated `httpGet` path:
+
+```ts
+export default defineNitroConfig({
+  c8y: {
+    manifest: {
+      livenessProbe: { initialDelaySeconds: 60 },
+      readinessProbe: { periodSeconds: 5, failureThreshold: 6 },
+    },
+  },
+  modules: [c8y()],
+})
+```
+
+## MCP Servers
+
+If your microservice serves an [MCP](https://modelcontextprotocol.io) endpoint, declare it with `exposeMcpServers`. Once the application is subscribed, Cumulocity AI Agent Manager registers it automatically, and MCP-aware clients such as mc8yp discover it from the manifest.
+
+```ts
+export default defineNitroConfig({
+  c8y: {
+    manifest: {
+      exposeMcpServers: [
+        {
+          name: 'my-service',
+          description: 'Tools for working with my-service data',
+          url: '/service/my-service/mcp',
+          type: 'http',
+          sendAuthentication: true,
+        },
+      ],
+    },
+  },
+  modules: [c8y()],
+})
+```
+
 ## Tenant Options (Settings)
 
 Define your microservice's settings in the manifest to get type-safe keys for `useTenantOption()`:

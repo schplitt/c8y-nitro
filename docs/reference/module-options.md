@@ -46,7 +46,8 @@ Common fields you are likely to set first:
 - `resources`
 - `requestedResources`
 - `livenessProbe`
-- `readinessProbe`
+- `readinessProbe` (timing-only probes keep the generated `httpGet` path)
+- `exposeMcpServers` (MCP servers auto-registered with AI Agent Manager)
 
 Fields such as `name`, `version`, `apiVersion`, `type`, and provider metadata are generated or inferred and are not part of `C8YManifestOptions`.
 
