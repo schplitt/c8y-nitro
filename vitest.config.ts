@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url'
+import { c8yTest } from 'c8y-nitro/testing/vite'
 import { nitro } from 'nitro/vite'
 import { configDefaults, defineConfig } from 'vitest/config'
 
@@ -10,6 +11,10 @@ const exclude = [...configDefaults.exclude, '**/.claude/**']
 export default defineConfig({
   test: {
     projects: [
+      // The playground is a consumer project with its own vitest.config.ts
+      // (nitro() + c8yTest()): its tests check that people can test their
+      // services with c8y-nitro/testing as documented.
+      'playground',
       {
         test: {
           name: 'unit',
@@ -19,8 +24,9 @@ export default defineConfig({
       },
       // Server tests run in Nitro's Vitest environment: every test file gets its
       // own Nitro app built from `tests/server/fixture`, without a dev server.
+      // c8yTest() (c8y-nitro/testing, from dist) answers all platform requests.
       {
-        plugins: [nitro({ rootDir: fixtureDir })],
+        plugins: [nitro({ rootDir: fixtureDir }), c8yTest()],
         test: {
           name: 'server',
           environment: 'nitro',
@@ -31,7 +37,7 @@ export default defineConfig({
       // Same fixture with dev user injection disabled (a module option, so it
       // needs its own Nitro app config rather than a per-file override).
       {
-        plugins: [nitro({ rootDir: fixtureDir, c8y: { dev: { injectUser: false } } })],
+        plugins: [nitro({ rootDir: fixtureDir, c8y: { dev: { injectUser: false } } }), c8yTest()],
         test: {
           name: 'server-no-dev-user',
           environment: 'nitro',

@@ -1,3 +1,4 @@
+import process from 'node:process'
 import type { NitroModule } from 'nitro/types'
 import type { C8yNitroModuleOptions } from './types'
 import { writeAPIClient } from './module/apiClient'
@@ -87,7 +88,9 @@ export function c8y(): NitroModule {
         // Load configured extra env files (e.g. a monorepo-root .env) and
         // resolve C8Y_NITRO_*-prefixed variables before anything reads them.
         await setupC8yDevEnv(nitro.options.rootDir, options.envFile)
-        if (!options.skipBootstrap) {
+        // Never bootstrap from tests: Nitro's Vitest environment runs as dev,
+        // and the fake tenant from c8y-nitro/testing answers all platform calls.
+        if (!options.skipBootstrap && !process.env.VITEST) {
           await autoBootstrap(nitro)
         }
       }
@@ -107,7 +110,7 @@ export function c8y(): NitroModule {
         manifest = await createC8yManifestFromNitro(nitro)
         setupRuntime(nitro, manifest)
         // Re-sync the tenant on in-session manifest edits, not just full restarts.
-        if (!options.skipBootstrap) {
+        if (!options.skipBootstrap && !process.env.VITEST) {
           await autoBootstrap(nitro)
         }
         if (options.apiClient) {

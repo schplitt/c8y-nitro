@@ -47,3 +47,43 @@ jobs:
           branch: chore/update-role-types
           delete-branch: true
           add-paths: src/types/roles.generated.ts
+
+  generate-testing-capabilities:
+    name: Regenerate the testing capability table
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate capabilities
+        run: pnpm gen:testing-capabilities && pnpm exec eslint --fix src/testing/capabilities.generated.ts
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v8
+        with:
+          commit-message: 'chore(testing): update the capability table from the OpenAPI spec'
+          title: 'chore(testing): update the testing capability table'
+          body: |
+            Automated update of `src/testing/capabilities.generated.ts` (query
+            parameters, required fields, and enums the fake tenant of
+            `c8y-nitro/testing` derives from the Cumulocity core OpenAPI spec).
+
+            Check the changes, and run `pnpm test:contract` against a real tenant
+            before merging.
+          branch: chore/update-testing-capabilities
+          delete-branch: true
+          add-paths: src/testing/capabilities.generated.ts

@@ -13,6 +13,7 @@ Nitro-powered tooling for building Cumulocity IoT microservices without manually
 - 🔥 **File-based Routing** - Auto-discovered routes from your file structure
 - 🛠️ **TypeScript First** - Full type safety with excellent DX
 - 🔄 **Auto-Bootstrap** - Automatically registers and configures your microservice in development
+- 🧪 **Testing** - Test your service in Vitest against a fake Cumulocity tenant you seed with devices, measurements, alarms, and more
 
 ## Quickstart
 
@@ -28,6 +29,7 @@ Useful entry points:
 - [Configuration](https://schplitt.github.io/c8y-nitro/guide/configuration)
 - [Module Options](https://schplitt.github.io/c8y-nitro/reference/module-options)
 - [Utilities](https://schplitt.github.io/c8y-nitro/reference/utilities)
+- [Testing](https://schplitt.github.io/c8y-nitro/guide/testing)
 
 ## Development
 

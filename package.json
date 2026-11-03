@@ -26,6 +26,9 @@
   "exports": {
     ".": "./dist/index.mjs",
     "./cli": "./dist/cli/index.mjs",
+    "./testing": "./dist/testing.mjs",
+    "./testing/setup": "./dist/testing/setup.mjs",
+    "./testing/vite": "./dist/testing/vite.mjs",
     "./types": "./dist/types.mjs",
     "./utils": "./dist/utils.mjs",
     "./package.json": "./package.json"
@@ -41,6 +44,7 @@
   "scripts": {
     "dev": "tsdown --watch",
     "gen:roles": "node scripts/generate-roles.ts",
+    "gen:testing-capabilities": "node scripts/generate-testing-capabilities.ts",
     "build": "tsdown",
     "build:update": "tsdown --update-snapshot",
     "lint": "eslint",
@@ -50,6 +54,7 @@
     "release": "bumpp",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:contract": "vitest run --config vitest.contract.config.ts",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs"
@@ -90,7 +95,17 @@
   },
   "peerDependencies": {
     "@c8y/client": ">=1021",
-    "nitro": "3.0.261029-rc"
+    "nitro": "3.0.261029-rc",
+    "vite": "^7.0.0 || ^8.0.0",
+    "vitest": "^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    },
+    "vitest": {
+      "optional": true
+    }
   },
   "engines": {
     "node": ">=24.0.0"

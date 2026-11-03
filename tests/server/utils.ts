@@ -1,38 +1,14 @@
 import { vi } from 'vitest'
-import { serverFetch } from 'nitro'
-
-/**
- * Dev and bootstrap environment a c8y-nitro dev server expects.
- */
-export const completeEnv = {
-  C8Y_DEVELOPMENT_TENANT: 't12345',
-  C8Y_DEVELOPMENT_USER: 'someUser@example.com',
-  C8Y_DEVELOPMENT_PASSWORD: '<password>',
-  C8Y_BASEURL: 'https://someTenant.cumulocity.com/',
-  C8Y_BOOTSTRAP_TENANT: 't12345',
-  C8Y_BOOTSTRAP_USER: 'bootstrapUser',
-  C8Y_BOOTSTRAP_PASSWORD: 'bootstrapPassword',
-}
-
-/**
- * Stubs the C8Y_* environment for the current test file. Call it at the top
- * level of the file: the Nitro app is created in `beforeAll`, after the stubs.
- *
- * @param overrides - Variables to change from {@link completeEnv}
- */
-export function stubC8yEnv(overrides: Partial<typeof completeEnv> = {}) {
-  for (const [key, value] of Object.entries({ ...completeEnv, ...overrides })) {
-    vi.stubEnv(key, value)
-  }
-}
+import { serverFetch } from 'c8y-nitro/testing'
+import type { C8yServerFetchInit } from 'c8y-nitro/testing'
 
 /**
  * Requests a route of the test file's Nitro app and parses the JSON body.
  *
  * @param path - Route path including query
- * @param init - Request options
+ * @param init - Request options, plus `as` (the calling user)
  */
-export async function fetchJson(path: string, init?: Parameters<typeof serverFetch>[1]) {
+export async function fetchJson(path: string, init?: C8yServerFetchInit) {
   const res = await serverFetch(path, init)
   const json = await res.json() as Record<string, any>
   return { res, json }
@@ -66,4 +42,13 @@ export function captureLogs() {
       .join('\n'),
     clear: () => spies.forEach((spy) => spy.mockClear()),
   }
+}
+
+/**
+ * Parses a JSON response body.
+ *
+ * @param res - Response
+ */
+export async function readJson(res: Response) {
+  return await res.json() as Record<string, any>
 }

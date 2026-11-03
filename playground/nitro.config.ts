@@ -17,6 +17,7 @@ export default defineConfig({
       settings: [
         { key: 'myOption', defaultValue: 'default' },
         { key: 'credentials.secret', defaultValue: 'change-me' },
+        { key: 'maxTemperature', defaultValue: '80' },
       ],
       requiredRoles: ['ROLE_OPTION_MANAGEMENT_READ', 'ROLE_OPTION_MANAGEMENT_ADMIN'],
     },

@@ -1,20 +1,14 @@
 import { Buffer } from 'node:buffer'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { serverFetch } from 'nitro'
-import { captureLogs, completeEnv, fetchJson, sleep, stubC8yEnv } from './utils'
-
-stubC8yEnv()
-
-vi.mock('@c8y/client', async () => {
-  const { mockC8yClientModule } = await import('./mocks/c8y-client')
-  return mockC8yClientModule()
-})
+import process from 'node:process'
+import { captureLogs, fetchJson, sleep } from './utils'
 
 describe('dev user injection', () => {
   it('injects the development user as basic auth', async () => {
     const { json } = await fetchJson('/authHeader')
 
-    expect(json.authHeader).toBe(`Basic ${Buffer.from(`${completeEnv.C8Y_DEVELOPMENT_TENANT}/${completeEnv.C8Y_DEVELOPMENT_USER}:${completeEnv.C8Y_DEVELOPMENT_PASSWORD}`).toString('base64')}`)
+    expect(json.authHeader).toBe(`Basic ${Buffer.from(`${process.env.C8Y_DEVELOPMENT_TENANT}/${process.env.C8Y_DEVELOPMENT_USER}:${process.env.C8Y_DEVELOPMENT_PASSWORD}`).toString('base64')}`)
   })
 })
 

@@ -1,13 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { serverFetch } from 'nitro'
-import { captureLogs, fetchJson, sleep, stubC8yEnv } from './utils'
-
-stubC8yEnv()
-
-vi.mock('@c8y/client', async () => {
-  const { mockC8yClientModule } = await import('./mocks/c8y-client')
-  return mockC8yClientModule()
-})
+import { captureLogs, fetchJson, sleep } from './utils'
 
 describe('logging', () => {
   const logs = captureLogs()

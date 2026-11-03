@@ -32,7 +32,8 @@ const rt = await useTenantRealtimeClient(event)
 
 rt.alarms.onCreate('*', (alarm) => log.info(alarm.severity, alarm.text))
 rt.measurements.onCreate('device42', (m) => log.info(m.type, m.time))
-rt.events.onDelete('*', ({ id }) => log.info('deleted', id))
+// DELETE payloads are not the object: read the id from the notification
+rt.managedObjects.onDelete('*', (_payload, n) => log.info('deleted', n.description.sourceId))
 
 // Same thing as a single key string:
 rt.hook('alarms:create:*', (alarm) => log.info(alarm.severity))
