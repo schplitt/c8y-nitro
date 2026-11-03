@@ -462,7 +462,7 @@ This section captures project-specific knowledge, tool quirks, and lessons learn
 
 ### Tools & Dependencies
 
-- **Nitro `3.0.261029-rc`** — Nitro v3 release candidate, pinned exactly as a peer dependency; bump `package.json` (peer), the `pnpm-workspace.yaml` catalog, and its `minimumReleaseAgeExclude` entry together, and add a `docs/migration.md` section
+- **Nitro `3.0.261102-rc`** — Nitro v3 release candidate, pinned exactly as a peer dependency; bump `package.json` (peer), the `pnpm-workspace.yaml` catalog, and its `minimumReleaseAgeExclude` entry together, and add a `docs/migration.md` section
 - **Nitro config helper** — Use `import { defineConfig } from 'nitro'`; `defineNitroConfig` from `nitro/config` is deprecated since the RC
 - **`nitro.logger` type** — Since the RC, `nitro.logger` is Nitro's own minimal logger type, not consola's `ConsolaInstance`, and Nitro does not export it by name. Type module helpers that receive it as `Nitro['logger']` (from `nitro/types`), not with consola types. Helpers shared with the CLI (which passes `consola`) use a small structural interface instead, like `BootstrapSyncLogger` in `src/module/autoBootstrap.ts`
 - **@c8y/client >= 1021** — Peer dependency; provides Cumulocity API client

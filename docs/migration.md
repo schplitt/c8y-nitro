@@ -3,7 +3,7 @@
 ## 0.10.x to 0.11.0
 
 This release upgrades the Nitro peer dependency from `3.0.260903-beta` to the Nitro v3
-release candidate `3.0.261029-rc`. `c8y-nitro` itself has no breaking API changes.
+release candidate `3.0.261102-rc`. `c8y-nitro` itself has no breaking API changes.
 
 ### Required changes
 
@@ -12,7 +12,7 @@ release candidate `3.0.261029-rc`. `c8y-nitro` itself has no breaking API change
 The peer dependency is pinned exactly, so Nitro must be bumped in lockstep:
 
 ```sh
-pnpm add -D nitro@3.0.261029-rc
+pnpm add -D nitro@3.0.261102-rc
 ```
 
 Nitro now requires Node.js `>=22.22.0`. `c8y-nitro` already requires Node.js 24, so
