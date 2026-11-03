@@ -58,8 +58,8 @@ catalogs:
       specifier: ^4.80.0
       version: 4.80.0
     nitro:
-      specifier: 3.0.261029-rc
-      version: 3.0.261029-rc
+      specifier: 3.0.261102-rc
+      version: 3.0.261102-rc
     pathe:
       specifier: ^2.0.3
       version: 2.0.3
@@ -121,7 +121,7 @@ importers:
         version: 11.0.0
       evlog:
         specifier: 'catalog:'
-        version: 2.34.0(nitro@3.0.261029-rc)(ofetch@1.5.1)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.27.7)(jiti@2.6.1)(yaml@2.9.0))
+        version: 2.34.0(nitro@3.0.261102-rc)(ofetch@1.5.1)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.27.7)(jiti@2.6.1)(yaml@2.9.0))
       itty-time:
         specifier: 'catalog:'
         version: 2.0.2
@@ -129,8 +129,8 @@ importers:
         specifier: 'catalog:'
         version: 3.10.2
       nitro:
-        specifier: 3.0.261029-rc
-        version: 3.0.261029-rc
+        specifier: 3.0.261102-rc
+        version: 3.0.261102-rc
       pathe:
         specifier: 'catalog:'
         version: 2.0.3
@@ -209,7 +209,7 @@ importers:
         version: link:..
       nitro:
         specifier: 'catalog:'
-        version: 3.0.261029-rc
+        version: 3.0.261102-rc
       rolldown:
         specifier: 'catalog:'
         version: 1.2.16
@@ -2910,8 +2910,8 @@ packages:
   natural-compare@1.4.0:
     resolution: {integrity: sha512-OWND8ei3VtNC9h7V60qff3SVobHr996CTwgxubgyQYEpg290h9J0buyECNNJexkFm5sOajh5G116RYA1c8ZMSw==}
 
-  nitro@3.0.261029-rc:
-    resolution: {integrity: sha512-BQvzAV0HgcsJCkDqZAbGYlGNi9ALJznhsihugYAIi+8IcItz320FNaxbAJvn/pMNxGOYo2MGs10mTU9tcnB9jQ==}
+  nitro@3.0.261102-rc:
+    resolution: {integrity: sha512-Qbje+O758prySsNhyRercCVkgP3qar0i28dDlCRpzq02EIO6i4FTqmTfL5tY+UKzAEoujxxa7WiQtPJ4SylbKA==}
     engines: {node: '>=22.22.0'}
     hasBin: true
 
@@ -5671,9 +5671,9 @@ snapshots:
 
   esutils@2.0.3: {}
 
-  evlog@2.34.0(nitro@3.0.261029-rc)(ofetch@1.5.1)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.27.7)(jiti@2.6.1)(yaml@2.9.0)):
+  evlog@2.34.0(nitro@3.0.261102-rc)(ofetch@1.5.1)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.27.7)(jiti@2.6.1)(yaml@2.9.0)):
     optionalDependencies:
-      nitro: 3.0.261029-rc
+      nitro: 3.0.261102-rc
       ofetch: 1.5.1
       vite: 8.3.5(@types/node@24.19.2)(esbuild@0.27.7)(jiti@2.6.1)(yaml@2.9.0)
 
@@ -6513,7 +6513,7 @@ snapshots:
 
   natural-compare@1.4.0: {}
 
-  nitro@3.0.261029-rc:
+  nitro@3.0.261102-rc:
     dependencies:
       crossws: 0.4.17(srvx@1.0.8)
       env-runner: 0.3.11
