@@ -1,18 +1,12 @@
 import { expect } from 'vitest'
 import type { Client } from '@c8y/client'
-import type { ContractScenario } from '../helpers'
+import type { ContractContext, ContractScenario } from '../helpers'
 import { eventually, time } from '../helpers'
 
 async function api(client: Client, method: string, path: string, body?: unknown) {
   const res = await client.core.fetch(path, { method, headers: { 'content-type': 'application/json', 'accept': 'application/json' }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) })
   const text = await res.text()
   return { status: res.status, body: text ? JSON.parse(text) : undefined }
-}
-
-function sleep(ms: number) {
-  return new Promise<void>((resolve) => {
-    setTimeout(resolve, ms)
-  })
 }
 
 interface Received {
@@ -35,17 +29,17 @@ function collector() {
 
 /**
  * Waits until the c8y-realtime subscriptions (named after the scenario) of a source exist, then gives the consumers a moment to connect.
- * @param client
- * @param unique
- * @param sourceId
- * @param count
+ * @param context - The scenario context
+ * @param sourceId - Source the subscriptions filter on
+ * @param count - Subscriptions expected
  */
-async function waitForConsumers(client: Client, unique: string, sourceId: string, count: number) {
+async function waitForConsumers(context: ContractContext, sourceId: string, count: number) {
+  const { client, unique, settle } = context
   await eventually(async () => {
     const result = await api(client, 'GET', `/notification2/subscriptions?source=${sourceId}&pageSize=100`)
     expect(result.body.subscriptions.filter((item: { subscription: string }) => item.subscription.startsWith(unique)).length).toBeGreaterThanOrEqual(count)
   })
-  await sleep(2000)
+  await settle(2000)
 }
 
 export const notificationsScenarios: ContractScenario[] = [
@@ -178,6 +172,7 @@ export const notificationsScenarios: ContractScenario[] = [
   },
   {
     name: 'notification2: tokens, and unsubscribing a consumer',
+    verifies: ['unsubscribe-statuses'],
     async run({ client, unique }) {
       const { data: device } = await client.inventory.create({ name: `nt-${unique}`, c8y_IsDevice: {} })
       const name = `tok${unique}`
@@ -263,7 +258,8 @@ export const notificationsScenarios: ContractScenario[] = [
   },
   {
     name: 'realtime: notifications for events, operations, and created managed objects',
-    async run({ client, unique, realtime }) {
+    async run(context) {
+      const { client, unique, realtime } = context
       const { data: device } = await client.inventory.create({ name: `rte-${unique}`, c8y_IsDevice: {}, com_cumulocity_model_Agent: {} } as any)
       const { data: other } = await client.inventory.create({ name: `rto-${unique}`, c8y_IsDevice: {} })
       const { received, record } = collector()
@@ -279,7 +275,7 @@ export const notificationsScenarios: ContractScenario[] = [
           record(payload, notification)
         }
       })
-      await waitForConsumers(client, unique, device.id, 2)
+      await waitForConsumers(context, device.id, 2)
       await eventually(async () => {
         const result = await api(client, 'GET', `/notification2/subscriptions?context=tenant&subscription=${unique}Managedobjects`)
         expect(result.body.subscriptions).toHaveLength(1)
@@ -327,7 +323,8 @@ export const notificationsScenarios: ContractScenario[] = [
   },
   {
     name: 'realtime: typeFilter and fragmentsToCopy of the subscription are applied',
-    async run({ client, unique, realtime }) {
+    async run(context) {
+      const { client, unique, realtime, settle } = context
       const { data: device } = await client.inventory.create({ name: `rtf-${unique}`, c8y_IsDevice: {} })
       // c8y-realtime names its subscriptions <name><Api>; creating them first gives them a filter (its ensure accepts the 409)
       const create = (body: Record<string, unknown>) => api(client, 'POST', '/notification2/subscriptions', { context: 'mo', source: { id: device.id }, nonPersistent: true, ...body })
@@ -339,7 +336,7 @@ export const notificationsScenarios: ContractScenario[] = [
       rt.alarms.onUpdate(device.id, record)
       rt.events.onCreate(device.id, record)
       await rt.start()
-      await waitForConsumers(client, unique, device.id, 2)
+      await waitForConsumers(context, device.id, 2)
 
       // alarms of other types are dropped, for creations, deduplications, and updates alike
       const alarm = (type: string) => api(client, 'POST', '/alarm/alarms', { source: { id: device.id }, type, text: 'text', severity: 'MAJOR', time: new Date().toISOString() })
@@ -361,7 +358,7 @@ export const notificationsScenarios: ContractScenario[] = [
         const acknowledged = received.filter((item) => item.action === 'UPDATE' && item.payload.status === 'ACKNOWLEDGED').map((item) => item.payload.type)
         expect(acknowledged.sort()).toEqual(['keep1', 'keep2'])
       }, 15_000)
-      await sleep(1500)
+      await settle(1500)
       expect(received.filter((item) => item.payload.type === 'drop')).toEqual([])
 
       // only the named fragments are copied next to the standard ones
@@ -375,12 +372,13 @@ export const notificationsScenarios: ContractScenario[] = [
   },
   {
     name: 'realtime: a wildcard subscription delivers every API of the device',
-    async run({ client, unique, realtime }) {
+    async run(context) {
+      const { client, unique, realtime } = context
       const { data: device } = await client.inventory.create({ name: `rtw-${unique}`, c8y_IsDevice: {}, com_cumulocity_model_Agent: {} } as any)
       const { received, record } = collector()
       const rt = realtime()
       rt.onAny(device.id, record)
-      await waitForConsumers(client, unique, device.id, 1)
+      await waitForConsumers(context, device.id, 1)
       const list = await api(client, 'GET', `/notification2/subscriptions?source=${device.id}&subscription=${unique}All`)
       expect(list.body.subscriptions).toHaveLength(1)
       expect(list.body.subscriptions[0].subscriptionFilter.apis).toEqual(['*'])

@@ -15,6 +15,7 @@ import { createRealtimeClient } from 'c8y-realtime'
 import type { RealtimeClient, WebSocketFactory } from 'c8y-realtime'
 import { WebSocket } from 'ws'
 import { afterEach, describe, it } from 'vitest'
+import { sleep } from './helpers'
 import { scenarios } from './scenarios'
 
 for (const file of ['.env', 'playground/.env']) {
@@ -88,6 +89,7 @@ describe.skipIf(!configured)('contract scenarios against a real tenant', () => {
         client: client!,
         unique,
         tenant: credentials.tenant!,
+        settle: sleep,
         realtime: () => {
           const realtime = createRealtimeClient({
             baseUrl: baseUrl!,

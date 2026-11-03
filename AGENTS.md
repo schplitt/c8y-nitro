@@ -86,11 +86,16 @@ src/
       └── tenant.ts           # Internal current-user tenant resolution and cache helpers
 tests/
 ├── contract/                   # Contract scenarios for the fake tenant (scenarios/<area>.ts; run against the fake and, via pnpm test:contract, a real tenant)
+│   ├── deviations.ts           # Where the platform deviates from its spec (statuses, body shapes), by behavior id
+│   ├── schema.ts               # Small JSON schema checker for the spec contract test
+│   └── spec.generated.json     # GENERATED (pnpm gen:testing-capabilities): documented query parameter facts and response schemas of the emulated endpoints
 ├── unit/                       # Unit tests for individual functions
 │   ├── apiClient.test.ts       # API client generation tests
 │   ├── c8yzip.test.ts          # Zip creation tests
 │   ├── docker.test.ts          # Docker generation tests
 │   ├── manifest.test.ts        # Manifest generation tests
+│   ├── platform-behavior.test.ts # Keeps docs/reference/platform-behavior.md and the scenarios' `verifies` ids in sync
+│   ├── query-language.test.ts  # Seeded property test of the fake's inventory query language against an oracle
 │   └── runtime.test.ts         # Runtime setup tests
 └── server/                     # Server integration tests (Nitro Vitest environment + c8yTest())
     ├── *.test.ts               # One Nitro app per file
@@ -179,7 +184,7 @@ run `pnpm build` afterwards to refresh the tsnapi snapshot.
 
 ### Generating the testing capability table (`gen:testing-capabilities`)
 
-`src/testing/capabilities.generated.ts` holds what the fake tenant of `c8y-nitro/testing` derives from the core OpenAPI spec instead of assuming: the query parameters of every emulated endpoint, required request-body fields, and enums (alarm severity/status, operation status). It is **generated, not hand-edited**:
+`src/testing/capabilities.generated.ts` holds what the fake tenant of `c8y-nitro/testing` derives from the core OpenAPI spec instead of assuming: the query parameters of every emulated endpoint, required request-body fields, enums (alarm severity/status, operation status), and `C8Y_SPEC_PATHS`, every `METHOD /path` of the spec (the fake answers 404 for a path the platform does not have and 405 for a wrong method, instead of "not emulated"). The same run writes `tests/contract/spec.generated.json`, the documented query parameter facts (type, enum, default, limits) and response schemas of the emulated endpoints (read-only properties become required, except the ones in `OPTIONAL_READ_ONLY`), which `tests/server/contract-spec.test.ts` checks every response of the fake against (kept out of the package). Both are **generated, not hand-edited**:
 
 ```sh
 pnpm gen:testing-capabilities                          # fetch the live spec
@@ -196,7 +201,7 @@ When you emulate a new endpoint, add it to `ENDPOINTS` in `scripts/generate-test
 pnpm test:contract
 ```
 
-Credentials come from the environment or `.env` / `playground/.env` (`C8Y_CONTRACT_BASEURL/TENANT/USER/PASSWORD`, else `C8Y_BASEURL` + `C8Y_DEVELOPMENT_*`). Never print or read them in agent sessions; the runner loads them itself. Every scenario names its data with a unique run id and the runner deletes it afterwards. Not part of `pnpm test` or CI. Run it after changing fake behavior; a failure there means the fake is wrong. **Coverage rule:** the fake runner fails if any emulated endpoint (the generated table plus the built-in endpoints) is never called by a scenario. Run `C8Y_CONTRACT_COVERAGE=1 npx vitest run --project server tests/server/contract.test.ts --disableConsoleIntercept` to print untested endpoints and spec query parameters. A new emulated endpoint or parameter needs a scenario that passes against both. Scenarios must pass on both: use `eventually()` for writes the platform applies asynchronously (bulk deletes, parent indexing). The real platform differs from the API docs in places (e.g. 422 instead of 400, unvalidated alarm severities, `next` links past the end): when a real-tenant run disagrees with the docs, the platform wins — fix the fake, mark the code with `verified against the platform`, and note it in the guide's assumptions. The runner's cleanup deletes binaries through `/inventory/binaries` (the inventory API refuses them).
+Credentials come from the environment or `.env` / `playground/.env` (`C8Y_CONTRACT_BASEURL/TENANT/USER/PASSWORD`, else `C8Y_BASEURL` + `C8Y_DEVELOPMENT_*`). Never print or read them in agent sessions; the runner loads them itself. Every scenario names its data with a unique run id and the runner deletes it afterwards. Not part of `pnpm test` or CI. Run it after changing fake behavior; a failure there means the fake is wrong. **Coverage rule:** the fake runner fails if any emulated endpoint (the generated table plus the built-in endpoints) is never called by a scenario. Run `C8Y_CONTRACT_COVERAGE=1 npx vitest run --project server tests/server/contract.test.ts --disableConsoleIntercept` to print untested endpoints and spec query parameters. A new emulated endpoint or parameter needs a scenario that passes against both. Scenarios must pass on both: use `eventually()` for writes the platform applies asynchronously (bulk deletes, parent indexing). The real platform differs from the API docs in places (e.g. 422 instead of 400, unvalidated alarm severities, `next` links past the end): when a real-tenant run disagrees with the docs, the platform wins — fix the fake, mark the code with `verified against the platform`, note it in the guide's assumptions, and **give it an id**: a row in `docs/reference/platform-behavior.md` (what the docs say vs. what the platform does) and that id in the scenario's `verifies` list. `tests/unit/platform-behavior.test.ts` fails when a documented id has no scenario or a scenario names an undocumented id. `tests/server/contract-spec.test.ts` checks every response of the fake against the spec's schemas and documented statuses; a status the platform answers but the spec does not document goes into `DEVIATIONS` in `tests/contract/deviations.ts` with the same id (a wrong documented body shape into `SCHEMA_DEVIATIONS`); the test fails for a deviation no response needs and for a documented success status no request reaches (`UNREACHABLE` lists the ones that cannot be, with the reason). `tests/unit/query-language.test.ts` is a seeded property test of the query parser (random worlds and expressions against an oracle; `C8Y_QUERY_SEED=<n>` reproduces a failing seed). The runner's cleanup deletes binaries through `/inventory/binaries` (the inventory API refuses them).
 
 ### Testing the Playground
 
@@ -269,6 +274,7 @@ tests/server/
 ├── tenant-options.test.ts    # Tenant option handles, caching, invalidation route
 ├── logging.test.ts           # evlog wide events
 ├── openapi.test.ts           # OpenAPI transformation
+├── contract-spec.test.ts     # Every response of the fake against the OpenAPI spec's documented statuses and schemas
 ├── testing-api.test.ts       # c8y-nitro/testing itself: scopes, stacking, reset, overrides, unsupported requests
 ├── testing-data.test.ts      # A service tested against seeded platform data (the pattern users follow)
 ├── contract.test.ts          # Runs tests/contract/scenarios.ts against the fake tenant
@@ -377,6 +383,7 @@ User-facing documentation belongs in `docs/` first:
 - Runtime hooks → `docs/reference/runtime-hooks.md`
 - Environment variables → `docs/reference/environment-variables.md`
 - Generated runtime exports or generated types → `docs/reference/runtime-module.md`
+- Platform behavior the fake tenant emulates that differs from the API docs → `docs/reference/platform-behavior.md` (one row per id, verified by a contract scenario)
 - Changes to existing API behavior → update the relevant `docs/guide/**` and `docs/reference/**` pages
 - Any feature that users can configure, use, or interact with
 

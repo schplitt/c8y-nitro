@@ -1,7 +1,7 @@
 import { expect } from 'vitest'
 import type { ContractScenario } from '../helpers'
 import type { Client } from '@c8y/client'
-import { rejection } from '../helpers'
+import { rejection, sleep } from '../helpers'
 
 async function api(client: Client, method: string, path: string, body?: unknown) {
   const res = await client.core.fetch(path, { method, headers: { 'content-type': 'application/json', 'accept': 'application/json' }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) })
@@ -9,11 +9,6 @@ async function api(client: Client, method: string, path: string, body?: unknown)
   return { status: res.status, body: text ? JSON.parse(text) : undefined }
 }
 
-function sleep(ms: number) {
-  return new Promise<void>((resolve) => {
-    setTimeout(resolve, ms)
-  })
-}
 const DAY = 86_400_000
 
 export const operationsScenarios: ContractScenario[] = [
@@ -130,6 +125,7 @@ export const operationsScenarios: ContractScenario[] = [
   },
   {
     name: 'operations: list ordering, revert, dates, fragmentType, paging',
+    verifies: ['operations-status-filter-422', 'date-parameters-lenient'],
     async run({ client, unique }) {
       const { data: device } = await client.inventory.create({ name: `ol-${unique}`, c8y_IsDevice: {}, com_cumulocity_model_Agent: {} } as any)
       const created: Array<{ id: string, creationTime: string }> = []

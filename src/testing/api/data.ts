@@ -1,9 +1,9 @@
 import type { C8yRequest } from '../types'
 import type { C8yEndpoint } from '../capabilities.generated'
-import type { DocumentCollection, StoredDocument, TenantData } from '../store'
-import { parentIds, store } from '../store'
+import type { DocumentCollection, StoredDocument, TenantData, ChildKind } from '../store'
+import { CHILD_KINDS, descendants, parentIds, store } from '../store'
 import { C8Y_ENUMS } from '../capabilities.generated'
-import { apiError, baseUrl, byTime, checkQuery, checkRequired, flag, inRange, paged, raw, sourceId } from './http'
+import { apiError, baseUrl, byTime, checkQuery, checkRequired, flag, inRange, paged, parsePlatformDate, raw, sourceId } from './http'
 import { moSelf } from './inventory'
 import type { RealtimeApi } from '../realtime'
 import { notify } from '../notify'
@@ -28,8 +28,8 @@ export type { Resource }
 
 export const RESOURCES = {
   measurement: { collection: 'measurements', path: '/measurement/measurements', domain: 'measurement', listParams: ['currentPage', 'dateFrom', 'dateTo', 'pageSize', 'revert', 'source', 'type', 'valueFragmentSeries', 'valueFragmentType', 'withTotalElements', 'withTotalPages'] },
-  event: { collection: 'events', path: '/event/events', domain: 'event', listParams: ['createdFrom', 'createdTo', 'currentPage', 'dateFrom', 'dateTo', 'fragmentType', 'lastUpdatedFrom', 'lastUpdatedTo', 'pageSize', 'revert', 'source', 'type', 'withTotalElements', 'withTotalPages'] },
-  alarm: { collection: 'alarms', path: '/alarm/alarms', domain: 'alarm', listParams: ['createdFrom', 'createdTo', 'currentPage', 'dateFrom', 'dateTo', 'lastUpdatedFrom', 'lastUpdatedTo', 'pageSize', 'resolved', 'severity', 'source', 'status', 'type', 'withTotalElements', 'withTotalPages'] },
+  event: { collection: 'events', path: '/event/events', domain: 'event', listParams: ['createdFrom', 'createdTo', 'currentPage', 'dateFrom', 'dateTo', 'fragmentType', 'lastUpdatedFrom', 'lastUpdatedTo', 'pageSize', 'revert', 'source', 'type', 'withSourceAdditions', 'withSourceAssets', 'withSourceChildren', 'withSourceDevices', 'withTotalElements', 'withTotalPages'] },
+  alarm: { collection: 'alarms', path: '/alarm/alarms', domain: 'alarm', listParams: ['createdFrom', 'createdTo', 'currentPage', 'dateFrom', 'dateTo', 'lastUpdatedFrom', 'lastUpdatedTo', 'pageSize', 'resolved', 'severity', 'source', 'status', 'type', 'withSourceAdditions', 'withSourceAssets', 'withSourceChildren', 'withSourceDevices', 'withTotalElements', 'withTotalPages'] },
   devicecontrol: { collection: 'operations', path: '/devicecontrol/operations', domain: 'devicecontrol', listParams: ['currentPage', 'dateFrom', 'dateTo', 'deviceId', 'fragmentType', 'pageSize', 'revert', 'status', 'withTotalElements', 'withTotalPages'] },
 } satisfies Record<string, Resource>
 
@@ -67,7 +67,7 @@ const DATE_PARAMS = ['dateFrom', 'dateTo', 'createdFrom', 'createdTo', 'lastUpda
 function checkDates(call: C8yRequest): Response | undefined {
   for (const name of DATE_PARAMS) {
     const value = call.query[name]
-    if (value !== undefined && Number.isNaN(Date.parse(value))) {
+    if (value !== undefined && Number.isNaN(parsePlatformDate(value))) {
       return apiError(422, `${value} is not a valid date./Invalid Data`, `${value} is not a valid date.`)
     }
   }
@@ -82,8 +82,8 @@ function checkDates(call: C8yRequest): Response | undefined {
  * @param to - Range end
  */
 function inDateRange(value: unknown, from: string | undefined, to: string | undefined): boolean {
-  if (from !== undefined && to !== undefined && Date.parse(from) === Date.parse(to)) {
-    return Date.parse(String(value)) === Date.parse(from)
+  if (from !== undefined && to !== undefined && parsePlatformDate(from) === parsePlatformDate(to)) {
+    return Date.parse(String(value)) === parsePlatformDate(from)
   }
   return inRange(value, from, to)
 }
@@ -297,13 +297,47 @@ function checkEventUpdate(call: C8yRequest, id: string, body: Record<string, unk
   return undefined
 }
 
+const SOURCE_KINDS: Array<[string, ChildKind[]]> = [
+  ['withSourceDevices', ['childDevices']],
+  ['withSourceAssets', ['childAssets']],
+  ['withSourceAdditions', ['childAdditions']],
+  ['withSourceChildren', CHILD_KINDS],
+]
+
+/**
+ * The sources a `source` filter selects: the object itself and, with
+ * `withSourceDevices`/`withSourceAssets`/`withSourceAdditions`/
+ * `withSourceChildren`, its children of that kind, recursively.
+ * @param call - The request
+ * @param data - Tenant data
+ * @param source - The `source` parameter
+ */
+function relatedSources(call: C8yRequest, data: TenantData, source: string): Set<string> {
+  return descendants(data, [source], SOURCE_KINDS.filter(([name]) => flag(call, name)).flatMap(([, kinds]) => kinds))
+}
+
+/**
+ * 404 for a `source` that does not exist, when a `withSource*` parameter asks
+ * for its children (verified: without one, an unknown source is an empty page;
+ * the bulk alarm update never answers 404).
+ * @param call - The request
+ * @param data - Tenant data
+ */
+function unknownSource(call: C8yRequest, data: TenantData): Response | undefined {
+  if (call.query.source && SOURCE_KINDS.some(([name]) => flag(call, name)) && !data.managedObjects.has(call.query.source)) {
+    return apiError(404, 'inventory/Not Found', `Finding device data from database failed : No managedObject for id '${call.query.source}'!`)
+  }
+  return undefined
+}
+
 function list(call: C8yRequest, data: TenantData, resource: Resource): StoredDocument[] {
   const { query } = call
   const values = (name: string) => query[name]?.split(',').map((value) => value.trim())
   let items = [...data[resource.collection].values()]
 
   if (query.source) {
-    items = items.filter((document) => sourceId(document) === query.source)
+    const sources = relatedSources(call, data, query.source)
+    items = items.filter((document) => sources.has(sourceId(document) ?? ''))
   }
   if (query.deviceId) {
     items = items.filter((document) => document.deviceId === query.deviceId)
@@ -397,16 +431,16 @@ export function documents(call: C8yRequest, segments: string[], data: TenantData
       }
       if (resource.collection === 'measurements') {
         // verified against the platform
-        const unaligned = ['dateFrom', 'dateTo'].some((name) => call.query[name] !== undefined && Date.parse(call.query[name]!) % 3_600_000 !== 0)
+        const unaligned = ['dateFrom', 'dateTo'].some((name) => call.query[name] !== undefined && parsePlatformDate(call.query[name]!) % 3_600_000 !== 0)
         if (unaligned) {
           return apiError(422, 'measurement/Invalid Data', 'Date from and date to parameters used for delete filter must be truncated to hour!')
         }
       }
       let target = call
       const { dateFrom, dateTo } = call.query
-      if (resource.collection === 'measurements' && dateFrom !== undefined && dateFrom === dateTo) {
+      if (resource.collection === 'measurements' && dateFrom !== undefined && dateTo !== undefined && parsePlatformDate(dateFrom) === parsePlatformDate(dateTo)) {
         // verified: equal bounds delete the whole hour
-        target = { ...call, query: { ...call.query, dateTo: new Date(Date.parse(dateFrom) + 3_600_000).toISOString() } }
+        target = { ...call, query: { ...call.query, dateTo: new Date(parsePlatformDate(dateFrom) + 3_600_000).toISOString() } }
       }
       for (const document of list(target, data, resource)) {
         collection.delete(document.id)
@@ -420,6 +454,10 @@ export function documents(call: C8yRequest, segments: string[], data: TenantData
       const dateError = checkDates(call)
       if (dateError) {
         return dateError
+      }
+      const sourceError = unknownSource(call, data)
+      if (sourceError) {
+        return sourceError
       }
       if (resource.collection === 'operations' && call.query.status !== undefined && !C8Y_ENUMS.operationStatus.includes(call.query.status as any)) {
         // verified: a single, known status
@@ -445,12 +483,13 @@ export function documents(call: C8yRequest, segments: string[], data: TenantData
       return result instanceof Response ? result : Response.json(renderDocument(data, resource, result), { status: 201 })
     }
     if (method === 'PUT' && resource.collection === 'alarms') {
-      checkQuery('PUT /alarm/alarms', call, ['createdFrom', 'createdTo', 'dateFrom', 'dateTo', 'resolved', 'severity', 'source', 'status'])
+      checkQuery('PUT /alarm/alarms', call, ['createdFrom', 'createdTo', 'dateFrom', 'dateTo', 'resolved', 'severity', 'source', 'status', 'withSourceAdditions', 'withSourceAssets', 'withSourceChildren', 'withSourceDevices'])
       const dateError = checkDates(call)
       if (dateError) {
         return dateError
       }
-      // verified: the status is mandatory and the only field applied
+      // verified: the status is mandatory and the only field applied (an
+      // unknown source is a no-op, even with withSource*)
       if (body.status === undefined) {
         return apiError(422, 'alarm/Invalid Data', 'Missing status for bulk alarm update')
       }
@@ -634,8 +673,10 @@ function series(call: C8yRequest, data: TenantData): Response {
       if (numbers) {
         return Object.fromEntries(fns.map((fn) => [fn, aggregate(numbers, fn)]))
       }
-      // verified: empty buckets give 0 for sum and count, null otherwise
-      return fns.every((fn) => fn === 'sum' || fn === 'count') ? Object.fromEntries(fns.map((fn) => [fn, 0])) : null
+      // verified: a series without values in a bucket keeps only its `sum`
+      // and `count` (0); without those (e.g. min/max) the entry is null
+      const zeros = fns.filter((fn) => fn === 'sum' || fn === 'count')
+      return zeros.length > 0 ? Object.fromEntries(zeros.map((fn) => [fn, 0])) : null
     })
   }
   return Response.json({

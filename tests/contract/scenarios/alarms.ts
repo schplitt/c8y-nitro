@@ -1,7 +1,7 @@
 import { expect } from 'vitest'
 import type { Client } from '@c8y/client'
 import type { ContractScenario } from '../helpers'
-import { eventually, time } from '../helpers'
+import { eventually, sleep, time } from '../helpers'
 
 async function api(client: Client, method: string, path: string, body?: unknown) {
   const res = await client.core.fetch(path, { method, headers: { 'content-type': 'application/json', 'accept': 'application/json' }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) })
@@ -9,16 +9,12 @@ async function api(client: Client, method: string, path: string, body?: unknown)
   return { status: res.status, body: text ? JSON.parse(text) : undefined }
 }
 
-function sleep(ms: number) {
-  return new Promise<void>((resolve) => {
-    setTimeout(resolve, ms)
-  })
-}
 const DAY = 86_400_000
 
 export const alarmsScenarios: ContractScenario[] = [
   {
     name: 'alarms: deduplication while active, clearing, bulk update',
+    verifies: ['alarm-deduplication'],
     async run({ client, unique }) {
       const { data: device } = await client.inventory.create({ name: `a-${unique}`, c8y_IsDevice: {} })
       const alarm = { source: { id: device.id }, type: `al-${unique}`, text: 'Too hot', severity: 'MAJOR', time: time(1) }
@@ -208,7 +204,7 @@ export const alarmsScenarios: ContractScenario[] = [
   },
   {
     name: 'alarms: bulk update by severity, dates, created, resolved; only the status is applied',
-    async run({ client, unique }) {
+    async run({ client, unique, settle }) {
       const { data: device } = await client.inventory.create({ name: `bk-${unique}`, c8y_IsDevice: {} })
       const make = async (letter: string, minute: number, severity: string) => (await api(client, 'POST', '/alarm/alarms', { source: { id: device.id }, type: `${letter}-${unique}`, text: 'original', severity, time: time(minute) })).body.id as string
       const a = await make('a', 1, 'MAJOR')
@@ -252,7 +248,7 @@ export const alarmsScenarios: ContractScenario[] = [
       const after = new Date(Date.now() + DAY).toISOString()
       await bulk(`createdFrom=${after}`, { status: 'CLEARED' })
       await bulk(`createdTo=${before}`, { status: 'CLEARED' })
-      await sleep(1500)
+      await settle(1500)
       expect(await statuses()).toEqual({ [a]: 'ACKNOWLEDGED', [b]: 'ACKNOWLEDGED', [c]: 'CLEARED', [d]: 'ACKNOWLEDGED' })
 
       // created inside the window, resolved=true: only the cleared alarm
@@ -260,6 +256,87 @@ export const alarmsScenarios: ContractScenario[] = [
       await eventually(async () => {
         expect(await statuses()).toEqual({ [a]: 'ACKNOWLEDGED', [b]: 'ACKNOWLEDGED', [c]: 'ACKNOWLEDGED', [d]: 'ACKNOWLEDGED' })
       })
+    },
+  },
+]
+
+export const alarmsConformanceScenarios: ContractScenario[] = [
+  {
+    name: 'alarms and events: withSource* parameters, unknown sources, resolved left out',
+    verifies: ['with-source-children', 'source-unknown', 'alarms-resolved-omitted'],
+    async run({ client, unique }) {
+      const create = async (name: string, extra: Record<string, unknown> = {}) => (await client.inventory.create({ name: `${name}-${unique}`, ...extra })).data
+      const parent = await create('parent', { c8y_IsDevice: {} })
+      const device = await create('device', { c8y_IsDevice: {} })
+      const grandchild = await create('grandchild', { c8y_IsDevice: {} })
+      const asset = await create('asset')
+      const addition = await create('addition')
+      await client.inventory.childDevicesAdd(device.id, parent.id)
+      await client.inventory.childDevicesAdd(grandchild.id, device.id)
+      await client.inventory.childAssetsAdd(asset.id, parent.id)
+      await client.inventory.childAdditionsAdd(addition.id, parent.id)
+      const objects = { parent, device, grandchild, asset, addition }
+      for (const [name, mo] of Object.entries(objects)) {
+        await client.alarm.create({ source: { id: mo.id }, type: `ws-${unique}`, text: name, severity: 'MINOR', time: time(1) })
+        await client.event.create({ source: { id: mo.id }, type: `ws-${unique}`, text: name, time: time(1) })
+      }
+      const sources = async (path: string, params: Record<string, string>) => {
+        const { status, body } = await api(client, 'GET', `${path}?${new URLSearchParams({ source: parent.id, pageSize: '100', ...params })}`)
+        expect(status).toBe(200)
+        return (body.alarms ?? body.events).map((item: { text: string }) => item.text).sort()
+      }
+      for (const path of ['/alarm/alarms', '/event/events']) {
+        expect(await sources(path, {}), path).toEqual(['parent'])
+        // the parent links are indexed asynchronously on the platform
+        await eventually(async () => {
+          expect(await sources(path, { withSourceDevices: 'true' }), path).toEqual(['device', 'grandchild', 'parent'])
+          expect(await sources(path, { withSourceAssets: 'true' }), path).toEqual(['asset', 'parent'])
+          expect(await sources(path, { withSourceAdditions: 'true' }), path).toEqual(['addition', 'parent'])
+          expect(await sources(path, { withSourceChildren: 'true' }), path).toEqual(['addition', 'asset', 'device', 'grandchild', 'parent'])
+        })
+        // an unknown source is an empty page, but a 404 with withSource*
+        const unknown = await api(client, 'GET', `${path}?source=99999999999`)
+        expect(unknown.status).toBe(200)
+        expect(unknown.body.alarms ?? unknown.body.events).toEqual([])
+        expect((await api(client, 'GET', `${path}?source=99999999999&withSourceAssets=true`)).status, path).toBe(404)
+        expect((await api(client, 'GET', `${path}?source=99999999999&withSourceDevices=true`)).status, path).toBe(404)
+      }
+      // the bulk alarm update is a no-op for an unknown source, with or without withSource*
+      expect((await api(client, 'PUT', '/alarm/alarms?source=99999999999', { status: 'CLEARED' })).status).toBe(200)
+      expect((await api(client, 'PUT', '/alarm/alarms?source=99999999999&withSourceDevices=true', { status: 'CLEARED' })).status).toBe(200)
+
+      // `resolved` left out returns alarms of every status (the docs say it defaults to false)
+      const { data: cleared } = await client.alarm.create({ source: { id: parent.id }, type: `wc-${unique}`, text: 'cleared', severity: 'MINOR', time: time(2) })
+      await client.alarm.update({ id: cleared.id, status: 'CLEARED' })
+      const texts = async (params: Record<string, string>) => (await api(client, 'GET', `/alarm/alarms?${new URLSearchParams({ source: parent.id, ...params })}`)).body.alarms.map((alarm: { text: string }) => alarm.text).sort()
+      expect(await texts({})).toEqual(['cleared', 'parent'])
+      expect(await texts({ resolved: 'false' })).toEqual(['parent'])
+      expect(await texts({ resolved: 'true' })).toEqual(['cleared'])
+    },
+  },
+  {
+    name: 'alarms and events: date parameter formats',
+    verifies: ['date-parameters-lenient'],
+    async run({ client, unique }) {
+      const { data: device } = await client.inventory.create({ name: `dp-${unique}`, c8y_IsDevice: {} })
+      await client.alarm.create({ source: { id: device.id }, type: `dp-${unique}`, text: 'at 10:05', severity: 'MINOR', time: time(5) })
+      await client.event.create({ source: { id: device.id }, type: `dp-${unique}`, text: 'at 10:05', time: time(5) })
+      for (const path of ['/alarm/alarms', '/event/events']) {
+        const count = async (params: Record<string, string>) => {
+          const { status, body } = await api(client, 'GET', `${path}?${new URLSearchParams({ source: device.id, ...params })}`)
+          return status === 200 ? (body.alarms ?? body.events).length : status
+        }
+        // fields may have one digit, and a bare date is a date
+        expect(await count({ dateFrom: '2026-1-1T10:0:0Z', dateTo: '2026-1-1T10:10:0Z' }), path).toBe(1)
+        expect(await count({ dateFrom: '2026-01-01', dateTo: '2026-01-02' }), path).toBe(1)
+        expect(await count({ dateFrom: '2026-01-01T10:06:00Z', dateTo: '2026-01-02' }), path).toBe(0)
+        expect(await count({ dateFrom: '2026-01-01T11:05:00+01:00', dateTo: '2026-01-01T11:06:00+01:00' }), path).toBe(1)
+        // a time needs seconds; words are no dates
+        expect(await count({ dateFrom: '2026-01-01T10:00Z' }), path).toBe(422)
+        expect(await count({ dateTo: '2026-01-01T10:00' }), path).toBe(422)
+        expect(await count({ dateFrom: 'yesterday' }), path).toBe(422)
+        expect(await count({ createdFrom: '2026-01-01T10:00Z' }), path).toBe(422)
+      }
     },
   },
 ]

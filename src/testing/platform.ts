@@ -8,6 +8,38 @@ import { compileRoute, matchRoute, splitPath } from './router'
 import { store } from './store'
 import { platformApi, UnsupportedRequestError } from './api'
 import { apiError, rawRequests } from './api/http'
+import { C8Y_SPEC_PATHS } from './capabilities.generated'
+
+// The spec's endpoints, to tell "not emulated" (501) from "the platform does not
+// have this endpoint" (404) or "not this method" (405).
+const SPEC_ROUTES = C8Y_SPEC_PATHS.map((entry) => {
+  const [method, template] = entry.split(' ') as [string, string]
+  const pattern = template.split(/\{[^}]+\}/).map((literal) => literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[^/]+')
+  return { method, pattern: new RegExp(`^${pattern}/?$`) }
+})
+const SPEC_DOMAINS = new Set(C8Y_SPEC_PATHS.map((entry) => entry.split('/')[1]!))
+
+/**
+ * How the platform would answer a request the fake does not emulate: 404 for a
+ * path the spec does not know (within the spec's APIs), 405 for a known path
+ * with another method, otherwise nothing (the request is unsupported).
+ * @param method
+ * @param path
+ */
+function specAnswer(method: string, path: string): Response | undefined {
+  if (!SPEC_DOMAINS.has(path.split('/')[1]!)) {
+    return undefined
+  }
+  const known = SPEC_ROUTES.filter((route) => route.pattern.test(path))
+  if (known.length === 0) {
+    // verified against the platform
+    return apiError(404, 'general/Not Found', `Resource ${path} not found`)
+  }
+  if (!known.some((route) => route.method === method)) {
+    return apiError(405, 'general/Method Not Allowed', `Method ${method} is not allowed for ${path}`)
+  }
+  return undefined
+}
 
 interface RegisteredHandler {
   route: CompiledRoute
@@ -187,6 +219,11 @@ export const platform = {
       if (response) {
         return response
       }
+      // the raw pathname: an encoded `/` in a path parameter is not a segment
+      const answer = specAnswer(method, url.pathname)
+      if (answer) {
+        return answer
+      }
     } catch (error) {
       if (!(error instanceof UnsupportedRequestError)) {
         throw error
@@ -298,6 +335,17 @@ function builtInRoute(call: C8yRequest, segments: string[]): Response | undefine
     return Response.json({ name: call.tenant, domainName: new URL(process.env.C8Y_BASEURL || DEFAULTS.baseUrl).host })
   }
 
+  if (a === 'application' && b === 'currentApplication') {
+    // verified: only an application's credentials (bootstrap or a service
+    // user) address the current application; a user gets 403
+    if (call.user === undefined) {
+      return apiError(401, 'security/Unauthorized', 'Invalid credentials!')
+    }
+    const applicationUsers = [process.env.C8Y_BOOTSTRAP_USER, ...platform.subscriptions.map((subscription) => subscription.user)]
+    if (!applicationUsers.includes(call.user)) {
+      return apiError(403, 'security/Forbidden', 'Access Denied')
+    }
+  }
   if (method === 'GET' && a === 'application' && b === 'currentApplication' && category === 'subscriptions' && segments.length === 3) {
     return Response.json({
       users: platform.subscriptions.map(({ tenant, user, password }) => ({ tenant, name: user, password })),

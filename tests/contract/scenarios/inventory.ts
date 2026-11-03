@@ -70,6 +70,7 @@ export const inventoryScenarios: ContractScenario[] = [
   {
     // Verified against a real tenant (eu-latest, 2026-11) via the mc8yp MCP server.
     name: 'inventory: query language details',
+    verifies: ['query-ne-rejected', 'query-type-ignored'],
     async run({ client, unique }) {
       const { data: group } = await client.inventory.create({ name: `group-${unique}`, type: 'c8y_DeviceGroup' })
       const { data: pump } = await client.inventory.create({ name: `Pump-${unique}`, type: `ql-${unique}`, c8y_IsDevice: {}, c8y_Position: { lng: 6.5 }, tags: ['a', 'b'], owners: [{ id: 'o1' }] } as any)
@@ -305,6 +306,7 @@ export const inventoryScenarios: ContractScenario[] = [
   {
     // Verified against a real tenant (2026-11).
     name: 'inventory: child lists (paging, totals, query, withChildren)',
+    verifies: ['paging-total-pages-zero', 'paging-next-past-end', 'with-children-false-empty-references'],
     async run({ client, unique }) {
       const { data: parent } = await client.inventory.create({ name: `parent-${unique}` })
       for (const name of ['d1', 'd2', 'd3']) {
@@ -367,6 +369,7 @@ export const inventoryScenarios: ContractScenario[] = [
   {
     // Verified against a real tenant (2026-11).
     name: 'inventory: single object detail (withChildren, skipChildrenNames, withParents)',
+    verifies: ['with-children-false-empty-references', 'parents-only-with-parameter'],
     async run({ client, unique }) {
       const { data: parent } = await client.inventory.create({ name: `parent-${unique}`, type: `pt-${unique}` })
       const { data: child } = await client.inventory.create({ name: `child-${unique}`, type: `ct-${unique}` })
@@ -459,6 +462,7 @@ export const inventoryScenarios: ContractScenario[] = [
   {
     // Verified against a real tenant (2026-11).
     name: 'inventory: paging statistics, next and prev links, invalid page sizes',
+    verifies: ['paging-next-past-end', 'paging-page-size-422'],
     async run({ client, unique }) {
       for (const name of ['a', 'b', 'c', 'd', 'e']) {
         await client.inventory.create({ name: `${name}-${unique}`, type: `pg-${unique}` })
@@ -508,6 +512,7 @@ export const inventoryScenarios: ContractScenario[] = [
   {
     // Verified against a real tenant (2026-11): numbers and strings are distinct types.
     name: 'inventory: query language comparisons (numbers, decimals, strings, booleans, null, quotes)',
+    verifies: ['query-typed-values', 'query-upper-case-operators'],
     async run({ client, unique }) {
       const type = `qc-${unique}`
       await client.inventory.create({ name: `a-${unique}`, type, num: 5, s: 'b', dec: 2.5, flag: true } as any)
@@ -583,12 +588,13 @@ export const inventoryScenarios: ContractScenario[] = [
   {
     // Verified against a real tenant (2026-11).
     name: 'inventory: $orderby (nested, numbers before strings, missing values, no filter)',
+    verifies: ['orderby-type-order'],
     async run({ client, unique }) {
       const type = `ob-${unique}`
-      await client.inventory.create({ name: `a-${unique}`, type, num: 5, s: 'b', nested: { v: 2 } } as any)
-      await client.inventory.create({ name: `b-${unique}`, type, num: 10, s: 'a', nested: { v: 10 } } as any)
-      await client.inventory.create({ name: `c-${unique}`, type, num: 7, s: 'C', nested: { v: 1 } } as any)
-      await client.inventory.create({ name: `d-${unique}`, type, num: 'seven' } as any)
+      await client.inventory.create({ name: `a-${unique}`, type, num: 5, s: 'b', nested: { v: 2 }, mixed: 1 })
+      await client.inventory.create({ name: `b-${unique}`, type, num: 10, s: 'a', nested: { v: 10 }, mixed: 'x' })
+      await client.inventory.create({ name: `c-${unique}`, type, num: 7, s: 'C', nested: { v: 1 }, mixed: true })
+      await client.inventory.create({ name: `d-${unique}`, type, num: 'seven', mixed: false })
       await client.inventory.create({ name: `e-${unique}`, type } as any)
       const names = async (expression: string, extra: Record<string, unknown> = {}) =>
         (await client.inventory.list({ query: expression, pageSize: 100, ...extra } as any)).data.map((mo) => mo.name!.replace(`-${unique}`, ''))
@@ -600,6 +606,9 @@ export const inventoryScenarios: ContractScenario[] = [
       // numbers sort before strings
       expect(await names(`${filter} and has(num)) $orderby=num asc`)).toEqual(['a', 'c', 'b', 'd'])
       expect(await names(`${filter} and has(num)) $orderby=num desc`)).toEqual(['d', 'b', 'c', 'a'])
+      // booleans sort after strings, false before true
+      expect(await names(`${filter} and has(mixed)) $orderby=mixed asc`)).toEqual(['a', 'b', 'd', 'c'])
+      expect(await names(`${filter} and has(mixed)) $orderby=mixed desc`)).toEqual(['c', 'd', 'b', 'a'])
       // strings by character code: uppercase first
       expect(await names(`${filter} and has(s)) $orderby=s asc`)).toEqual(['c', 'b', 'a'])
       expect(await names(`${filter} and has(s)) $orderby=s desc`)).toEqual(['a', 'b', 'c'])
@@ -615,6 +624,88 @@ export const inventoryScenarios: ContractScenario[] = [
       expect(await names(`${filter} and has(s)) $orderby=num desc, name asc`)).toEqual(['b', 'c', 'a'])
       // $orderby alone works without a filter
       expect(await names('$orderby=name desc', { text: unique })).toEqual(['e', 'd', 'c', 'b', 'a'])
+    },
+  },
+]
+
+export const inventoryConformanceScenarios: ContractScenario[] = [
+  {
+    name: 'inventory: query language on standard properties, literal left side, invalid paths and arguments',
+    verifies: ['query-has-standard-property', 'query-literal-left-side', 'query-invalid-path', 'query-function-arguments', 'query-upper-case-operators', 'query-date-literals'],
+    async run({ client, unique }) {
+      const type = `qs-${unique}`
+      await client.inventory.create({ name: `x-${unique}`, type, c8y_Flag: {} })
+      await client.inventory.create({ name: `y-${unique}`, type })
+      const names = async (expression: string) =>
+        (await client.inventory.list({ query: `$filter=(type eq '${type}' and ${expression})`, pageSize: 100 })).data.map((mo) => mo.name!.replace(`-${unique}`, '')).sort()
+
+      // has() and hasany() on standard properties match nothing
+      for (const property of ['id', 'self', 'name', 'type', 'owner', 'creationTime', 'lastUpdated', 'childDevices', 'childAssets', 'childAdditions', 'deviceParents', 'assetParents', 'additionParents']) {
+        expect(await names(`has(${property})`), property).toEqual([])
+      }
+      expect(await names('hasany(name,type)')).toEqual([])
+      expect(await names('has(c8y_Flag)')).toEqual(['x'])
+      expect(await names('hasany(name,c8y_Flag)')).toEqual(['x'])
+
+      // a quoted left side is accepted and names the property
+      expect(await names(`'a' eq 'a'`)).toEqual([])
+      expect(await names(`'name' eq 'x-${unique}'`)).toEqual(['x'])
+      // function arguments are not validated: unknown group ids match nothing, quoted fragments work
+      expect(await names(`bygroupid(abc)`)).toEqual([])
+      expect(await names(`bygroupid(eq, 'x')`)).toEqual([])
+      expect(await names(`isinhierarchyof('${UNKNOWN_ID}')`)).toEqual([])
+      expect(await names(`has('c8y_Flag')`)).toEqual(['x'])
+      // a .date literal needs a date and a time; seconds, fraction, and zone are optional, fields may have one digit
+      for (const literal of ['2020-01-01T00:00', '2020-1-1T0:0:0Z', '2020-01-01T00:00:00.1234567Z', '2020-01-01T00:00:00+0100']) {
+        expect(await names(`creationTime.date gt '${literal}'`), literal).toEqual(['x', 'y'])
+      }
+      // anything else matches nothing (no error)
+      for (const literal of ['2020-01-01', '2020-1-1', 'yesterday', '2020-01-01 00:00:00', '2020-01-01T00Z']) {
+        expect(await names(`creationTime.date gt '${literal}'`), literal).toEqual([])
+      }
+
+      // lower-case t/z is not a date-time, a quoted fragment with a slash is accepted
+      expect(await names(`creationTime.date gt '2020-01-01t09:00z'`)).toEqual([])
+      expect(await names(`has('a/b')`)).toEqual([])
+      // rejected: paths with / or [], upper-case operators, impossible dates, quoted operators, bad argument lists
+      const statuses: Record<string, number> = {}
+      const invalids = [
+        `groups/id eq 'x'`,
+        `externalIds["serialNumber"].id eq 'x'`,
+        `name eq 'x' AND type eq '${type}'`,
+        `name eq 'x' OR type eq '${type}'`,
+        `NOT(name eq 'x')`,
+        `creationTime.date gt '2020-13-01T00:00:00Z'`,
+        `creationTime.date gt '2020-01-01T25:00:00Z'`,
+        `creationTime.date gt '2020-01-01T09:00:00.1234567891Z'`,
+        `name 'eq' 'x'`,
+        `hasany(c8y_Flag missing)`,
+        `has(c8y_Flag,)`,
+      ]
+      for (const invalid of invalids) {
+        statuses[invalid] = (await client.core.fetch(`/inventory/managedObjects?${query({ query: `$filter=(type eq '${type}' and ${invalid})` })}`)).status
+      }
+      expect(statuses).toEqual(Object.fromEntries(invalids.map((invalid) => [invalid, 422])))
+    },
+  },
+  {
+    name: 'inventory: $orderby on arrays and byte-wise string order',
+    verifies: ['orderby-arrays', 'orderby-byte-wise'],
+    async run({ client, unique }) {
+      const type = `oa-${unique}`
+      await client.inventory.create({ name: `AH-VW-10-${unique}`, type, tags: [5, 1] })
+      await client.inventory.create({ name: `AH-VW-100-${unique}`, type, tags: [3] })
+      await client.inventory.create({ name: `AH-VW-14-${unique}`, type, tags: [2, 9] })
+      await client.inventory.create({ name: `ah-vw-1-${unique}`, type, tags: ['b', 'a'] })
+      const names = async (orderBy: string) =>
+        (await client.inventory.list({ query: `$filter=(type eq '${type}') $orderby=${orderBy}`, pageSize: 100 })).data.map((mo) => mo.name!.replace(`-${unique}`, ''))
+
+      // strings byte-wise: upper case first, "10" < "100" < "14"
+      expect(await names('name asc')).toEqual(['AH-VW-10', 'AH-VW-100', 'AH-VW-14', 'ah-vw-1'])
+      expect(await names('name desc')).toEqual(['ah-vw-1', 'AH-VW-14', 'AH-VW-100', 'AH-VW-10'])
+      // arrays by their smallest element ascending and their largest descending
+      expect(await names('tags asc')).toEqual(['AH-VW-10', 'AH-VW-14', 'AH-VW-100', 'ah-vw-1'])
+      expect(await names('tags desc')).toEqual(['ah-vw-1', 'AH-VW-14', 'AH-VW-10', 'AH-VW-100'])
     },
   },
 ]

@@ -127,6 +127,32 @@ export function childIds(data: TenantData, parentId: string, kind: ChildKind): s
 }
 
 /**
+ * The given objects and their children of the given kinds, recursively.
+ * @param data - Tenant data
+ * @param roots - Managed object ids
+ * @param kinds - Relation kinds to follow (default: all)
+ */
+export function descendants(data: TenantData, roots: Iterable<string>, kinds: readonly ChildKind[] = CHILD_KINDS): Set<string> {
+  const result = new Set<string>()
+  const queue = [...roots]
+  for (let i = 0; i < queue.length; i++) {
+    const id = queue[i]!
+    if (result.has(id)) {
+      continue
+    }
+    result.add(id)
+    for (const kind of kinds) {
+      for (const child of childIds(data, id, kind)) {
+        if (!result.has(child)) {
+          queue.push(child)
+        }
+      }
+    }
+  }
+  return result
+}
+
+/**
  * Parent ids of a managed object for a relation kind.
  * @param data - Tenant data
  * @param childId - Managed object id
