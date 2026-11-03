@@ -48,6 +48,7 @@ export const identityScenarios: ContractScenario[] = [
   },
   {
     name: 'identity: unknown ids and objects, validation, delete twice',
+    verifies: ['required-fields-422'],
     async run({ client, unique }) {
       const { data: device } = await client.inventory.create({ name: `idv-${unique}`, c8y_IsDevice: {} })
 

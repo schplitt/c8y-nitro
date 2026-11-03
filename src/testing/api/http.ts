@@ -137,17 +137,62 @@ export function paged(call: C8yRequest, collection: string, items: unknown[], pa
 }
 
 /**
+ * Parses a date query parameter the way the platform does (verified): fields
+ * may have one digit (`2026-1-3T1:0:0Z`), a bare date is allowed, but a time
+ * needs seconds (`2026-10-13T12:00Z` is invalid).
+ * @param value - Query parameter value
+ * @returns Epoch milliseconds, or `NaN` for an invalid date
+ */
+const parsedDates = new Map<string, number>()
+
+export function parsePlatformDate(value: string): number {
+  // filters parse the same bounds once per document: remember recent values
+  const cached = parsedDates.get(value)
+  if (cached !== undefined) {
+    return cached
+  }
+  if (parsedDates.size >= 256) {
+    parsedDates.clear()
+  }
+  const time = parsePlatformDateUncached(value)
+  parsedDates.set(value, time)
+  return time
+}
+
+function parsePlatformDateUncached(value: string): number {
+  const match = /^(\d{4})-(\d{1,2})-(\d{1,2})(?:T(\d{1,2}):(\d{1,2}):(\d{1,2})(?:\.(\d{1,9}))?(?:(Z)|([+-])(\d{1,2})(?::?(\d{2}))?)?)?$/i.exec(value.trim())
+  if (!match) {
+    return Number.NaN
+  }
+  const [year, month, day, hour, minute, second] = match.slice(1, 7).map((field) => Number(field ?? 0))
+  const fraction = match[7] ?? '0'
+  const [sign, zoneHours, zoneMinutes] = [match[9], Number(match[10] ?? 0), Number(match[11] ?? 0)]
+  const lastOfMonth = new Date(0)
+  lastOfMonth.setUTCFullYear(year!, month!, 0)
+  const zoneTooFar = zoneHours > 18 || (zoneHours === 18 && zoneMinutes > 0) || zoneMinutes > 59
+  if (month! < 1 || month! > 12 || day! < 1 || day! > lastOfMonth.getUTCDate() || hour! > 23 || minute! > 59 || second! > 59 || zoneTooFar) {
+    return Number.NaN
+  }
+  // `Date.UTC` reads years below 100 as 19xx; set the year explicitly
+  const date = new Date(0)
+  date.setUTCFullYear(year!, month! - 1, day!)
+  date.setUTCHours(hour!, minute!, second!, Number(`0.${fraction}`) * 1000)
+  const offset = sign === undefined ? 0 : (sign === '-' ? -1 : 1) * (zoneHours * 60 + zoneMinutes)
+  return date.getTime() - offset * 60_000
+}
+
+/**
  * Filters documents by an inclusive-from, exclusive-to date range on a field.
  * @param value - ISO date of the document
- * @param from - Range start (inclusive)
+ * @param from - Range start (inclusive), as the platform parses it
  * @param to - Range end (exclusive)
  */
 export function inRange(value: unknown, from: string | undefined, to: string | undefined): boolean {
   const time = Date.parse(String(value))
-  if (from !== undefined && time < Date.parse(from)) {
+  if (from !== undefined && time < parsePlatformDate(from)) {
     return false
   }
-  if (to !== undefined && time >= Date.parse(to)) {
+  if (to !== undefined && time >= parsePlatformDate(to)) {
     return false
   }
   return true

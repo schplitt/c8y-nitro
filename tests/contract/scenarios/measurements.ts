@@ -19,12 +19,6 @@ async function call(client: Client, method: string, path: string, body?: unknown
 
 const q = encodeURIComponent
 const at = (hour: number, minute = 0) => new Date(Date.UTC(2026, 0, 1, hour, minute)).toISOString()
-function pause(ms: number) {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms)
-  })
-}
-
 async function createTemperature(client: Client, source: string, when: string, value: number, fragment = 'c8y_T', type = fragment) {
   await client.measurement.create({ source: { id: source }, type, time: when, [fragment]: { T: { value, unit: 'C' } } } as any)
 }
@@ -32,6 +26,7 @@ async function createTemperature(client: Client, source: string, when: string, v
 export const measurementsScenarios: ContractScenario[] = [
   {
     name: 'measurements: newest first, revert=false for oldest first',
+    verifies: ['measurements-newest-first'],
     async run({ client, unique }) {
       const { data: device } = await client.inventory.create({ name: `m-${unique}`, c8y_IsDevice: {} })
       for (const [minute, value] of [[1, 10], [3, 30], [2, 20]] as const) {
@@ -77,6 +72,7 @@ export const measurementsScenarios: ContractScenario[] = [
   },
   {
     name: 'measurements: collection create, value fragment filters, detail and delete, interval functions',
+    verifies: ['measurement-by-id-405'],
     async run({ client, unique }) {
       const { data: device } = await client.inventory.create({ name: `m2-${unique}`, c8y_IsDevice: {} })
       const created = await client.core.fetch('/measurement/measurements', {
@@ -115,6 +111,7 @@ export const measurementsScenarios: ContractScenario[] = [
   },
   {
     name: 'measurements: validation and error responses',
+    verifies: ['measurement-by-id-405', 'time-unparsable-400', 'date-parameters-lenient'],
     async run({ client, unique }) {
       const { data: device } = await client.inventory.create({ name: `mv-${unique}`, c8y_IsDevice: {} })
       const post = (body: unknown) => call(client, 'POST', '/measurement/measurements', body)
@@ -187,7 +184,7 @@ export const measurementsScenarios: ContractScenario[] = [
   },
   {
     name: 'measurements: bulk delete filters (type, fragmentType, dateFrom, dateTo)',
-    async run({ client, unique }) {
+    async run({ client, unique, settle }) {
       const { data: device } = await client.inventory.create({ name: `md-${unique}`, c8y_IsDevice: {} })
       await createTemperature(client, device.id, at(9, 0), 1)
       await createTemperature(client, device.id, at(9, 30), 2)
@@ -208,7 +205,7 @@ export const measurementsScenarios: ContractScenario[] = [
       await del(`fragmentType=c8y_Nope`)
       await del(`dateFrom=${q(at(12, 0))}&fragmentType=c8y_Other`)
       await del(`dateFrom=${q(at(13, 0))}`)
-      await pause(1500)
+      await settle(1500)
       expect(await remaining()).toHaveLength(6)
 
       // dateFrom inclusive, dateTo exclusive
@@ -229,7 +226,7 @@ export const measurementsScenarios: ContractScenario[] = [
       })
 
       await del(`dateTo=${q(at(10, 0))}`)
-      await pause(1500)
+      await settle(1500)
       expect(await remaining()).toEqual(['10:00', '12:00'])
 
       await del(`dateFrom=${q(at(12, 0))}`)
@@ -300,6 +297,7 @@ export const measurementsScenarios: ContractScenario[] = [
   },
   {
     name: 'measurements: series validation',
+    verifies: ['series-validation-statuses'],
     async run({ client, unique }) {
       const { data: device } = await client.inventory.create({ name: `mq-${unique}`, c8y_IsDevice: {} })
       const base = `/measurement/measurements/series?source=${device.id}&dateFrom=${q(time(0))}&dateTo=${q(time(10))}`
@@ -315,6 +313,37 @@ export const measurementsScenarios: ContractScenario[] = [
       const fn = await call(client, 'GET', `${base}&aggregationInterval=1h&aggregationFunction=bogus`)
       expect(fn.status).toBe(400)
       expect(fn.json.message).toContain('min, max, avg, sum, count, stdDevPop, stdDevSamp')
+    },
+  },
+]
+
+export const measurementsConformanceScenarios: ContractScenario[] = [
+  {
+    name: 'measurements: series entries of a series without a value (null, count-only buckets)',
+    verifies: ['series-missing-entries'],
+    async run({ client, unique }) {
+      const { data: device } = await client.inventory.create({ name: `sn-${unique}`, c8y_IsDevice: {} })
+      const measurement = (minute: number, fragments: Record<string, unknown>) => ({ source: { id: device.id }, type: `sn-${unique}`, time: time(minute), ...fragments })
+      await client.measurement.create(measurement(0, { c8y_Temperature: { T: { value: 21.5, unit: 'C' } } }))
+      await client.measurement.create(measurement(1, { c8y_Temperature: { T: { value: 22.5, unit: 'C' } }, c8y_Humidity: { H: { value: 50, unit: '%' } } }))
+      await client.measurement.create(measurement(2, { c8y_Humidity: { H: { value: 55, unit: '%' } } }))
+      const base = `/measurement/measurements/series?source=${device.id}&dateFrom=${q(time(0))}&dateTo=${q(time(10))}&series=c8y_Temperature.T&series=c8y_Humidity.H`
+      // the order of `series` varies on the platform: read entries by series name
+      const entries = (json: any) => {
+        const index = (name: string) => json.series.findIndex((item: { name: string }) => item.name === name)
+        return Object.fromEntries(Object.entries(json.values).map(([at, values]: [string, any]) => [at, { T: values[index('T')], H: values[index('H')] }]))
+      }
+      // without aggregation, a series without a value at that time is null
+      const plain = entries((await call(client, 'GET', base)).json)
+      expect(plain[time(0)]).toEqual({ T: { min: 21.5, max: 21.5 }, H: null })
+      expect(plain[time(1)]).toEqual({ T: { min: 22.5, max: 22.5 }, H: { min: 50, max: 50 } })
+      expect(plain[time(2)]).toEqual({ T: null, H: { min: 55, max: 55 } })
+      // with aggregation functions, an empty bucket keeps only the functions that have a value
+      const aggregated = entries((await call(client, 'GET', `${base}&aggregationInterval=1m&aggregationFunction=avg&aggregationFunction=count`)).json)
+      expect(aggregated[time(0)]).toEqual({ T: { avg: 21.5, count: 1 }, H: { count: 0 } })
+      expect(aggregated[time(2)]).toEqual({ T: { count: 0 }, H: { avg: 55, count: 1 } })
+      const minMax = entries((await call(client, 'GET', `${base}&aggregationInterval=1m&aggregationFunction=min&aggregationFunction=max`)).json)
+      expect(minMax[time(0)]).toEqual({ T: { min: 21.5, max: 21.5 }, H: null })
     },
   },
 ]

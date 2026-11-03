@@ -1,5 +1,6 @@
 import type { TenantData } from '../store'
-import { CHILD_KINDS, childIds } from '../store'
+import { childIds, descendants } from '../store'
+import { parsePlatformDate } from './http'
 
 /**
  * The Cumulocity inventory query language (OData 2.0 style), as documented in
@@ -15,11 +16,18 @@ import { CHILD_KINDS, childIds } from '../store'
  *   matches a string property and a quoted value never matches a number
  * - `true`/`false` match booleans only; `null` matches a stored `null` only,
  *   never a missing property
- * - date-times via `.date` (`creationTime.date gt '2026-…'`)
+ * - date-times via `.date` (`creationTime.date gt '2026-…'`): the literal
+ *   needs a date and a time; anything else matches nothing
  * - `eq` on array properties matches any element (`customers.id eq '1'`)
- * - `$orderby=field [asc|desc], …`
+ * - `has()`/`hasany()` on a standard property (`name`, `type`, …) match nothing
+ * - a quoted left side (`'name' eq 'x'`) is accepted and read as the property
+ * - `$orderby=field [asc|desc], …`; arrays sort by their smallest element
+ *   ascending and their largest descending
  *
- * Anything else (e.g. `ne`) is rejected with 422 like on the platform.
+ * Function arguments are not validated: a non-numeric group id matches nothing
+ * and a quoted fragment name works like an unquoted one. Anything else (`ne`,
+ * upper-case operators, paths with `/` or `[`) is rejected with 422 like on the
+ * platform.
  */
 export interface ParsedQuery {
   filter: (document: Record<string, unknown>) => boolean
@@ -35,6 +43,14 @@ type Literal = string | number | boolean | null
 interface Token { kind: 'word' | 'string' | 'punct', value: string }
 
 const COMPARISONS = new Set(['eq', 'gt', 'ge', 'lt', 'le'])
+// A property path or fragment name. The platform rejects `groups/id` and
+// `externalIds["x"].id` (verified); other characters are left alone.
+const PATH = /^[^/[\]]+$/
+/**
+ * Standard managed object properties, for which `has()` is "not supported"
+ * (verified against the platform: the query matches nothing).
+ */
+const STANDARD_PROPERTIES = new Set(['id', 'self', 'name', 'type', 'owner', 'creationTime', 'lastUpdated', 'childDevices', 'childAssets', 'childAdditions', 'deviceParents', 'assetParents', 'additionParents'])
 
 function tokenize(input: string): Token[] {
   const tokens: Token[] = []
@@ -105,7 +121,7 @@ export function readValues(document: unknown, path: string): unknown[] {
   for (const key of path.split('.')) {
     values = values.flatMap((value) => {
       const items = Array.isArray(value) ? value : [value]
-      return items.flatMap((item) => (item && typeof item === 'object' && key in item) ? [(item as Record<string, unknown>)[key]] : [])
+      return items.flatMap((item) => (item && typeof item === 'object' && Object.hasOwn(item, key)) ? [(item as Record<string, unknown>)[key]] : [])
     })
   }
   return values.flatMap((value) => Array.isArray(value) ? value : [value])
@@ -120,7 +136,20 @@ export function readPath(document: Record<string, unknown>, path: string): unkno
   return readValues(document, path)[0]
 }
 
-function compareOne(actual: unknown, operator: string, expected: Literal, asDate: boolean): boolean {
+/**
+ * The regular expression of a `*` wildcard literal (case-insensitive), or
+ * undefined for a literal without wildcards.
+ * @param expected - The literal
+ */
+function wildcard(expected: Literal): RegExp | undefined {
+  if (typeof expected !== 'string' || !expected.includes('*')) {
+    return undefined
+  }
+  const pattern = expected.split('*').map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')
+  return new RegExp(`^${pattern}$`, 'i')
+}
+
+function compareOne(actual: unknown, operator: string, expected: Literal, asDate: boolean, pattern?: RegExp): boolean {
   if (expected === null) {
     // verified: only a stored null, never a missing property
     return operator === 'eq' && actual === null
@@ -130,7 +159,7 @@ function compareOne(actual: unknown, operator: string, expected: Literal, asDate
   }
   if (asDate) {
     const left = Date.parse(String(actual))
-    const right = Date.parse(String(expected))
+    const right = expected as number
     switch (operator) {
       case 'eq': return left === right
       case 'gt': return left > right
@@ -144,11 +173,7 @@ function compareOne(actual: unknown, operator: string, expected: Literal, asDate
     return false
   }
   if (operator === 'eq') {
-    if (typeof expected === 'string' && expected.includes('*')) {
-      const pattern = expected.split('*').map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')
-      return new RegExp(`^${pattern}$`, 'i').test(String(actual))
-    }
-    return actual === expected
+    return pattern ? pattern.test(String(actual)) : actual === expected
   }
   if (typeof expected === 'boolean') {
     return false
@@ -163,20 +188,35 @@ function compareOne(actual: unknown, operator: string, expected: Literal, asDate
   }
 }
 
-function descendants(data: TenantData, roots: string[]): Set<string> {
-  const result = new Set<string>()
-  const queue = [...roots]
-  while (queue.length > 0) {
-    const id = queue.shift()!
-    if (result.has(id)) {
-      continue
-    }
-    result.add(id)
-    for (const kind of CHILD_KINDS) {
-      queue.push(...childIds(data, id, kind))
-    }
+// A `.date` literal needs a date and a time (seconds, fraction, and zone optional)
+const QUERY_DATE = /^\d{4}-\d{1,2}-\d{1,2}T\d{1,2}:\d{1,2}(:\d{1,2}(\.\d+)?)?(Z|[+-]\d{1,2}(:?\d{2})?)?$/
+
+/**
+ * Parses a `.date` literal the way the platform does (verified): a value
+ * without a date and a time (`'2020-01-01'`, `'yesterday'`, lower-case `t`/`z`)
+ * matches nothing, one with the right shape but impossible fields
+ * (`'2020-13-01T00:00:00Z'`, a fraction longer than nine digits) is rejected
+ * with 422.
+ * @param value - The literal
+ * @returns Epoch milliseconds, `NaN` (matches nothing), or `'invalid'` (422)
+ */
+function queryDate(value: string): number | 'invalid' {
+  if (!QUERY_DATE.test(value)) {
+    return Number.NaN
   }
-  return result
+  const withSeconds = value.replace(/^(\d{4}-\d{1,2}-\d{1,2}T\d{1,2}:\d{1,2})(?![:\d])/, '$1:00')
+  const time = parsePlatformDate(withSeconds)
+  return Number.isNaN(time) ? 'invalid' : time
+}
+
+/**
+ * `has(fragment)`: the property exists. Standard properties are "not
+ * supported": the platform matches nothing for them.
+ * @param document
+ * @param fragment
+ */
+function hasFragment(document: Record<string, unknown>, fragment: string): boolean {
+  return !STANDARD_PROPERTIES.has(fragment.split('.')[0]!) && readValues(document, fragment).length > 0
 }
 
 function parseFilter(input: string, data: TenantData): ParsedQuery['filter'] {
@@ -198,17 +238,25 @@ function parseFilter(input: string, data: TenantData): ParsedQuery['filter'] {
   const argumentList = () => {
     expect('(')
     const args: string[] = []
-    while (peek()?.value !== ')') {
-      args.push(next().value)
-      if (peek()?.value === ',') {
-        next()
+    // verified: arguments are not validated (`bygroupid(abc)`, `has('x')` are
+    // accepted), but they are separated by commas, without a trailing one
+    while (true) {
+      const token = next()
+      if (token.kind === 'punct' || (token.kind === 'word' && !PATH.test(token.value))) {
+        throw new QuerySyntaxError(`invalid function argument "${token.value}"`)
+      }
+      args.push(token.value)
+      if (next().value === ')') {
+        return args
       }
     }
-    expect(')')
-    if (args.length === 0) {
-      throw new QuerySyntaxError('missing function argument')
+  }
+  const comparison = (): [string, Literal] => {
+    const operator = next()
+    if (operator.kind !== 'word' || !COMPARISONS.has(operator.value)) {
+      throw new QuerySyntaxError(`unknown operator "${operator.value}"`)
     }
-    return args
+    return [operator.value, literal(next())]
   }
 
   function parseOr(): ParsedQuery['filter'] {
@@ -240,49 +288,64 @@ function parseFilter(input: string, data: TenantData): ParsedQuery['filter'] {
       expect(')')
       return inner
     }
-    if (token.kind !== 'word') {
+    if (token.kind === 'punct') {
       throw new QuerySyntaxError(`unexpected "${token.value}"`)
     }
-    if (token.value === 'not') {
+    // verified: a quoted left side ('name' eq 'x') is accepted and names the
+    // property; keywords and functions are only recognized unquoted
+    if (token.kind === 'word' && token.value === 'not') {
       expect('(')
       const inner = parseOr()
       expect(')')
       return (document) => !inner(document)
     }
-    if (peek()?.value === '(') {
-      const args = argumentList()
+    if (token.kind === 'word' && peek()?.value === '(') {
       switch (token.value) {
-        case 'has':
+        case 'has': {
+          const args = argumentList()
           if (args.length !== 1) {
             throw new QuerySyntaxError('has() accepts one argument')
           }
-          return (document) => readValues(document, args[0]!).length > 0
-        case 'hasany':
-          return (document) => args.some((fragment) => readValues(document, fragment).length > 0)
+          return (document) => hasFragment(document, args[0]!)
+        }
+        case 'hasany': {
+          const args = argumentList()
+          return (document) => args.some((fragment) => hasFragment(document, fragment))
+        }
         case 'bygroupid': {
-          // direct members (child assets) of the given groups
-          return (document) => args.some((group) => childIds(data, group, 'childAssets').includes(String(document.id)))
+          // direct members (child assets) of the given groups (the set is
+          // built once per query, not per document)
+          const args = argumentList()
+          let members: Set<string> | undefined
+          return (document) => (members ??= new Set(args.flatMap((group) => childIds(data, group, 'childAssets')))).has(String(document.id))
         }
         case 'isinhierarchyof': {
           // the given objects and all their children (assets, devices, additions), recursively
-          return (document) => descendants(data, args).has(String(document.id))
+          const args = argumentList()
+          let members: Set<string> | undefined
+          return (document) => (members ??= descendants(data, args)).has(String(document.id))
         }
         default:
           throw new QuerySyntaxError(`unknown function ${token.value}()`)
       }
     }
-    const operator = next()
-    if (!COMPARISONS.has(operator.value)) {
-      throw new QuerySyntaxError(`unknown operator "${operator.value}"`)
+    if (!PATH.test(token.value)) {
+      throw new QuerySyntaxError(`invalid property path "${token.value}"`)
     }
-    const value = literal(next())
+    const [operator, value] = comparison()
     const asDate = token.value.endsWith('.date')
     const path = asDate ? token.value.slice(0, -'.date'.length) : token.value
+    const date = asDate ? queryDate(String(value)) : undefined
+    if (date === 'invalid') {
+      throw new QuerySyntaxError(`invalid date "${String(value)}"`)
+    }
+    const expected = date ?? value
+    const pattern = wildcard(expected)
     return (document) => {
       const values = readValues(document, path)
       return values.length === 0
-        ? compareOne(undefined, operator.value, value, asDate)
-        : values.some((actual) => compareOne(actual, operator.value, value, asDate))
+        ? compareOne(undefined, operator, expected, asDate, pattern)
+        : values.some((actual) => compareOne(actual, operator, expected, asDate, pattern))
     }
   }
 
@@ -325,24 +388,34 @@ export function applyOrderBy<T extends Record<string, unknown>>(items: T[], orde
     return items
   }
   // verified against the platform: missing values first (ascending), then
-  // numbers, then strings (by character code). Ids are numeric on the platform.
-  const rank = (value: unknown) => value === undefined || value === null ? 0 : typeof value === 'number' ? 1 : 2
-  return [...items].sort((a, b) => {
-    for (const { field, descending } of orderBy) {
-      let left = readPath(a, field)
-      let right = readPath(b, field)
-      if (field === 'id') {
-        left = Number(left)
-        right = Number(right)
-      }
+  // numbers, then strings (by character code), then booleans (MongoDB's order).
+  // Ids are numeric on the platform. An array sorts by its smallest element
+  // ascending and its largest descending.
+  const rank = (value: unknown) => value === undefined || value === null ? 0 : typeof value === 'number' ? 1 : typeof value === 'string' ? 2 : 3
+  const compare = (left: unknown, right: unknown) => rank(left) !== rank(right)
+    ? rank(left) - rank(right)
+    : (left as number | string) < (right as number | string) ? -1 : 1
+  const sortKey = (document: T, field: string, descending: boolean): unknown => {
+    const values = readValues(document, field).filter((value) => typeof value !== 'object' || value === null)
+    if (field === 'id') {
+      const id = Number(values[0])
+      return Number.isNaN(id) ? undefined : id
+    }
+    return values.reduce<unknown>((best, value) => best === undefined ? value : (descending ? compare(value, best) > 0 : compare(value, best) < 0) ? value : best, undefined)
+  }
+  // keys once per document, not per comparison
+  const keyed = items.map((item) => ({ item, keys: orderBy.map(({ field, descending }) => sortKey(item, field, descending)) }))
+  keyed.sort((a, b) => {
+    for (const [index, { descending }] of orderBy.entries()) {
+      const left = a.keys[index]
+      const right = b.keys[index]
       if (left === right || (rank(left) === 0 && rank(right) === 0)) {
         continue
       }
-      const result = rank(left) !== rank(right)
-        ? rank(left) - rank(right)
-        : (left as number | string) < (right as number | string) ? -1 : 1
+      const result = compare(left, right)
       return descending ? -result : result
     }
     return 0
   })
+  return keyed.map(({ item }) => item)
 }

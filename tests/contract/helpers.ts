@@ -26,10 +26,22 @@ export interface ContractContext {
    * scenario). Against the fake it uses the fake tenant's WebSocket.
    */
   realtime: () => RealtimeClient
+  /**
+   * Waits for a write the platform applies asynchronously before asserting
+   * that nothing changed (a negative wait). The fake applies writes at once,
+   * so its runner shortens the wait.
+   */
+  settle: (ms: number) => Promise<void>
 }
 
 export interface ContractScenario {
   name: string
+  /**
+   * Ids of the platform behaviors this scenario checks, as listed in
+   * docs/reference/platform-behavior.md (tests/unit/platform-behavior.test.ts
+   * keeps the list and the scenarios in sync).
+   */
+  verifies?: string[]
   run: (context: ContractContext) => Promise<void>
 }
 
@@ -62,6 +74,12 @@ export async function eventually(assertion: () => Promise<void>, timeout = 5000)
       })
     }
   }
+}
+
+export function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
 }
 
 export const time = (minutes: number) => new Date(Date.UTC(2026, 0, 1, 10, minutes)).toISOString()

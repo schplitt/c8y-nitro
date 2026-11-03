@@ -4,16 +4,16 @@
  * (tests/contract/real-tenant.test.ts, `pnpm test:contract`).
  */
 import type { ContractScenario } from './helpers'
-import { alarmsScenarios } from './scenarios/alarms'
+import { alarmsConformanceScenarios, alarmsScenarios } from './scenarios/alarms'
 import { binariesScenarios } from './scenarios/binaries'
 import { eventsScenarios } from './scenarios/events'
 import { identityScenarios } from './scenarios/identity'
-import { inventoryScenarios } from './scenarios/inventory'
-import { measurementsScenarios } from './scenarios/measurements'
+import { inventoryConformanceScenarios, inventoryScenarios } from './scenarios/inventory'
+import { measurementsConformanceScenarios, measurementsScenarios } from './scenarios/measurements'
 import { notificationsScenarios } from './scenarios/notifications'
 import { operationsScenarios } from './scenarios/operations'
 import { optionsScenarios } from './scenarios/options'
-import { platformScenarios } from './scenarios/platform'
+import { platformConformanceScenarios, platformScenarios } from './scenarios/platform'
 
 export type { ContractContext, ContractScenario } from './helpers'
 
@@ -28,4 +28,9 @@ export const scenarios: ContractScenario[] = [
   ...operationsScenarios,
   ...optionsScenarios,
   ...platformScenarios,
+  // platform behaviors that differ from, or go beyond, the API docs
+  ...inventoryConformanceScenarios,
+  ...alarmsConformanceScenarios,
+  ...measurementsConformanceScenarios,
+  ...platformConformanceScenarios,
 ]

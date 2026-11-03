@@ -3,7 +3,7 @@ import { EventBinaryService } from '@c8y/client'
 import type { Client } from '@c8y/client'
 import { expect } from 'vitest'
 import type { ContractScenario } from '../helpers'
-import { eventually, rejection, time } from '../helpers'
+import { eventually, rejection, sleep, time } from '../helpers'
 
 async function call(client: Client, method: string, path: string, body?: unknown, headers: Record<string, string> = {}) {
   const raw = body === undefined || typeof body === 'string' || body instanceof Uint8Array
@@ -21,12 +21,6 @@ async function call(client: Client, method: string, path: string, body?: unknown
 }
 
 const q = encodeURIComponent
-function pause(ms: number) {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms)
-  })
-}
-
 export const eventsScenarios: ContractScenario[] = [
   {
     name: 'events: newest first, update, delete',
@@ -192,7 +186,7 @@ export const eventsScenarios: ContractScenario[] = [
 
       // an empty update still bumps lastUpdated
       const before = (await client.event.detail(event.id!)).data.lastUpdated
-      await pause(20)
+      await sleep(20)
       const empty = await put({})
       expect(empty.status).toBe(200)
       expect(empty.json.lastUpdated > before).toBe(true)
@@ -218,7 +212,7 @@ export const eventsScenarios: ContractScenario[] = [
       const { data: device } = await client.inventory.create({ name: `et-${unique}`, c8y_IsDevice: {} })
       const make = async (text: string) => {
         const { data } = await client.event.create({ source: { id: device.id }, type: `ev-${unique}`, text, time: time(1) } as any)
-        await pause(30)
+        await sleep(30)
         return data
       }
       const [first, second, third] = [await make('first'), await make('second'), await make('third')]
@@ -231,7 +225,7 @@ export const eventsScenarios: ContractScenario[] = [
       expect(await texts(`lastUpdatedFrom=${q(third.lastUpdated!)}`)).toEqual(['third'])
       expect(await texts(`lastUpdatedTo=${q(third.lastUpdated!)}`)).toEqual(['first', 'second'])
 
-      await pause(30)
+      await sleep(30)
       const { data: updated } = await client.event.update({ id: second.id, text: 'second-updated' } as any)
       expect(updated.lastUpdated! > third.lastUpdated!).toBe(true)
       expect(await texts(`lastUpdatedFrom=${q(third.lastUpdated!)}`)).toEqual(['second-updated', 'third'])
@@ -329,7 +323,7 @@ export const eventsScenarios: ContractScenario[] = [
   },
   {
     name: 'events: bulk delete filters (dateFrom, dateTo, createdFrom, createdTo, fragmentType)',
-    async run({ client, unique }) {
+    async run({ client, unique, settle }) {
       const { data: device } = await client.inventory.create({ name: `ed-${unique}`, c8y_IsDevice: {} })
       for (const [minute, type, extra] of [[1, 'a', { c8y_Flag: {} }], [2, 'a', {}], [3, 'a', {}], [4, 'b', {}], [5, 'a', {}]] as const) {
         await client.event.create({ source: { id: device.id }, type: `${type}-${unique}`, text: `e${minute}`, time: time(minute), ...extra } as any)
@@ -348,7 +342,7 @@ export const eventsScenarios: ContractScenario[] = [
       await del('createdTo=2000-01-01T00:00:00Z')
       await del(`createdFrom=${q(new Date(Date.now() + 86_400_000).toISOString())}`)
       await del(`createdFrom=2000-01-01T00:00:00Z&createdTo=2100-01-01T00:00:00Z&fragmentType=c8y_Nope`)
-      await pause(1500)
+      await settle(1500)
       expect(await remaining()).toEqual(['e1', 'e2', 'e3', 'e4', 'e5'])
 
       await del('fragmentType=c8y_Flag')

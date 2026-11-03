@@ -25,10 +25,11 @@ const UNKNOWN_ID = '99999999999'
 export const binariesScenarios: ContractScenario[] = [
   {
     name: 'inventory binaries: upload, download, list, delete',
+    verifies: ['binary-fragment-empty-string'],
     async run({ client, unique }) {
       const { data: binary, res } = await client.inventoryBinary.create(Buffer.from('file content'), { name: `file-${unique}.txt`, fileName: `file-${unique}.txt` } as any)
       expect(res.status).toBe(201)
-      expect(binary).toMatchObject({ name: `file-${unique}.txt`, c8y_IsBinary: expect.anything(), length: 12 })
+      expect(binary).toMatchObject({ name: `file-${unique}.txt`, c8y_IsBinary: '', length: 12 })
 
       const download = await client.inventoryBinary.download(binary.id!)
       expect(await (download as unknown as Response).text()).toBe('file content')
@@ -42,6 +43,7 @@ export const binariesScenarios: ContractScenario[] = [
   },
   {
     name: 'inventory binaries: replace content, no deletes through the inventory API',
+    verifies: ['binary-replace-empty-body'],
     async run({ client, unique }) {
       const { data: binary } = await client.inventoryBinary.create(Buffer.from('version 1'), { name: `bin-${unique}.txt`, fileName: `bin-${unique}.txt` } as any)
       const replaced = await client.core.fetch(`/inventory/binaries/${binary.id}`, { method: 'PUT', headers: { 'content-type': 'text/plain' }, body: 'version 2' })
@@ -219,6 +221,7 @@ export const binariesScenarios: ContractScenario[] = [
   {
     // Verified against a real tenant (2026-11): binary ids answer 404, and the binaries API deletes any object.
     name: 'inventory binaries: unknown and non-binary ids, deleting through the binaries API',
+    verifies: ['binaries-unknown-404'],
     async run({ client, unique }) {
       const { data: plain } = await client.inventory.create({ name: `plain-${unique}` })
       const binary = await upload(client, unique, 'x.txt', 'x')

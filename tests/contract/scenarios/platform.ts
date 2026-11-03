@@ -48,6 +48,7 @@ export const platformScenarios: ContractScenario[] = [
   },
   {
     name: 'validation: every required field of alarm, event, measurement, and operation POST',
+    verifies: ['required-fields-422'],
     async run({ client, unique }) {
       const { data: device } = await client.inventory.create({ name: `vr-${unique}`, c8y_IsDevice: {}, com_cumulocity_model_Agent: {} } as any)
       const source = { id: device.id }
@@ -73,6 +74,7 @@ export const platformScenarios: ContractScenario[] = [
   },
   {
     name: 'validation: unknown source, server-owned fields, unparsable time',
+    verifies: ['alarm-unknown-source-404', 'time-unparsable-400'],
     async run({ client, unique }) {
       const { data: device } = await client.inventory.create({ name: `vs-${unique}`, c8y_IsDevice: {}, com_cumulocity_model_Agent: {} } as any)
       const source = { id: device.id }
@@ -101,6 +103,32 @@ export const platformScenarios: ContractScenario[] = [
       ] as const) {
         expect((await post(path, body)).status, path).toBe(400)
       }
+    },
+  },
+]
+
+export const platformConformanceScenarios: ContractScenario[] = [
+  {
+    name: 'platform: the current application needs application credentials',
+    verifies: ['current-application-user-403'],
+    async run({ client }) {
+      for (const path of ['/application/currentApplication', '/application/currentApplication/subscriptions', '/application/currentApplication/settings']) {
+        const result = await api(client, 'GET', path)
+        expect(result.status, path).toBe(403)
+        expect(result.body.error, path).toBe('security/Forbidden')
+      }
+    },
+  },
+  {
+    name: 'platform: unknown endpoints answer 404, wrong methods 405',
+    verifies: ['unknown-endpoint-404', 'wrong-method-405'],
+    async run({ client }) {
+      for (const path of ['/inventory/nope', '/alarm/alarms/count/nope', '/measurement/nope']) {
+        expect((await api(client, 'GET', path)).status, path).toBe(404)
+      }
+      expect((await api(client, 'POST', '/tenant/currentTenant', {})).status).toBe(405)
+      expect((await api(client, 'PATCH', '/inventory/managedObjects', {})).status).toBe(405)
+      expect((await api(client, 'DELETE', '/user/currentUser')).status).toBe(405)
     },
   },
 ]

@@ -5,6 +5,7 @@ import { createRealtimeClient } from 'c8y-realtime'
 import type { RealtimeClient, WebSocketFactory } from 'c8y-realtime'
 import { afterAll, afterEach, describe, expect, it } from 'vitest'
 import { c8y } from 'c8y-nitro/testing'
+import { sleep } from '../contract/helpers'
 import { scenarios } from '../contract/scenarios'
 import { C8Y_ENDPOINTS } from '../../src/testing/capabilities.generated'
 
@@ -25,6 +26,7 @@ afterEach(async () => {
 const BUILT_IN_ENDPOINTS = [
   'GET /user/currentUser',
   'GET /tenant/currentTenant',
+  'GET /application/currentApplication/subscriptions',
   'GET /tenant/options/{category}/{key}',
   'PUT /tenant/options/{category}/{key}',
   'DELETE /tenant/options/{category}/{key}',
@@ -62,6 +64,8 @@ describe('contract scenarios against the fake tenant', () => {
         client: new Client(new BasicAuth(credentials()), process.env.C8Y_BASEURL),
         unique,
         tenant: c8y.tenant,
+        // the fake applies writes at once; a short wait still catches a late notification
+        settle: (ms) => sleep(Math.min(ms, 100)),
         realtime: () => {
           // the fake tenant's WebSocket, as c8y-nitro's realtime client gets it
           const hooks = (globalThis as Record<symbol, { WebSocket?: unknown }>)[Symbol.for('c8y-nitro.testing')]
