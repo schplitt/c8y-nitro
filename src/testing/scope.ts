@@ -21,6 +21,16 @@ export function markRunning(): void {
 }
 
 /**
+ * The error for test-time APIs in a concurrent test. Vitest 5 has no
+ * `.sequential` modifier: a test opts out with `{ concurrent: false }`.
+ * @param name - API name for error messages
+ * @param test - Name of the concurrent test
+ */
+function concurrentError(name: string, test: string): Error {
+  return new Error(`${name} cannot be used in concurrent tests ("${test}"): the fake Cumulocity tenant is shared by all tests of a file. Remove \`.concurrent\`, or pass \`{ concurrent: false }\` to the test or describe (for example when \`sequence.concurrent\` is on).`)
+}
+
+/**
  * Runs an arrange operation in the scope it was called from.
  * @param name - API name for error messages, e.g. `c8y.user()`
  * @param operation - Applies the change to the fake tenant
@@ -29,7 +39,7 @@ export function arrange(name: string, operation: () => void): void {
   if (phase === 'collect') {
     beforeEach((context) => {
       if (context.task.concurrent) {
-        throw new Error(`${name} cannot be used in concurrent tests ("${context.task.name}"): the fake Cumulocity tenant is shared by all tests of a file. Run these tests sequentially.`)
+        throw concurrentError(name, context.task.name)
       }
       // rebuilding arranged data is not a change the service should be notified about
       store.silent = true
@@ -56,6 +66,6 @@ export function assertActiveTest(name: string): void {
     throw new Error(`${name} cannot be used in beforeAll() or afterAll(). Call it at file or describe level, in beforeEach(), or inside a test.`)
   }
   if (test.concurrent) {
-    throw new Error(`${name} cannot be used in concurrent tests ("${test.name}"): the fake Cumulocity tenant is shared by all tests of a file. Run these tests sequentially.`)
+    throw concurrentError(name, test.name)
   }
 }

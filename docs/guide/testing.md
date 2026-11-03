@@ -321,7 +321,7 @@ The fake implements a documented subset of the Cumulocity REST API. Request and 
 | Tenant options               | read, write, delete, and list per category and tenant                                                                                                                                                                                                                                                                    |
 | Inventory                    | create, read, update (fragments merge, `null` removes), delete; list by `type`, `fragmentType`, `ids`, `owner`, `text`, `childDeviceId`/`childAssetId`/`childAdditionId`, `onlyRoots`, and `query`/`q` (see below); child devices, assets, and additions with parent references                                          |
 | Binaries                     | upload (multipart), download, replace, delete, list                                                                                                                                                                                                                                                                      |
-| Notification 2.0             | subscriptions (`mo` and `tenant` context, `apis`, `typeFilter`, `fragmentsToCopy`), tokens, unsubscribe, and the consumer WebSocket of c8y-nitro's realtime client                                                                                                                                                                          |
+| Notification 2.0             | subscriptions (`mo` and `tenant` context, `apis`, `typeFilter`, `fragmentsToCopy`), tokens, unsubscribe, and the consumer WebSocket of c8y-nitro's realtime client                                                                                                                                                       |
 | Identity                     | external IDs: create, read, delete, list per managed object                                                                                                                                                                                                                                                              |
 | Measurements                 | create (single or collection), read, delete, bulk delete by filter, list by `source`, `type`, `valueFragmentType`/`valueFragmentSeries`, `dateFrom`/`dateTo`, `revert`; `series` with `aggregationInterval`/`aggregationType` and `aggregationFunction` (`min`, `max`, `avg`, `sum`, `count`, `stdDevPop`, `stdDevSamp`) |
 | Events                       | create, read, update, delete, bulk delete by filter, list by `source`, `type`, `fragmentType`, date ranges, `revert`; attachments (upload, download, replace, delete)                                                                                                                                                    |
@@ -385,6 +385,12 @@ Prefer asserting on responses and `c8y.db` over asserting on calls. Asserting on
 ## Limitations
 
 - **One app per test file.** [Module options](/reference/module-options) apply to the whole Nitro app. To test different options, use a separate [Vitest project](https://vitest.dev/guide/projects) with its own `nitro({ ... })` config.
-- **No concurrent tests.** All tests of a file share the fake tenant, so `c8y` throws in `it.concurrent` and `describe.concurrent`.
+- **No concurrent tests.** All tests of a file share the fake tenant, so `c8y` and `serverFetch(path, { as })` throw in concurrent tests: `it.concurrent`, `describe.concurrent`, and every test when `sequence.concurrent` is on. Vitest 5 has no `.sequential` modifier, so to run a file or `describe` sequentially under `sequence.concurrent`, pass `{ concurrent: false }`:
+
+  ```ts
+  describe('orders', { concurrent: false }, () => {
+    // c8y works here
+  })
+  ```
 - **Your own caches persist within a file.** c8y-nitro clears its own caches before every test, but functions you cache with `defineCachedFunction` keep their entries.
 - **Requests to other hosts are not faked.** `@c8y/client`, c8y-realtime, and plain `fetch` calls to the platform's URL (`C8Y_BASEURL`) go to the fake tenant.
