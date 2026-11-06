@@ -1,6 +1,6 @@
 catalogMode: prefer
 minimumReleaseAgeExclude:
-  - c8y-realtime@0.2.2
+  - c8y-realtime@0.3.0
   - db0@0.4.1
   - h3@2.0.1-rc.31
   - nitro@3.0.261102-rc
@@ -26,7 +26,7 @@ catalog:
   '@types/ws': ^8.18.2
   bumpp: ^12.3.0
   c12: ^4.0.0-rc.4
-  c8y-realtime: ^0.2.2
+  c8y-realtime: ^0.3.0
   changelogithub: ^15.0.5
   citty: ^0.2.2
   consola: ^3.4.2
