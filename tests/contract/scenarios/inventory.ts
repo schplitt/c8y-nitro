@@ -571,9 +571,9 @@ export const inventoryScenarios: ContractScenario[] = [
       expect(await names(`name eq '*s-${unique}'`)).toEqual(['it\'s'])
 
       // and binds tighter than or, not() includes objects without the property
-      // the right-hand branch of `or` must carry its own type scope, otherwise
-      // it matches any object on the tenant with num 10 (other suites run concurrently)
-      expect(await names(`num eq 5 or (type eq '${type}' and num eq 10)`)).toEqual(['a', 'b'])
+      // every `or` branch carries its own type scope, fully bracketed: an unscoped
+      // branch would match any object on the tenant (other suites run concurrently)
+      expect(await names(`((type eq '${type}' and num eq 5) or (type eq '${type}' and num eq 10))`)).toEqual(['a', 'b'])
       expect(await names(`name eq 'nothing' and num eq 5 or (type eq '${type}' and num eq 10)`)).toEqual(['b'])
       expect(await names('not(num eq 5)')).toEqual(['b', 'c', 'd', 'it\'s'])
 
