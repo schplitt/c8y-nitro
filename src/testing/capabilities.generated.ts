@@ -614,6 +614,7 @@ export const C8Y_SPEC_PATHS = [
   'POST /inventory/managedObjects/{id}/childAdditions',
   'POST /inventory/managedObjects/{id}/childAssets',
   'POST /inventory/managedObjects/{id}/childDevices',
+  'POST /inventory/templates/globalId/{globalId}/externalId',
   'POST /measurement/measurements',
   'POST /notification/realtime',
   'POST /notification2/subscriptions',
