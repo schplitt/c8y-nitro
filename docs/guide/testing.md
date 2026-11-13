@@ -129,7 +129,7 @@ it('…', async () => {
 })
 ```
 
-### Measurements, Events, Alarms, and Operations
+### Measurements, Events, Alarms, Operations, and More
 
 ```ts
 c8y.seed({
@@ -145,6 +145,8 @@ Seeds get the same treatment as writes from your service:
 - **Validation:** required fields, enum values such as operation statuses, and the source must exist. Like the platform, alarm severity and status are not validated.
 - **Defaults:** `time` defaults to now, `text` to the type, and alarm `severity` to `MAJOR`.
 - **Platform behavior:** alarms are deduplicated, and operations start as `PENDING`.
+
+`c8y.seed()` also takes `measurementGenerators` (measurement history computed on read), `newDeviceRequests`, `retentionRules`, `auditRecords`, `users`, `groups`, `roles`, `inventoryRoles`, and `applications`. See fake-c8y's [seeding guide](https://github.com/schplitt/fake-c8y/blob/main/docs/world.md#seeding) for the inputs.
 
 ### Files (Binaries)
 
@@ -181,7 +183,7 @@ it('reports devices per tenant', async () => {
 })
 ```
 
-Each request is answered with the data of the tenant it was sent to: the tenant of the credentials, or the `targetTenant` parameter. Personas can belong to any tenant (`definePersona({ ..., tenant: 't99999' })`), so you can also test what users of a subscribed tenant see.
+Each request is answered with the data of the tenant it was sent to: the tenant of the credentials. Personas can belong to any tenant (`definePersona({ ..., tenant: 't99999' })`), so you can also test what users of a subscribed tenant see.
 
 ## Personas
 
@@ -242,7 +244,7 @@ export default definePlugin(async () => {
 
 A test follows four steps:
 
-1. **The service sets itself up.** The Nitro app and its plugins start before the first test, and their subscriptions stay for the whole test file.
+1. **The service sets itself up.** The Nitro app and its plugins start before the first test. The subscriptions they create at startup are in place in every test of the file. Subscriptions created during a test are removed before the next one, so subscribe at startup (in a plugin), not lazily in a route.
 2. **Trigger a write**, like a device would: `c8y.seed()` or `c8y.device()` inside the test, a route of your service, or `c8y.db.operations.update()`.
 3. **Wait until it is processed:** `await c8y.notifications.settled()`. This waits until every delivered notification has been handled, including notifications caused by the handlers' own writes.
 4. **Query the fake world** with `c8y.db`.
@@ -271,7 +273,7 @@ Arrange calls apply to the scope they are called in:
 | inside `describe`                      | every test in that `describe`, including nested ones |
 | inside a test or `beforeEach`          | that test only                                       |
 
-Before every test, the fake tenant is rebuilt: the baseline first, then the file, then each enclosing `describe` from outer to inner, then the test. Nothing a test does, including data your service writes, leaks into the next test. IDs come out the same in every run.
+Before every test, the fake tenant is rebuilt: the baseline first, then the file, then each enclosing `describe` from outer to inner, then the test. Nothing a test does, including data your service writes, leaks into the next test. IDs come out the same in every test and every run.
 
 | API                                                 | Inner Scope                                    |
 | --------------------------------------------------- | ---------------------------------------------- |
@@ -296,8 +298,20 @@ it('fails while the inventory is unavailable', async () => {
 ```
 
 - **Patterns** are `"[METHOD ]/path"`. Path segments can be `:name` (captured in `params`), `*` (any one segment), or `**` (the rest of the path).
-- **The handler's return value:** return a `Response` for any status, any other value for `200` with it as JSON, or nothing for `204`.
+- **The handler's return value:** return a `Response` for any status, any other value for `200` with it as JSON, or nothing for `204`. A handler that throws makes the request fail with that error, like a network error: `() => { throw new TypeError('fetch failed') }`.
 - **`{ once: true }`** answers only the first match, for example a single temporary failure.
+- **`next()`** passes the request on to the fake platform (or an older override) and returns its answer. Use it to add latency, to change an answer, or to let the platform store a write while your service sees an error. **`callCount`** is the number of requests this override got, this one included.
+
+```ts
+// fail the first request, answer the others normally
+c8y.override('POST /alarm/alarms', ({ callCount, next }) => callCount === 1 ? Response.json({ message: 'Unavailable' }, { status: 503 }) : next())
+
+// the platform stores the alarm, your service sees an error
+c8y.override('POST /alarm/alarms', async ({ next }) => {
+  await next()
+  return new Response(null, { status: 503 })
+})
+```
 
 Overrides couple a test to the endpoints your service calls. Use them for failures and for APIs the fake doesn't emulate, not for normal data.
 
@@ -305,74 +319,31 @@ By default, a request the fake can't answer **fails the test** after it ran, nam
 
 ```
 c8y-nitro/testing: 1 Cumulocity request(s) the fake tenant does not support:
-  GET /tenant/statistics/summary (endpoint not emulated)
+  GET /features (endpoint not emulated)
 ```
 
 Answer it with `c8y.override()`, or set `onUnhandledRequest: 'warn'` or `'ignore'` in the plugin options or with `c8y.apply()`.
 
 ## What the Fake Emulates
 
-The fake implements a documented subset of the Cumulocity REST API. Request and response formats, query parameters, required fields, and enum values come from the [official OpenAPI spec](https://cumulocity.com/api/core/). The behavior is checked by contract scenarios that run against both the fake and a real tenant.
+The fake tenant is a [fake-c8y](https://github.com/schplitt/fake-c8y) world: an in-memory Cumulocity platform whose endpoints, query parameters, required fields, and enum values come from the [official OpenAPI spec](https://cumulocity.com/api/core/), and whose behavior is checked by contract scenarios against a real tenant. It emulates:
 
-| API                          | Emulated                                                                                                                                                                                                                                                                                                                 |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Current user, current tenant | from the calling user (`as`) and the request's credentials                                                                                                                                                                                                                                                               |
-| Microservice subscriptions   | from `c8y.subscriptions`                                                                                                                                                                                                                                                                                                 |
-| Tenant options               | read, write, delete, and list per category and tenant                                                                                                                                                                                                                                                                    |
-| Inventory                    | create, read, update (fragments merge, `null` removes), delete; list by `type`, `fragmentType`, `ids`, `owner`, `text`, `childDeviceId`/`childAssetId`/`childAdditionId`, `onlyRoots`, and `query`/`q` (see below); child devices, assets, and additions with parent references                                          |
-| Binaries                     | upload (multipart), download, replace, delete, list                                                                                                                                                                                                                                                                      |
-| Notification 2.0             | subscriptions (`mo` and `tenant` context, `apis`, `typeFilter`, `fragmentsToCopy`), tokens, unsubscribe, and the consumer WebSocket of c8y-nitro's realtime client                                                                                                                                                       |
-| Identity                     | external IDs: create, read, delete, list per managed object                                                                                                                                                                                                                                                              |
-| Measurements                 | create (single or collection), read, delete, bulk delete by filter, list by `source`, `type`, `valueFragmentType`/`valueFragmentSeries`, `dateFrom`/`dateTo`, `revert`; `series` with `aggregationInterval`/`aggregationType` and `aggregationFunction` (`min`, `max`, `avg`, `sum`, `count`, `stdDevPop`, `stdDevSamp`) |
-| Events                       | create, read, update, delete, bulk delete by filter, list by `source` (with `withSourceDevices`/`withSourceAssets`/`withSourceAdditions`/`withSourceChildren`), `type`, `fragmentType`, date ranges, `revert`; attachments (upload, download, replace, delete)                                                           |
-| Alarms                       | create (with deduplication), read, update, bulk update, list by `source` (with `withSource*`), `type`, `status`, `severity`, `resolved`, date ranges                                                                                                                                                                     |
-| Operations                   | create, read, update, list by `deviceId`, `status`, `fragmentType`, date range, `revert`                                                                                                                                                                                                                                 |
+- inventory with the query language, text search, hierarchies, and cascading deletes; identity; binaries
+- measurements (with series and generated history), events with attachments, alarms with deduplication, operations, bulk operations, and new device requests
+- tenant options, retention rules, audit records, tenant statistics, and availability monitoring
+- users, groups, global and inventory roles, applications, and microservice subscriptions
+- Notification 2.0: subscriptions, tokens, and the consumer WebSocket of c8y-nitro's realtime client
 
-All lists support `pageSize`, `currentPage`, `withTotalPages`, and `withTotalElements`, with `next` and `prev` links. Inventory queries (`query` and `q`) support the documented [query language](https://cumulocity.com/api/core/#section/Query-language):
+The details, and where the fake simplifies, are in fake-c8y's [Emulated API](https://github.com/schplitt/fake-c8y/blob/main/docs/emulated-api.md) guide. Every verified place where the platform differs from its API docs is in its [Platform Behavior](https://github.com/schplitt/fake-c8y/blob/main/docs/platform-behavior.md) reference. A request for an endpoint the platform does not have (`GET /inventory/nope`) answers 404, and a known path with another method answers 405, like on the platform. A request the fake does not emulate answers 501 and fails the test (see above).
 
-- `eq`, `gt`, `ge`, `lt`, `le`, `and`, `or`, `not()`, parentheses, and `$orderby`
-- `has()`, `hasany()`, `bygroupid()`, and `isinhierarchyof()`
-- values: strings, `*` wildcards, integers, decimals with an `f`/`d` suffix, `true`/`false`, `null`, and date-times with `.date` (the literal needs a date and a time, anything else matches nothing)
-- `eq` on array properties and on objects in arrays
+What c8y-nitro sets up on top:
 
-These details behave like the platform, checked against a real tenant (the full list, with what the API docs say instead, is the [Platform Behavior](/reference/platform-behavior) reference):
-
-- Exact matches are case-sensitive, wildcards case-insensitive.
-- Values are typed: a number never matches a string property (`num eq '5'` does not match `5`), decimals without a suffix are strings, and `true`/`false` match booleans only.
-- `null` matches a stored `null`, never a missing property.
-- `has()` and `hasany()` on a standard property (`name`, `type`, `owner`, `id`, `creationTime`) match nothing. A quoted left side (`'name' eq 'x'`) names the property.
-- `$orderby` puts objects without the property first when ascending and last when descending, then numbers, strings (by character code, upper case first), and booleans. An array sorts by its smallest element ascending and its largest descending.
-- `type` is ignored when a query is given. Function arguments are not validated (`bygroupid(abc)` matches nothing). Anything outside the language is rejected with 422: `ne`, upper-case operators (`AND`), and paths with `/` or `[`.
-
-A request for an endpoint the platform does not have (`GET /inventory/nope`) answers 404, a known path with another method answers 405, like on the platform. `/application/currentApplication` and its sub-resources answer 403 unless the request carries application credentials: the bootstrap user or a service user of `c8y.subscriptions`.
-
-**Not emulated:** `withLatestValues`, `withGroups`, `withChildrenCount`, `fragmentValue`, cascade deletes, `alarmsWithChildren`/`eventsWithChildren` subscriptions, bulk operations, user management, audit records, and all other APIs. These fail loudly instead of returning wrong results. Unknown query parameters are ignored, as on the platform.
-
-**Assumptions:** where the spec doesn't define behavior, the fake assumes the following:
-
-- **IDs** are sequential numbers, starting at `1` in every test. Timestamps come from `Date`, so `vi.useFakeTimers()` controls them.
-- **`owner`** is the user of the request's credentials, unless the body sets it.
-- **Groups:** `bygroupid()` matches the group's direct child assets. `isinhierarchyof()` follows child assets, devices, and additions recursively.
-- **Paging:** pages are 1-based, the default page size is 5, `pageSize=0` means 1 (at most 2000), and a non-integer `pageSize` answers 422. `next` is present on every page, also past the last one, unless `withTotalPages=true` and the page is the last one or beyond. `prev` appears after the first page. The binaries list always reports `totalPages` and never `totalElements`.
-- **Sort orders:** measurements, events, and alarms newest first; operations by ascending ID; inventory by ID; series values always oldest first. `revert` only has an effect together with a date range: `revert=false` gives measurements oldest first, `revert=true` gives events oldest first and operations newest first.
-- **Date ranges:** the `…From` end is inclusive, the `…To` end is exclusive. Equal bounds select exactly that time; for a measurement bulk delete they select the whole hour. Date parameters are parsed like on the platform: fields may have one digit and a bare date is accepted, but a time needs seconds. Anything else answers 422.
-- **Related sources:** `withSourceDevices`, `withSourceAssets`, and `withSourceAdditions` add the alarms or events of the source's children of that kind, recursively; `withSourceChildren` adds every kind. An unknown `source` is an empty page, or a 404 with one of these parameters.
-- **Alarms:** `resolved` left out returns alarms of every status (the API docs say it defaults to `false`). An `ACTIVE` or `ACKNOWLEDGED` alarm with the same source and type is deduplicated: `count` and `time` change, `text` and `severity` stay, and `firstOccurrenceTime` is set on the first duplicate. An update cannot change `type`, `time`, `count`, or the server timestamps (422). A bulk update needs `status` and applies only the status.
-- **Operations** need an agent: the device has `com_cumulocity_model_Agent`, or one of its device parents does. Otherwise the platform answers 422. They need at least one property besides `deviceId`. They start as `PENDING`, and only your tests change their status, for example with `c8y.db.operations.update()`. Any status can follow any other. `failureReason` is only accepted with `FAILED` and is removed when the status changes again. A single read has no `deviceName`.
-- **Validation:** writes that reference a missing source fail with 422 (alarms: 404). Sending `id` or `creationTime` on create fails with 422, and a `time` that is not a date with 400. Updates of events reject `source`, `type`, and `time`.
-- **External IDs:** creating an existing external ID again for the same object succeeds; for another object it fails with 409. Listing the external IDs of an unknown object returns an empty list.
-- **Parent references** (`deviceParents`, `assetParents`, `additionParents`) are only filled with `withParents=true`. `c8y.db` always shows them.
-- **Deleting a managed object** removes its references, external IDs, and binary content. Its measurements, events, alarms, and operations stay.
+- **IDs** have the platform's format (managed objects get 8 digits, `47100001`). They are deterministic: the same arrangement gives the same IDs in every test and every run. Timestamps come from `Date`, so `vi.useFakeTimers()` controls them.
+- **Permissions** are checked like on the platform for users the tenant stores: a request your service sends with the credentials of a user you seeded with `c8y.seed({ users })` gets 403 where that user lacks the rights, and lists show only what it may see. The calling user (the default `user` or the `as` persona), your service's own credentials, and requests without credentials keep full access, so the roles of personas only matter in your own middleware, like `hasUserRequiredRole()`. A route called with `serverFetch(path, { as })` therefore always works as an unrestricted user; it cannot run as a restricted seeded user. `c8yTest({ roles: 'off' })` turns the checks off.
 - **Tenant options:** default values from your manifest's settings are not applied. Set the options your test needs. `credentials.` options read as `<<Encrypted>>`, except in your microservice's own settings category, where the service gets the clear value.
-- **Bulk deletes** apply immediately. On the platform they run asynchronously and take effect within about a second.
-- **Single measurements** cannot be read (`GET /measurement/measurements/{id}` answers 405, as with the platform's default time series persistence), but they can be deleted.
-- **Binaries** cannot be deleted through `/inventory/managedObjects/{id}` (422). Use the binaries API. A download has the object's `type` as its content type when it is a media type, otherwise `application/octet-stream`. Event attachments without a content type are stored as `text/plain;charset=UTF-8`.
-- **Text search** (`text`) splits the value into tokens at whitespace, `/`, `-`, and `.`, and matches objects that contain any token. A value in double quotes matches the exact phrase.
-- **Series:** values are bucketed in UTC. `aggregationFunction` without `aggregationInterval` answers 422 (the API docs say 400). Without aggregation, every measurement is its own entry with `min` = `max`. Entries are always oldest first. A series without values in a bucket is `null`, or keeps only `sum` and `count` (as `0`) when those functions are requested.
-- **Notifications:** a DELETE notification's payload is not JSON but an opaque string, as on the platform. Read the deleted object's ID from `notification.description.sourceId`. Tokens can be created for any subscription name. Subscription and subscriber names must be alphanumeric. Persistent subscriptions keep notifications until a consumer connects. `fragmentsToCopy` keeps the standard properties and the named fragments (checked for events, assumed for the other APIs).
-- **No permission checks:** roles only matter in your own middleware, like `hasUserRequiredRole()`.
+- **Tenants:** each request is answered with the data of the tenant of its credentials. The `targetTenant` parameter is not read.
 
-If you find a difference from the real platform, please [open an issue](https://github.com/schplitt/c8y-nitro/issues).
+If you find a difference from the real platform, please [open an issue in fake-c8y](https://github.com/schplitt/fake-c8y/issues).
 
 ## Debugging
 

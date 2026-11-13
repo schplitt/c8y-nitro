@@ -2,6 +2,7 @@ catalogMode: prefer
 minimumReleaseAgeExclude:
   - c8y-realtime@0.3.0
   - db0@0.4.1
+  - fake-c8y@0.2.0
   - h3@2.0.1-rc.31
   - nitro@3.0.261102-rc
   - srvx@1.0.3
@@ -33,6 +34,7 @@ catalog:
   croner: ^11.0.0
   eslint: ^10.14.0
   evlog: ^2.34.0
+  fake-c8y: ^0.2.0
   itty-time: ^2.0.2
   jszip: ^3.10.2
   memfs: ^4.80.0

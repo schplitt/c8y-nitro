@@ -1,5 +1,5 @@
 import { beforeEach, TestRunner } from 'vitest'
-import { store } from './store'
+import { useWorld } from './world'
 
 /**
  * Scope-aware arrange calls.
@@ -42,12 +42,7 @@ export function arrange(name: string, operation: () => void): void {
         throw concurrentError(name, context.task.name)
       }
       // rebuilding arranged data is not a change the service should be notified about
-      store.silent = true
-      try {
-        operation()
-      } finally {
-        store.silent = false
-      }
+      useWorld().muted(operation)
     })
     return
   }

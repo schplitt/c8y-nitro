@@ -68,7 +68,6 @@ export default defineConfig({
           { text: 'Runtime Module', link: '/reference/runtime-module' },
           { text: 'Environment Variables', link: '/reference/environment-variables' },
           { text: 'Testing API', link: '/reference/testing' },
-          { text: 'Platform Behavior', link: '/reference/platform-behavior' },
         ],
       },
     ],

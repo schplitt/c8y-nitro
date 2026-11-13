@@ -1,5 +1,19 @@
 # Migration
 
+## 0.11.x to 0.12.0
+
+The fake tenant of `c8y-nitro/testing` now runs on [fake-c8y](https://github.com/schplitt/fake-c8y), which emulates much more of the platform: users and roles, applications, bulk operations, device registration, retention rules, audit records, statistics, availability, generated measurements, and cascading deletes. The testing API (`c8y`, `serverFetch`, `definePersona`, `c8yTest()`) stays the same. Tests that only arrange data and assert on responses and `c8y.db` need no changes.
+
+### What can change in your tests
+
+- **IDs** have the platform's format (`47100001` instead of `1`). They are still the same in every test and every run. Do not assert on literal IDs: use the ref (`pump.id`).
+- **Deleting a managed object** deletes its measurements, events, alarms, and operations too, like the platform.
+- **Requests that used to fail with 501** (for example tenant statistics or user management) are now answered. Remove overrides you only added to answer them, or keep them: overrides still win.
+- **Users you seed** with `c8y.seed({ users })` are checked against their roles when your service calls the platform with their credentials. The calling user (default `user` or `as` persona) keeps full access. `c8yTest({ roles: 'off' })` turns the checks off.
+- **Notification 2.0 subscriptions** created during a test are removed before the next test. Only the subscriptions the app creates at startup stay for the whole file.
+- **`targetTenant`** is no longer read: a request works in the tenant of its credentials.
+- **Types:** `C8yRequest` (in `c8y.calls`) no longer has `params` (it was always empty), and gains `id`, `status`, and `durationMs`. `C8yUnhandledRequest` gains `kind`. Override handlers get `callCount` and `next()` in addition to the request fields.
+
 ## 0.10.x to 0.11.0
 
 This release upgrades the Nitro peer dependency from `3.0.260903-beta` to the Nitro v3

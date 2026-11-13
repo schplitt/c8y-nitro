@@ -48,6 +48,9 @@ catalogs:
     evlog:
       specifier: ^2.34.0
       version: 2.34.0
+    fake-c8y:
+      specifier: ^0.2.0
+      version: 0.2.0
     itty-time:
       specifier: ^2.0.2
       version: 2.0.2
@@ -122,6 +125,9 @@ importers:
       evlog:
         specifier: 'catalog:'
         version: 2.34.0(nitro@3.0.261102-rc)(ofetch@1.5.1)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.27.7)(jiti@2.6.1)(yaml@2.9.0))
+      fake-c8y:
+        specifier: 'catalog:'
+        version: 0.2.0
       itty-time:
         specifier: 'catalog:'
         version: 2.0.2
@@ -2220,6 +2226,10 @@ packages:
 
   extend@3.0.2:
     resolution: {integrity: sha512-fjquC59cD7CyW6urNXK0FBufkZcoiGG80wTuPujX590cB5Ttln20E2UB4S/WARVqhXffZl2LNgS+gQdPIIim/g==}
+
+  fake-c8y@0.2.0:
+    resolution: {integrity: sha512-7Ofz72ZUiCBP3BjbZGtV9UIxqmxQiyLtpWPL8poTFreaFSe9ujXja/YpD7ZuiGHxFoeLc4fuBTPf1moQphyCQw==}
+    engines: {node: '>=24.0.0'}
 
   fast-deep-equal@3.1.3:
     resolution: {integrity: sha512-f3qQ9oQy9j2AhBe/H9VC91wLmKBCCU/gDOnKNAYG5hswO7BLKj09Hc5HYNz9cGI++xlpDCIgDaitVs03ATR84Q==}
@@ -5683,6 +5693,8 @@ snapshots:
       is-extendable: 0.1.1
 
   extend@3.0.2: {}
+
+  fake-c8y@0.2.0: {}
 
   fast-deep-equal@3.1.3: {}
 
