@@ -1,20 +1,45 @@
 import { Buffer } from 'node:buffer'
 import type { C8YTenantOptionKey } from 'c8y-nitro/types'
 import { serverFetch as nitroServerFetch } from 'nitro'
-import type { C8yRequest, C8yRequestHandler, C8yTestState, C8yTestSubscription, C8yTestUser, C8yUnhandledRequest } from './types'
-import type { C8yBinaryInput, C8yDb, C8yManagedObjectInput, C8yRef, C8ySeed } from './data'
-import { applySeed, createBinaryFromInput, createDb, createFromInput, newRef } from './data'
-import { platform } from './platform'
-import { compileRoute, matchRoute, splitPath } from './router'
+import type { C8yBinaryInput, C8yDb, C8yManagedObjectInput, C8yRequest, C8ySeed, C8yUnhandledRequest, NotificationSubscription } from 'fake-c8y'
+import { compileRoute, matchRoute, splitPath } from 'fake-c8y'
+import type { C8yRequestHandler, C8yTestState, C8yTestSubscription, C8yTestUser } from './types'
 import { DEFAULTS } from './defaults'
 import { arrange, assertActiveTest } from './scope'
-import type { FakeSubscription } from './realtime'
-import { realtime } from './realtime'
+import { applyState, refs, trackOverride, useWorld } from './world'
 
 export type * from './types'
-export type { C8yAlarmInput, C8yBinaryContent, C8yBinaryInput, C8yDb, C8yDbCollection, C8yDbFilter, C8yEventInput, C8yIdInput, C8yManagedObjectInput, C8yMeasurementInput, C8yOperationInput, C8yRef, C8ySeed } from './data'
-export type { C8yAlarmSeverity, C8yAlarmStatus, C8yOperationStatus } from './capabilities.generated'
-export type { FakeSubscription as C8yNotificationSubscription } from './realtime'
+export type { C8yAlarmInput, C8yAlarmSeverity, C8yAlarmStatus, C8yApplicationInput, C8yAuditRecordInput, C8yBinaryContent, C8yBinaryInput, C8yDb, C8yDbCollection, C8yDbFilter, C8yEventInput, C8yGroupInput, C8yIdInput, C8yInventoryRoleInput, C8yManagedObjectInput, C8yMeasurementGeneratorInput, C8yMeasurementInput, C8yNewDeviceRequestInput, C8yOperationInput, C8yOperationStatus, C8yRequest, C8yRetentionRuleInput, C8ySeed, C8yUnhandledRequest, C8yUserInput } from 'fake-c8y'
+export type { NotificationSubscription as C8yNotificationSubscription } from 'fake-c8y'
+
+/**
+ * A managed object or binary created by `c8y.device()`, `c8y.managedObject()`,
+ * or `c8y.binary()`. Its `id` exists while a test runs (the object is rebuilt
+ * before every test).
+ */
+export interface C8yRef {
+  readonly id: string
+}
+
+class Ref implements C8yRef {
+  private readonly label: string
+
+  constructor(label: string) {
+    this.label = label
+  }
+
+  get id(): string {
+    const id = refs.get(this)
+    if (id === undefined) {
+      throw new Error(`${this.label} does not exist yet: objects created with c8y.device()/c8y.managedObject()/c8y.binary() exist while a test runs, in the scope they were created in.`)
+    }
+    return id
+  }
+
+  toJSON() {
+    return { id: this.id }
+  }
+}
 
 type TenantOptionKeyInput = C8YTenantOptionKey | (string & {})
 
@@ -87,14 +112,14 @@ export const c8y = {
    * Tenant the microservice is deployed in (the bootstrap tenant).
    */
   get tenant(): string {
-    return platform.tenant
+    return useWorld().tenant
   },
 
   /**
    * Every request the microservice sent to the platform in this test, in order.
    */
   get calls(): readonly C8yRequest[] {
-    return platform.calls
+    return useWorld().calls
   },
 
   /**
@@ -103,7 +128,7 @@ export const c8y = {
    * fails after it ran if this is not empty.
    */
   get unhandled(): readonly C8yUnhandledRequest[] {
-    return platform.unhandled
+    return useWorld().unhandled
   },
 
   /**
@@ -116,10 +141,9 @@ export const c8y = {
    * c8y.db.operations.update(operationId, { status: 'SUCCESSFUL' })
    * ```
    */
-  db: {
-    ...createDb(() => platform.tenant),
-    tenant: (tenant: string) => createDb(() => tenant),
-  } as C8yDb,
+  get db(): C8yDb {
+    return useWorld().db
+  },
 
   /**
    * Creates a managed object in the fake tenant (in the current scope).
@@ -132,8 +156,10 @@ export const c8y = {
    * @param input - Fragments, plus `children`/`assets`/`additions`, `externalIds`, and `tenant`
    */
   managedObject(input: C8yManagedObjectInput = {}): C8yRef {
-    const ref = newRef(`c8y.managedObject(${JSON.stringify(input.name ?? input.type ?? '')})`)
-    arrange('c8y.managedObject()', () => createFromInput(ref, input))
+    const ref = new Ref(`c8y.managedObject(${JSON.stringify(input.name ?? input.type ?? '')})`)
+    arrange('c8y.managedObject()', () => {
+      refs.set(ref, useWorld().managedObject(input))
+    })
     return ref
   },
 
@@ -150,8 +176,10 @@ export const c8y = {
    * @param input - Fragments, plus `children`/`assets`/`additions`, `externalIds`, and `tenant`
    */
   device(input: C8yManagedObjectInput = {}): C8yRef {
-    const ref = newRef(`c8y.device(${JSON.stringify(input.name ?? '')})`)
-    arrange('c8y.device()', () => createFromInput(ref, { c8y_IsDevice: {}, ...input }))
+    const ref = new Ref(`c8y.device(${JSON.stringify(input.name ?? '')})`)
+    arrange('c8y.device()', () => {
+      refs.set(ref, useWorld().device(input))
+    })
     return ref
   },
 
@@ -166,15 +194,20 @@ export const c8y = {
    * @param input - Name, content, optional content type, tenant, and fragments
    */
   binary(input: C8yBinaryInput): C8yRef {
-    const ref = newRef(`c8y.binary(${JSON.stringify(input.name)})`)
-    arrange('c8y.binary()', () => createBinaryFromInput(ref, input))
+    const ref = new Ref(`c8y.binary(${JSON.stringify(input.name)})`)
+    arrange('c8y.binary()', () => {
+      refs.set(ref, useWorld().binary(input))
+    })
     return ref
   },
 
   /**
-   * Seeds measurements, events, alarms, and operations (in the current scope).
-   * They are validated like API writes (required fields, enums, existing
-   * source), and alarms are deduplicated like on the platform.
+   * Seeds everything other data does not point to (in the current scope):
+   * measurements (also generated history), events, alarms, operations, new
+   * device requests, retention rules, audit records, users, groups, roles,
+   * inventory roles, and applications. They are validated like API writes
+   * (required fields, enums, existing source), and alarms are deduplicated
+   * like on the platform.
    *
    * @example
    * ```ts
@@ -186,7 +219,9 @@ export const c8y = {
    * @param seed - Data to seed
    */
   seed(seed: C8ySeed): void {
-    arrange('c8y.seed()', () => applySeed(seed))
+    arrange('c8y.seed()', () => {
+      useWorld().seed(seed)
+    })
   },
 
   /**
@@ -197,7 +232,7 @@ export const c8y = {
      * Current subscriptions.
      */
     list(): readonly C8yTestSubscription[] {
-      return platform.subscriptions
+      return useWorld().subscriptions
     },
     /**
      * Adds a subscription, or replaces the one of the same tenant.
@@ -205,7 +240,8 @@ export const c8y = {
      */
     add(subscription: C8yTestSubscription): void {
       arrange('c8y.subscriptions.add()', () => {
-        platform.subscriptions = [...platform.subscriptions.filter((item) => item.tenant !== subscription.tenant), { ...subscription }]
+        const world = useWorld()
+        world.apply({ subscriptions: [...world.subscriptions.filter((item) => item.tenant !== subscription.tenant), { ...subscription }] })
       })
     },
     /**
@@ -214,7 +250,8 @@ export const c8y = {
      */
     remove(tenant: string): void {
       arrange('c8y.subscriptions.remove()', () => {
-        platform.subscriptions = platform.subscriptions.filter((item) => item.tenant !== tenant)
+        const world = useWorld()
+        world.apply({ subscriptions: world.subscriptions.filter((item) => item.tenant !== tenant) })
       })
     },
     /**
@@ -223,7 +260,7 @@ export const c8y = {
      */
     set(subscriptions: C8yTestSubscription[]): void {
       arrange('c8y.subscriptions.set()', () => {
-        platform.subscriptions = subscriptions.map((subscription) => ({ ...subscription }))
+        useWorld().apply({ subscriptions: subscriptions.map((subscription) => ({ ...subscription })) })
       })
     },
   },
@@ -240,7 +277,9 @@ export const c8y = {
      * @param scope - Category and tenant, default own category in the deployed tenant
      */
     set(key: TenantOptionKeyInput, value: string, scope?: C8yTenantOptionScope): void {
-      arrange('c8y.tenantOptions.set()', () => platform.setOption(key, value, scope))
+      arrange('c8y.tenantOptions.set()', () => {
+        useWorld().options.set(key, value, scope)
+      })
     },
     /**
      * Deletes an option in this scope.
@@ -249,7 +288,7 @@ export const c8y = {
      */
     delete(key: TenantOptionKeyInput, scope?: C8yTenantOptionScope): void {
       arrange('c8y.tenantOptions.delete()', () => {
-        platform.deleteOption(key, scope)
+        useWorld().options.delete(key, scope)
       })
     },
     /**
@@ -258,7 +297,7 @@ export const c8y = {
      * @param scope - Category and tenant
      */
     get(key: TenantOptionKeyInput, scope?: C8yTenantOptionScope): string | undefined {
-      return platform.getOption(key, scope)
+      return useWorld().options.get(key, scope)
     },
   },
 
@@ -284,7 +323,26 @@ export const c8y = {
    */
   override(pattern: string, handler: C8yRequestHandler, options: { once?: boolean } = {}): void {
     arrange('c8y.override()', () => {
-      platform.override(pattern, handler, options.once ?? false)
+      const once = options.once ?? false
+      trackOverride(useWorld().override(pattern, async (request, ctx) => {
+        if (once && ctx.callCount > 1) {
+          return ctx.next()
+        }
+        const url = new URL(request.url)
+        return handler({
+          method: request.method.toUpperCase(),
+          path: url.pathname.split('/').map(decodeURIComponent).join('/'),
+          query: Object.fromEntries(url.searchParams),
+          body: await readBody(request),
+          headers: Object.fromEntries(request.headers),
+          tenant: ctx.tenant,
+          user: ctx.user,
+          params: ctx.params,
+          request,
+          callCount: ctx.callCount,
+          next: ctx.next,
+        })
+      }))
     })
   },
 
@@ -294,7 +352,9 @@ export const c8y = {
    * @param state - Partial tenant state
    */
   apply(state: Partial<Omit<C8yTestState, 'user'>>): void {
-    arrange('c8y.apply()', () => platform.apply(state))
+    arrange('c8y.apply()', () => {
+      applyState(state)
+    })
   },
 
   /**
@@ -320,6 +380,7 @@ export const c8y = {
     async settled(options: { timeout?: number } = {}): Promise<void> {
       const timeout = options.timeout ?? 5000
       const start = Date.now()
+      const realtime = useWorld().realtime
       const tick = () => new Promise<void>((resolve) => {
         setTimeout(resolve, 1)
       })
@@ -340,8 +401,8 @@ export const c8y = {
     /**
      * Notification 2.0 subscriptions your service created (all tenants).
      */
-    subscriptions(): readonly FakeSubscription[] {
-      return realtime.subscriptions
+    subscriptions(): readonly NotificationSubscription[] {
+      return useWorld().realtime.subscriptions
     },
   },
 
@@ -351,7 +412,7 @@ export const c8y = {
    */
   callsTo(pattern: string): C8yRequest[] {
     const route = compileRoute(pattern)
-    return platform.calls.filter((call) => matchRoute(route, call.method, splitPath(call.path)))
+    return useWorld().calls.filter((call) => matchRoute(route, call.method, splitPath(call.path)))
   },
 
 }
@@ -404,16 +465,38 @@ export async function serverFetch(path: string, init: C8yServerFetchInit = {}): 
   }
   const { as: user, ...requestInit } = init
   assertActiveTest('serverFetch({ as })')
-  const previous = platform.user
-  platform.setUser(user ?? null)
+  const world = useWorld()
+  const previous = world.user
+  world.setUser(user ?? null)
   try {
     const headers = new Headers(requestInit.headers)
     const login = user
-      ? `${user.tenant ?? platform.tenant}/${user.userName}:${DEFAULTS.developmentPassword}`
-      : `${platform.tenant}/anonymous:invalid`
+      ? `${user.tenant ?? world.tenant}/${user.userName}:${DEFAULTS.developmentPassword}`
+      : `${world.tenant}/anonymous:invalid`
     headers.set('authorization', `Basic ${Buffer.from(login).toString('base64')}`)
     return await nitroServerFetch(path, { ...requestInit, headers })
   } finally {
-    platform.setUser(previous)
+    world.setUser(previous)
+  }
+}
+
+/**
+ * The body of an overridden request: parsed JSON, text, or `undefined`
+ * (also for binary uploads).
+ * @param request - The request copy the override got
+ */
+async function readBody(request: Request): Promise<unknown> {
+  const contentType = request.headers.get('content-type') ?? ''
+  if (!request.body || contentType.startsWith('multipart/') || contentType.includes('octet-stream')) {
+    return undefined
+  }
+  const text = await request.text()
+  if (!text) {
+    return undefined
+  }
+  try {
+    return JSON.parse(text)
+  } catch {
+    return text
   }
 }

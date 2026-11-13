@@ -44,7 +44,6 @@
   "scripts": {
     "dev": "tsdown --watch",
     "gen:roles": "node scripts/generate-roles.ts",
-    "gen:testing-capabilities": "node scripts/generate-testing-capabilities.ts",
     "build": "tsdown",
     "build:update": "tsdown --update-snapshot",
     "lint": "eslint",
@@ -54,7 +53,6 @@
     "release": "bumpp",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:contract": "vitest run --config vitest.contract.config.ts",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs"
@@ -66,6 +64,7 @@
     "consola": "catalog:",
     "croner": "catalog:",
     "evlog": "catalog:",
+    "fake-c8y": "catalog:",
     "itty-time": "catalog:",
     "jszip": "catalog:",
     "pathe": "catalog:",

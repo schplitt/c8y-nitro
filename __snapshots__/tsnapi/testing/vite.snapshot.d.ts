@@ -4,6 +4,7 @@
 // #region Interfaces
 export interface C8yTestOptions extends C8yTestState {
   baseUrl?: string;
+  roles?: 'enforce' | 'off';
 }
 // #endregion
 

@@ -74,9 +74,10 @@ export interface C8yTestState {
 }
 
 /**
- * A request the microservice sent to the (fake) platform.
+ * Context passed to a `c8y.override()` handler: the request, the params the
+ * pattern captured, and `next()` to pass the request on.
  */
-export interface C8yRequest {
+export interface C8yRequestContext {
   method: string
   /**
    * Path without query, e.g. `/inventory/managedObjects/42`.
@@ -89,7 +90,8 @@ export interface C8yRequest {
   body: unknown
   headers: Record<string, string>
   /**
-   * Tenant the request targets: `targetTenant` query, else the caller's tenant.
+   * Tenant the request works in: the caller's tenant (Basic auth prefix),
+   * else the deployed tenant.
    */
   tenant: string
   /**
@@ -97,29 +99,26 @@ export interface C8yRequest {
    */
   user: string | undefined
   /**
-   * Route params captured by the matching `c8y.override()` pattern.
+   * Route params captured by the pattern: `:name` segments, and `_` for the
+   * rest a `**` matched.
    */
   params: Record<string, string>
-}
-
-/**
- * A platform request the fake tenant could not answer.
- */
-export interface C8yUnhandledRequest extends C8yRequest {
-  /**
-   * Why the fake tenant could not answer it.
-   */
-  reason: string
-}
-
-/**
- * Context passed to a `c8y.override()` handler.
- */
-export interface C8yRequestContext extends C8yRequest {
   /**
    * The raw request, body already consumed.
    */
   request: Request
+  /**
+   * How many requests this override got in this test, this one included:
+   * `callCount === 2` is its second request.
+   */
+  callCount: number
+  /**
+   * Answers the request as if this override did not exist (an older
+   * override, else the fake platform) and returns that answer. Use it to add
+   * latency, or to let the platform store a write while the service sees an
+   * error. Callable once per request.
+   */
+  next: () => Promise<Response>
 }
 
 /**
@@ -138,6 +137,14 @@ export interface C8yTestOptions extends C8yTestState {
    * @default 'https://t12345.cumulocity.test'
    */
   baseUrl?: string
+  /**
+   * Whether platform requests are checked against the caller's rights, like
+   * on the platform. Only users you seed with `c8y.seed({ users })` (other
+   * than the current user) are restricted; the service's own credentials and
+   * the current user keep full access. `'off'` gives every caller full access.
+   * @default 'enforce'
+   */
+  roles?: 'enforce' | 'off'
 }
 
 declare module 'vitest' {

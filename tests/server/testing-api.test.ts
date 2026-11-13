@@ -50,8 +50,15 @@ describe('scopes', () => {
     expect(c8y.tenantOptions.get('scopeOption')).toBe('file')
   })
 
-  it('rebuilds data before every test (stable ids)', () => {
-    expect(pump.id).toBe('1')
+  let firstId: string | undefined
+  it('rebuilds data before every test', () => {
+    firstId = pump.id
+    expect(c8y.db.managedObjects.find({ name: 'file-pump' })).toHaveLength(1)
+  })
+
+  it('gives rebuilt data the same ids in every test', () => {
+    expect(pump.id).toBe(firstId)
+    expect(c8y.db.managedObjects.find({ name: 'file-pump' })).toHaveLength(1)
   })
 })
 
@@ -69,6 +76,19 @@ describe('overrides', () => {
     // @c8y/client throws { res, data } on error statuses; the c8y-client
     // middleware turns upstream errors into a 500
     expect((await fetchJson(`/devices/${pump.id}`)).res.status).toBe(500)
+  })
+
+  it('passes a request on to the platform with next()', async () => {
+    c8y.override('GET /inventory/managedObjects/:id', async ({ next }) => ({ ...await (await next()).json() as object, name: 'via-next' }))
+
+    expect(await deviceName()).toBe('via-next')
+  })
+
+  it('counts the requests an override got', async () => {
+    c8y.override('GET /inventory/managedObjects/:id', ({ callCount, next }) => callCount === 1 ? Response.json({ message: 'Unavailable' }, { status: 503 }) : next())
+
+    expect((await fetchJson(`/devices/${pump.id}`)).res.status).toBe(500)
+    expect(await deviceName()).toBe('file-pump')
   })
 })
 
@@ -107,16 +127,16 @@ describe('unsupported requests', () => {
     // 'error' (the default) would fail this test after it ran
     c8y.apply({ onUnhandledRequest: 'ignore' })
 
-    const { json } = await fetchJson('/platform/statistics')
+    const { json } = await fetchJson('/platform/features')
 
     expect(json.status).toBe(501)
-    expect(c8y.unhandled).toMatchObject([{ method: 'GET', path: '/tenant/statistics/summary', reason: 'endpoint not emulated' }])
+    expect(c8y.unhandled).toMatchObject([{ method: 'GET', path: '/features', reason: 'endpoint not emulated', kind: 'endpoint' }])
   })
 
   it('can be answered with an override', async () => {
-    c8y.override('GET /tenant/statistics/summary', () => ({ deviceCount: 3 }))
+    c8y.override('GET /features', () => [{ key: 'my-feature', active: true }])
 
-    expect((await fetchJson('/platform/statistics')).json).toEqual({ status: 200, body: { deviceCount: 3 } })
+    expect((await fetchJson('/platform/features')).json).toEqual({ status: 200, body: [{ key: 'my-feature', active: true }] })
   })
 })
 
