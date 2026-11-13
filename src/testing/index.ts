@@ -6,7 +6,7 @@ import { compileRoute, matchRoute, splitPath } from 'fake-c8y'
 import type { C8yRequestHandler, C8yTestState, C8yTestSubscription, C8yTestUser } from './types'
 import { DEFAULTS } from './defaults'
 import { arrange, assertActiveTest } from './scope'
-import { applyState, refs, trackOverride, useWorld } from './world'
+import { applyState, overrideFailure, refs, trackOverride, useWorld } from './world'
 
 export type * from './types'
 export type { C8yAlarmInput, C8yAlarmSeverity, C8yAlarmStatus, C8yApplicationInput, C8yAuditRecordInput, C8yBinaryContent, C8yBinaryInput, C8yDb, C8yDbCollection, C8yDbFilter, C8yEventInput, C8yGroupInput, C8yIdInput, C8yInventoryRoleInput, C8yManagedObjectInput, C8yMeasurementGeneratorInput, C8yMeasurementInput, C8yNewDeviceRequestInput, C8yOperationInput, C8yOperationStatus, C8yRequest, C8yRetentionRuleInput, C8ySeed, C8yUnhandledRequest, C8yUserInput } from 'fake-c8y'
@@ -329,19 +329,24 @@ export const c8y = {
           return ctx.next()
         }
         const url = new URL(request.url)
-        return handler({
-          method: request.method.toUpperCase(),
-          path: url.pathname.split('/').map(decodeURIComponent).join('/'),
-          query: Object.fromEntries(url.searchParams),
-          body: await readBody(request),
-          headers: Object.fromEntries(request.headers),
-          tenant: ctx.tenant,
-          user: ctx.user,
-          params: ctx.params,
-          request,
-          callCount: ctx.callCount,
-          next: ctx.next,
-        })
+        try {
+          return await handler({
+            method: request.method.toUpperCase(),
+            path: url.pathname.split('/').map(decodeURIComponent).join('/'),
+            query: Object.fromEntries(url.searchParams),
+            body: await readBody(request),
+            headers: Object.fromEntries(request.headers),
+            tenant: ctx.tenant,
+            user: ctx.user,
+            params: ctx.params,
+            request,
+            callCount: ctx.callCount,
+            next: ctx.next,
+          })
+        } catch (error) {
+          // the service sees the request fail with this error (see setup.ts)
+          return overrideFailure(error)
+        }
       }))
     })
   },

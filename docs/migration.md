@@ -9,7 +9,8 @@ The fake tenant of `c8y-nitro/testing` now runs on [fake-c8y](https://github.com
 - **IDs** have the platform's format (`47100001` instead of `1`). They are still the same in every test and every run. Do not assert on literal IDs: use the ref (`pump.id`).
 - **Deleting a managed object** deletes its measurements, events, alarms, and operations too, like the platform.
 - **Requests that used to fail with 501** (for example tenant statistics or user management) are now answered. Remove overrides you only added to answer them, or keep them: overrides still win.
-- **Users you seed** with `c8y.seed({ users })` are checked against their roles when your service calls the platform with their credentials. The current user and persona keep full access. `c8yTest({ roles: 'off' })` turns the checks off.
+- **Users you seed** with `c8y.seed({ users })` are checked against their roles when your service calls the platform with their credentials. The calling user (default `user` or `as` persona) keeps full access. `c8yTest({ roles: 'off' })` turns the checks off.
+- **Notification 2.0 subscriptions** created during a test are removed before the next test. Only the subscriptions the app creates at startup stay for the whole file.
 - **`targetTenant`** is no longer read: a request works in the tenant of its credentials.
 - **Types:** `C8yRequest` (in `c8y.calls`) no longer has `params` (it was always empty), and gains `id`, `status`, and `durationMs`. `C8yUnhandledRequest` gains `kind`. Override handlers get `callCount` and `next()` in addition to the request fields.
 

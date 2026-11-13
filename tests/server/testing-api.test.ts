@@ -84,6 +84,22 @@ describe('overrides', () => {
     expect(await deviceName()).toBe('via-next')
   })
 
+  it('makes the request fail with what a handler throws', async () => {
+    c8y.override('GET /features', () => {
+      throw new TypeError('fetch failed')
+    })
+
+    const { json } = await fetchJson('/platform/request', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ tenant: c8y.tenant, method: 'GET', path: '/features' }),
+    })
+
+    // a network-style failure, not an answer, and not an unsupported request
+    expect(json).toEqual({ error: 'TypeError: fetch failed' })
+    expect(c8y.unhandled).toEqual([])
+  })
+
   it('counts the requests an override got', async () => {
     c8y.override('GET /inventory/managedObjects/:id', ({ callCount, next }) => callCount === 1 ? Response.json({ message: 'Unavailable' }, { status: 503 }) : next())
 

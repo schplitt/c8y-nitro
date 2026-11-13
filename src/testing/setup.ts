@@ -3,10 +3,11 @@
 import { FetchClient } from '@c8y/client'
 import { compileRoute, matchRoute, splitPath } from 'fake-c8y'
 import { waitForRealtimeStartup } from 'fake-c8y/realtime'
-import { afterEach, beforeAll, beforeEach, expect, inject } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, expect, inject } from 'vitest'
 import { PROVIDE_KEY } from './defaults'
 import { markRunning } from './scope'
-import { platformUrl, resetWorld, setBaseline, unhandledMessage, useUnhandledStrategy, useWebSocket, useWorld } from './world'
+import type { C8yUnhandledRequest } from 'fake-c8y'
+import { markStarted, platformUrl, resetWorld, rethrowOverrideFailure, setBaseline, unhandledMessage, useUnhandledStrategy, useWebSocket, useWorld } from './world'
 import { setTestingHooks } from '../utils/internal/testing'
 
 interface FetchClientInternals {
@@ -27,9 +28,9 @@ FetchClient.prototype.fetch = async function (this: FetchClientInternals, url: s
   if (body && typeof body.getBuffer === 'function' && typeof body.getBoundary === 'function') {
     const headers = new Headers(options.headers)
     headers.set('content-type', `multipart/form-data; boundary=${body.getBoundary()}`)
-    return useWorld().fetch(new Request(fullUrl, { ...options, headers, body: body.getBuffer() }))
+    return rethrowOverrideFailure(await useWorld().fetch(new Request(fullUrl, { ...options, headers, body: body.getBuffer() })))
   }
-  return useWorld().fetch(new Request(fullUrl, options))
+  return rethrowOverrideFailure(await useWorld().fetch(new Request(fullUrl, options)))
 } as unknown as FetchClient['fetch']
 
 // Requests with the global fetch (e.g. c8y-realtime's REST calls, or a service
@@ -39,7 +40,7 @@ const originalFetch = globalThis.fetch
 globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
   const request = new Request(input, init)
   const platformOrigin = new URL(platformUrl()).origin
-  return new URL(request.url).origin === platformOrigin ? useWorld().fetch(request) : originalFetch(input, init)
+  return new URL(request.url).origin === platformOrigin ? rethrowOverrideFailure(await useWorld().fetch(request)) : originalFetch(input, init)
 }) as typeof fetch
 
 // Notification 2.0 consumers of c8y-nitro's realtime client connect to the fake.
@@ -62,12 +63,15 @@ beforeAll(async () => {
   const { useNitroApp } = await import('nitro/app')
   await (useNitroApp() as { ready?: Promise<void> }).ready
   await waitForRealtimeStartup(world.realtime, () => world.inflight)
+  // what the app subscribed to at startup is the realtime state of every test
+  markStarted()
 })
 
 // Registered before any test file hook, so it runs first: the scope-aware
 // arrange calls of the file and its describes replay after it.
 beforeEach(async () => {
-  resetWorld()
+  // requests that failed after the previous test ended (background work)
+  failUnhandled(resetWorld(), 'after the previous test ended')
   // Imported lazily: loading c8y-nitro/utils before Nitro created the app
   // (in its own beforeAll) would enter Nitro's runtime through an import cycle.
   const { useSubscribedTenantCredentials, useTenantOptions } = await import('c8y-nitro/utils')
@@ -79,10 +83,28 @@ afterEach(() => {
   const world = useWorld()
   const unhandled = world.unhandled
   world.unhandled = []
-  if (unhandled.length > 0 && useUnhandledStrategy() === 'error') {
-    throw new Error(unhandledMessage(unhandled))
-  }
+  failUnhandled(unhandled)
 })
+
+afterAll(() => {
+  // requests that failed after the last test of the file ended
+  const world = useWorld()
+  const unhandled = world.unhandled
+  world.unhandled = []
+  failUnhandled(unhandled, 'after the last test ended')
+})
+
+/**
+ * Fails the current hook for unhandled requests (with `onUnhandledRequest:
+ * 'error'`, the default).
+ * @param unhandled - The unhandled requests
+ * @param when - When they happened, if not during the test
+ */
+function failUnhandled(unhandled: readonly C8yUnhandledRequest[], when?: string): void {
+  if (unhandled.length > 0 && useUnhandledStrategy() === 'error') {
+    throw new Error(unhandledMessage(unhandled, when))
+  }
+}
 
 expect.extend({
   toHaveReceived(_received: unknown, pattern: string, options: { times?: number } = {}) {

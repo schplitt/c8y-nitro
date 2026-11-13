@@ -244,7 +244,7 @@ export default definePlugin(async () => {
 
 A test follows four steps:
 
-1. **The service sets itself up.** The Nitro app and its plugins start before the first test, and their subscriptions stay for the whole test file.
+1. **The service sets itself up.** The Nitro app and its plugins start before the first test. The subscriptions they create at startup are in place in every test of the file. Subscriptions created during a test are removed before the next one, so subscribe at startup (in a plugin), not lazily in a route.
 2. **Trigger a write**, like a device would: `c8y.seed()` or `c8y.device()` inside the test, a route of your service, or `c8y.db.operations.update()`.
 3. **Wait until it is processed:** `await c8y.notifications.settled()`. This waits until every delivered notification has been handled, including notifications caused by the handlers' own writes.
 4. **Query the fake world** with `c8y.db`.
@@ -298,7 +298,7 @@ it('fails while the inventory is unavailable', async () => {
 ```
 
 - **Patterns** are `"[METHOD ]/path"`. Path segments can be `:name` (captured in `params`), `*` (any one segment), or `**` (the rest of the path).
-- **The handler's return value:** return a `Response` for any status, any other value for `200` with it as JSON, or nothing for `204`.
+- **The handler's return value:** return a `Response` for any status, any other value for `200` with it as JSON, or nothing for `204`. A handler that throws makes the request fail with that error, like a network error: `() => { throw new TypeError('fetch failed') }`.
 - **`{ once: true }`** answers only the first match, for example a single temporary failure.
 - **`next()`** passes the request on to the fake platform (or an older override) and returns its answer. Use it to add latency, to change an answer, or to let the platform store a write while your service sees an error. **`callCount`** is the number of requests this override got, this one included.
 
@@ -339,7 +339,7 @@ The details, and where the fake simplifies, are in fake-c8y's [Emulated API](htt
 What c8y-nitro sets up on top:
 
 - **IDs** have the platform's format (managed objects get 8 digits, `47100001`). They are deterministic: the same arrangement gives the same IDs in every test and every run. Timestamps come from `Date`, so `vi.useFakeTimers()` controls them.
-- **Permissions** are checked like on the platform, for users the tenant stores: users you seed with `c8y.seed({ users })` get 403 where they lack the rights, and lists show only what they may see. The current user (the default `user` or the `as` persona), your service's own credentials, and requests without credentials keep full access, so roles of personas only matter in your own middleware, like `hasUserRequiredRole()`. `c8yTest({ roles: 'off' })` turns the checks off.
+- **Permissions** are checked like on the platform for users the tenant stores: a request your service sends with the credentials of a user you seeded with `c8y.seed({ users })` gets 403 where that user lacks the rights, and lists show only what it may see. The calling user (the default `user` or the `as` persona), your service's own credentials, and requests without credentials keep full access, so the roles of personas only matter in your own middleware, like `hasUserRequiredRole()`. A route called with `serverFetch(path, { as })` therefore always works as an unrestricted user; it cannot run as a restricted seeded user. `c8yTest({ roles: 'off' })` turns the checks off.
 - **Tenant options:** default values from your manifest's settings are not applied. Set the options your test needs. `credentials.` options read as `<<Encrypted>>`, except in your microservice's own settings category, where the service gets the clear value.
 - **Tenants:** each request is answered with the data of the tenant of its credentials. The `targetTenant` parameter is not read.
 
