@@ -20,7 +20,7 @@ import type { FakeWebSocketClass } from 'fake-c8y/realtime'
 import { createFakeWebSocket, waitForRealtimeStartup } from 'fake-c8y/realtime'
 import type { C8yTestOptions, C8yTestState, UnhandledRequestStrategy } from './types'
 import { DEFAULTS } from './defaults'
-import { arrangementsOf, concurrentError } from './scope'
+import { arrangementsOf, concurrentError, isConcurrentRunning } from './scope'
 import { useTestingHooks } from '../utils/internal/testing'
 
 interface WorldState {
@@ -118,9 +118,9 @@ const sharedScopes = new WeakSet<object>()
  */
 let currentInstance: object | undefined
 /**
- * The key of the instance concurrent tests share.
+ * The key of the instance the concurrent tests of a suite share.
  */
-const CONCURRENT = {}
+const concurrentKeys = new WeakMap<object, object>()
 /**
  * Whether a service instance runs (Nitro app created and started).
  */
@@ -223,17 +223,28 @@ async function prepare(task: TaskLike & { name?: string, concurrent?: boolean })
     throw concurrentError(concurrent.name, task.name ?? '')
   }
   if (task.concurrent) {
-    // Concurrent tests (they arrange nothing) share one service on a clean
-    // tenant, and never reset it under each other.
-    if (current.startup && currentInstance === CONCURRENT) {
+    // The concurrent tests of a suite (they arrange nothing) share one service
+    // on a clean tenant, and never reset it under each other.
+    const group = task.suite ?? file
+    let key = concurrentKeys.get(group)
+    if (!key) {
+      key = {}
+      concurrentKeys.set(group, key)
+    }
+    if (current.startup && currentInstance === key) {
       return []
     }
     await stopService()
     world.reset({ to: current.clean })
     refs.clear()
     const unhandled = await startService()
-    currentInstance = CONCURRENT
+    currentInstance = key
     return unhandled
+  }
+  if (isConcurrentRunning()) {
+    // Vitest runs concurrent suites side by side: preparing this test would
+    // reset the platform and the service under them
+    throw new Error(`c8y-nitro/testing: "${task.name ?? ''}" runs while concurrent tests of a sibling suite run. A suite with { concurrent: true } may only contain concurrent tests that arrange nothing; move this test out of it, or pass { concurrent: false } to the suites around it.`)
   }
   // the scopes down to the one that owns the instance are arranged before the
   // service starts; the deeper ones before each test
@@ -303,8 +314,8 @@ async function startService(): Promise<C8yUnhandledRequest[]> {
     await app.ready
     await waitForRealtimeStartup(world.realtime, () => world.inflight)
   } catch (error) {
-    // a failed start is closed, so the next test starts a new instance; its
-    // unhandled requests go with the error that fails this test
+    // a failed start is closed, so the next test starts a new instance; the
+    // start error fails this test, its unhandled requests are dropped
     world.unhandled = []
     await stopService()
     throw error
@@ -370,12 +381,14 @@ export async function restartService(): Promise<void> {
   const current = useState()
   const { world } = current
   // the test's own requests stay in its log; the restart's startup does not
+  // (fake-c8y appends to the array in place: the restart gets its own)
   const calls = world.calls
   const before = world.unhandled
+  world.calls = []
   world.unhandled = []
-  await stopService()
   let unhandled: C8yUnhandledRequest[]
   try {
+    await stopService()
     unhandled = await startService()
   } finally {
     world.calls = calls

@@ -91,10 +91,13 @@ beforeEach(async ({ task }) => {
   trackTest(task, true)
   const world = useWorld()
   // requests that failed after the previous test ended (background work),
-  // judged by the strategy that test had
-  const late = world.unhandled
-  world.unhandled = []
-  failUnhandled(late, useUnhandledStrategy(), 'after the previous test ended')
+  // judged by the strategy that test had; with concurrent tests, they may
+  // belong to a sibling that still runs, whose afterEach reports them
+  if (!task.concurrent) {
+    const late = world.unhandled
+    world.unhandled = []
+    failUnhandled(late, useUnhandledStrategy(), 'after the previous test ended')
+  }
   // back to the startup state, on the service instance of the test's scope
   // (started now if the scope needs a new one)
   const startup = await prepareTest(task)

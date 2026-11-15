@@ -3,7 +3,7 @@ import { Buffer } from 'node:buffer'
 import type { C8YTenantOptionKey } from 'c8y-nitro/types'
 import { serverFetch as nitroServerFetch } from 'nitro'
 import { TestRunner } from 'vitest'
-import type { C8yBinaryInput, C8yDb, C8yManagedObjectInput, C8yRequest, C8ySeed, C8yUnhandledRequest, NotificationSubscription } from 'fake-c8y'
+import type { C8yBinaryInput, C8yDb, C8yManagedObjectInput, C8yRequest, C8ySeed, C8yTenantOptionScope, C8yUnhandledRequest, NotificationSubscription } from 'fake-c8y'
 import { compileRoute, matchRoute, splitPath } from 'fake-c8y'
 import type { C8yRequestHandler, C8yTestState, C8yTestSubscription, C8yTestUser } from './types'
 import { DEFAULTS } from './defaults'
@@ -11,7 +11,7 @@ import { arrange, assertActiveTest, isCollecting, isConcurrentRunning, runningSu
 import { applyState, refs, restartService, shareService, syncEnv, useWorld } from './world'
 
 export type * from './types'
-export type { C8yAlarmInput, C8yAlarmSeverity, C8yAlarmStatus, C8yApplicationInput, C8yAuditRecordInput, C8yBinaryContent, C8yBinaryInput, C8yDb, C8yDbCollection, C8yDbFilter, C8yEventInput, C8yGroupInput, C8yIdInput, C8yInventoryRoleInput, C8yManagedObjectInput, C8yMeasurementGeneratorInput, C8yMeasurementInput, C8yNewDeviceRequestInput, C8yOperationInput, C8yOperationStatus, C8yRequest, C8yRetentionRuleInput, C8ySeed, C8yUnhandledRequest, C8yUserInput } from 'fake-c8y'
+export type { C8yAlarmInput, C8yAlarmSeverity, C8yAlarmStatus, C8yApplicationInput, C8yAuditRecordInput, C8yBinaryContent, C8yBinaryInput, C8yDb, C8yDbCollection, C8yDbFilter, C8yEventInput, C8yGroupInput, C8yIdInput, C8yInventoryRoleInput, C8yManagedObjectInput, C8yMeasurementGeneratorInput, C8yMeasurementInput, C8yNewDeviceRequestInput, C8yOperationInput, C8yOperationStatus, C8yRequest, C8yRetentionRuleInput, C8ySeed, C8yTenantOptionScope, C8yUnhandledRequest, C8yUserInput } from 'fake-c8y'
 export type { NotificationSubscription as C8yNotificationSubscription } from 'fake-c8y'
 
 /**
@@ -44,14 +44,6 @@ class Ref implements C8yRef {
 }
 
 type TenantOptionKeyInput = C8YTenantOptionKey | (string & {})
-
-/**
- * Where a tenant option lives. Defaults: own settings category, deployed tenant.
- */
-export interface C8yTenantOptionScope {
-  category?: string
-  tenant?: string
-}
 
 /**
  * Options of the `toHaveReceived()` matcher.
@@ -223,24 +215,7 @@ export const c8y = {
    */
   seed(seed: C8ySeed): void {
     arrange('c8y.seed()', () => {
-      const world = useWorld()
-      const tenant = seed.tenant ?? world.tenant
-      // a user with its own `tenant` (e.g. a persona) is seeded there, with
-      // the seed's roles, so `serverFetch({ as })` finds it
-      const elsewhere = new Map<string, NonNullable<C8ySeed['users']>>()
-      const users: NonNullable<C8ySeed['users']> = []
-      for (const { tenant: own, ...user } of seed.users ?? []) {
-        const target = typeof own === 'string' ? own : tenant
-        if (target === tenant) {
-          users.push(user)
-        } else {
-          elsewhere.set(target, [...(elsewhere.get(target) ?? []), user])
-        }
-      }
-      world.seed(seed.users ? { ...seed, users } : seed)
-      for (const [other, otherUsers] of elsewhere) {
-        world.seed({ tenant: other, ...(seed.roles ? { roles: seed.roles } : {}), users: otherUsers })
-      }
+      useWorld().seed(seed)
     })
   },
 

@@ -257,8 +257,6 @@ function ensureLifecycleWired(): void {
     // Close sockets so shutdown leaks nothing; remote subscriptions are kept.
     await Promise.all([...pool.values()].map((client) => client.close().catch(() => {})))
     pool.clear()
-    // a new app instance (e.g. a restarted service in tests) wires its own hook
-    lifecycleWired = false
   })
 }
 

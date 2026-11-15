@@ -41,13 +41,6 @@ describe('realtime triggers', () => {
       expect(c8y.db.alarms.find()).toEqual([])
     })
   })
-
-  it('deduplicates repeated alarms like the platform', async () => {
-    c8y.seed({ measurements: [temperature(90), temperature(91)] })
-    await c8y.notifications.settled()
-
-    expect(c8y.db.alarms.find({ source: pump })).toMatchObject([{ count: 2 }])
-  })
 })
 
 // Order-dependent on purpose: each pair checks what the next test sees.

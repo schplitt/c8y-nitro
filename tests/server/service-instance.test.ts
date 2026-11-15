@@ -195,18 +195,16 @@ describe('concurrent tests', () => {
       expect((await fetchJson('/hello')).res.status).toBe(200)
     })
 
-    it('without the data of the test before', () => {
-      expect(c8y.db.managedObjects.find({ name: 'only-in-this-describe' })).toEqual([])
+    it('on a clean tenant, without the data of the test before', () => {
+      expect(c8y.db.managedObjects.find()).toEqual([])
     })
   })
 })
 
 describe('misuse', () => {
   describe('startService() in afterAll', () => {
-    let error: unknown
     afterAll(async () => {
-      error = await c8y.startService().catch((caught: unknown) => caught)
-      expect(String(error)).toContain('cannot be called in afterAll()')
+      await expect(c8y.startService()).rejects.toThrow('cannot be called in afterAll()')
     })
 
     it('runs a test first', () => {})

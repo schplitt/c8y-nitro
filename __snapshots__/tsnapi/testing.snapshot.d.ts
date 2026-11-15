@@ -18,10 +18,6 @@ export interface C8yRequestContext {
   callCount: number;
   next: () => Promise<Response>;
 }
-export interface C8yTenantOptionScope {
-  category?: string;
-  tenant?: string;
-}
 export interface C8yTestOptions extends C8yTestState {
   baseUrl?: string;
   roles?: 'enforce' | 'off';
@@ -85,9 +81,9 @@ export declare const c8y: {
     set(subscriptions: C8yTestSubscription[]): void;
   };
   tenantOptions: {
-    set(key: TenantOptionKeyInput, value: string, scope?: C8yTenantOptionScope): void;
-    delete(key: TenantOptionKeyInput, scope?: C8yTenantOptionScope): void;
-    get(key: TenantOptionKeyInput, scope?: C8yTenantOptionScope): string | undefined;
+    set(key: TenantOptionKeyInput, value: string, scope?: C8yTenantOptionScope$1): void;
+    delete(key: TenantOptionKeyInput, scope?: C8yTenantOptionScope$1): void;
+    get(key: TenantOptionKeyInput, scope?: C8yTenantOptionScope$1): string | undefined;
   };
   override(pattern: string, handler: C8yRequestHandler, options?: {
     once?: boolean;
@@ -133,6 +129,7 @@ export { C8yOperationStatus }
 export { C8yRequest }
 export { C8yRetentionRuleInput }
 export { C8ySeed }
+export { C8yTenantOptionScope }
 export { C8yUnhandledRequest }
 export { C8yUserInput }
 // #endregion

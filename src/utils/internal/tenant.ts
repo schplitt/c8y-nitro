@@ -4,8 +4,13 @@ import type { ServerRequest } from 'nitro/types'
 import { Buffer } from 'node:buffer'
 import { createHash, randomBytes } from 'node:crypto'
 import { useUserClient } from '../client'
+import { useTestingHooks } from './testing'
 
-const USER_TENANT_CACHE_SALT = randomBytes(32).toString('hex')
+// Random per process: cache keys of the current user's tenant never contain
+// raw credentials, and a new process starts with keys nothing has cached.
+let userTenantCacheSalt = randomBytes(32).toString('hex')
+// Part of the tenant domain cache key in tests only (0 in production).
+let tenantDomainCacheGeneration = 0
 
 function getCookieValue(cookieHeader: string | null, name: string): string | undefined {
   try {
@@ -38,7 +43,7 @@ export function createCurrentUserTenantCacheKey(requestOrEvent: ServerRequest | 
   }
 
   return createHash('sha256')
-    .update(USER_TENANT_CACHE_SALT)
+    .update(userTenantCacheSalt)
     .update(':')
     .update(material)
     .digest('hex')
@@ -107,7 +112,7 @@ const cachedTenantDomain = defineCachedFunction(
     name: '_c8y_nitro_get_user_tenant_domain',
     group: 'c8y_nitro',
     swr: false,
-    getKey: (_requestOrEvent, tenantId) => tenantId,
+    getKey: (_requestOrEvent, tenantId) => tenantDomainCacheGeneration === 0 ? tenantId : `${tenantId}:${tenantDomainCacheGeneration}`,
   },
 )
 
@@ -134,6 +139,16 @@ const FAST_DOMAIN_MAX_ENTRIES = 1000
 // salted auth-material hash, so per-request cost after the first resolution is
 // one hash + one Map lookup with no async storage round-trip.
 const fastDomainCache = new Map<string, FastDomainCacheEntry>()
+
+// Tests: a new service instance starts with empty tenant id and domain caches,
+// like a new process. The Nitro caches persist in the shared cache storage and
+// have no `invalidateAll()`, so their keys change instead: a new salt for the
+// per-credential keys, a new generation for the per-tenant domain key.
+useTestingHooks()?.instanceState?.add(() => {
+  userTenantCacheSalt = randomBytes(32).toString('hex')
+  tenantDomainCacheGeneration++
+  fastDomainCache.clear()
+})
 
 /**
  * Clears the in-process tenant domain cache. Exposed for tests.
