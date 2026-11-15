@@ -10,15 +10,16 @@ import { c8yTest } from 'c8y-nitro/testing/vite'
 
 Vite plugin. Add it next to `nitro()` in `vitest.config.ts`. `options` is the baseline of the fake tenant for every test:
 
-| Option               | Type                            | Default                                | Description                                                      |
-| -------------------- | ------------------------------- | -------------------------------------- | ---------------------------------------------------------------- |
-| `tenant`             | `string`                        | `'t12345'`                             | Tenant the microservice is deployed in (`C8Y_BOOTSTRAP_TENANT`). |
-| `user`               | `C8yTestUser \| null`           | `{ userName: 'test-user', roles: [] }` | Default user for plain `serverFetch()`. `null`: not logged in.   |
-| `subscriptions`      | `C8yTestSubscription[]`         | the deployed tenant                    | Subscribed tenants and their service users.                      |
-| `tenantOptions`      | `Record<string, string>`        | `{}`                                   | Options of the own settings category in the deployed tenant.     |
-| `onUnhandledRequest` | `'error' \| 'warn' \| 'ignore'` | `'error'`                              | What happens to platform requests the fake cannot answer.        |
-| `baseUrl`            | `string`                        | `'https://t12345.cumulocity.test'`     | `C8Y_BASEURL` of the fake platform.                              |
-| `roles`              | `'enforce' \| 'off'`            | `'enforce'`                            | Permission checks for users seeded with `c8y.seed({ users })`.   |
+| Option               | Type                            | Default                                | Description                                                                                                  |
+| -------------------- | ------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `tenant`             | `string`                        | `'t12345'`                             | Tenant the microservice is deployed in (`C8Y_BOOTSTRAP_TENANT`).                                             |
+| `user`               | `C8yTestUser \| null`           | `{ userName: 'test-user', roles: [] }` | Default caller of `serverFetch()`, full access on the platform. `null`: `GET /user/currentUser` answers 401. |
+| `subscriptions`      | `C8yTestSubscription[]`         | the deployed tenant                    | Subscribed tenants and their service users.                                                                  |
+| `tenantOptions`      | `Record<string, string>`        | `{}`                                   | Options of the own settings category in the deployed tenant.                                                 |
+| `onUnhandledRequest` | `'error' \| 'warn' \| 'ignore'` | `'error'`                              | What happens to platform requests the fake cannot answer.                                                    |
+| `baseUrl`            | `string`                        | `'https://t12345.cumulocity.test'`     | `C8Y_BASEURL` of the fake platform.                                                                          |
+| `roles`              | `'enforce' \| 'off'`            | `'enforce'`                            | Permission checks for users seeded with `c8y.seed({ users })`.                                               |
+| `service`            | `'per-test' \| 'per-file'`      | `'per-test'`                           | How long one service instance lives: a new one per test, or one per file.                                    |
 
 The plugin sets these environment variables unless `test.env` sets them: `C8Y_BASEURL`, `C8Y_BOOTSTRAP_TENANT`, `C8Y_BOOTSTRAP_USER`, `C8Y_BOOTSTRAP_PASSWORD`, `C8Y_DEVELOPMENT_TENANT`, `C8Y_DEVELOPMENT_USER`, `C8Y_DEVELOPMENT_PASSWORD`.
 
@@ -32,17 +33,18 @@ Arrange calls (marked _scoped_) apply to the scope they are called in: file, `de
 
 ### Arrange
 
-| Member                                                                            | Description                                                                                |
-| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `c8y.device(input?)`                                                              | _Scoped._ Creates a device (`c8y_IsDevice`). Returns a `C8yRef`.                           |
-| `c8y.managedObject(input?)`                                                       | _Scoped._ Creates a managed object. Returns a `C8yRef`.                                    |
-| `c8y.binary({ name, content, contentType?, tenant? })`                            | _Scoped._ Creates an inventory binary (a file). Returns a `C8yRef`.                        |
-| `c8y.seed({ measurements?, events?, alarms?, operations?, users?, …, tenant? })`  | _Scoped._ Creates data other data does not point to, validated like API writes.            |
-| `c8y.tenantOptions.set(key, value, scope?)`                                       | _Scoped._ Sets an option. `scope`: `{ category?, tenant? }`.                               |
-| `c8y.tenantOptions.delete(key, scope?)`                                           | _Scoped._ Deletes an option.                                                               |
-| `c8y.subscriptions.add(subscription)` / `.remove(tenant)` / `.set(subscriptions)` | _Scoped._ Changes the subscribed tenants.                                                  |
-| `c8y.override(pattern, handler, { once? })`                                       | _Scoped._ Overrides the platform's answer, for failures and unsupported APIs.              |
-| `c8y.apply(state)`                                                                | _Scoped._ Applies a partial `C8yTestState` (the plugin options except `baseUrl`, `roles`). |
+| Member                                                                            | Description                                                                                                                                                                       |
+| --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `c8y.device(input?)`                                                              | _Scoped._ Creates a device (`c8y_IsDevice`). Returns a `C8yRef`.                                                                                                                  |
+| `c8y.managedObject(input?)`                                                       | _Scoped._ Creates a managed object. Returns a `C8yRef`.                                                                                                                           |
+| `c8y.binary({ name, content, contentType?, tenant? })`                            | _Scoped._ Creates an inventory binary (a file). Returns a `C8yRef`.                                                                                                               |
+| `c8y.seed({ measurements?, events?, alarms?, operations?, users?, …, tenant? })`  | _Scoped._ Creates data other data does not point to, validated like API writes.                                                                                                   |
+| `c8y.tenantOptions.set(key, value, scope?)`                                       | _Scoped._ Sets an option. `scope`: `{ category?, tenant? }`.                                                                                                                      |
+| `c8y.tenantOptions.delete(key, scope?)`                                           | _Scoped._ Deletes an option.                                                                                                                                                      |
+| `c8y.subscriptions.add(subscription)` / `.remove(tenant)` / `.set(subscriptions)` | _Scoped._ Changes the subscribed tenants.                                                                                                                                         |
+| `c8y.override(pattern, handler, { once? })`                                       | _Scoped._ Overrides the platform's answer, for failures and unsupported APIs.                                                                                                     |
+| `c8y.apply(state)`                                                                | _Scoped._ Applies a partial `C8yTestState`: `tenant`, `subscriptions`, `tenantOptions`, `onUnhandledRequest`.                                                                     |
+| `c8y.startService()`                                                              | In `beforeAll`: the tests of that `describe` (or file) share one service. In `beforeEach`: a new service per test. In a test (`await` it): a new service now, on the test's data. |
 
 `c8y.device()` and `c8y.managedObject()` take any fragments plus:
 
@@ -61,10 +63,10 @@ Seed inputs reference managed objects as a ref, an id, or `{ id }`: `source` for
 import { definePersona, serverFetch } from 'c8y-nitro/testing'
 ```
 
-| Member                     | Description                                                                                                                                                                                                        |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `serverFetch(path, init?)` | Calls a route of your service, like `serverFetch()` from `nitro`. `init.as` is the calling user: a persona, an inline user, or `null` (no valid login). Without `as`, the default user of the plugin config calls. |
-| `definePersona(user)`      | Types a user for reuse as `as` (role names autocomplete).                                                                                                                                                          |
+| Member                     | Description                                                                                                                                                                                                                                                                                                                                              |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `serverFetch(path, init?)` | Calls a route of your service, like `serverFetch()` from `nitro`. `init.as` is the caller of this call only: a user the fake tenant stores (a name, or a user with `tenant` such as a persona), seeded with `c8y.seed({ users })`; the platform checks its roles. Throws for an unknown user. Without `as`, the default user of the plugin config calls. |
+| `definePersona(user)`      | Types a user once, to seed it (`c8y.seed({ users: [persona] })`) and call as it (role names autocomplete).                                                                                                                                                                                                                                               |
 
 ### Assert
 
@@ -97,13 +99,13 @@ import { definePersona, serverFetch } from 'c8y-nitro/testing'
 | `*`     | any one segment                                           |
 | `**`    | the rest of the path (also empty), captured as `params._` |
 
-The handler receives the request: `method`, `path`, `params`, `query`, `body` (parsed JSON), `headers`, `tenant`, `user`, and the raw `request`, plus `callCount` (the requests this override got, this one included) and `next()` (answers the request as if the override did not exist and returns that `Response`). Return a `Response` for full control, any other value to answer `200` with it as JSON, or nothing to answer `204`.
+The handler receives the request: `method`, `path`, `params`, `query`, `body` (parsed JSON), `headers`, `tenant`, `user`, and the raw `request`, plus `callCount` (the requests this override got, this one included) and `next()` (answers the request as if the override did not exist and returns that `Response`; once per request). `body` is `undefined` for uploads. A handler that throws answers 500 and fails the test. Return a `Response` for full control, any other value to answer `200` with it as JSON, or nothing to answer `204`.
 
 ## Types
 
 All types are exported from `c8y-nitro/testing`:
 
-- **Plugin and state:** `C8yTestOptions`, `C8yTestState`, `C8yTestUser`, `C8yServerFetchInit`, `C8yTestRole`, `C8yTestSubscription`.
+- **Plugin and state:** `C8yTestOptions`, `C8yTestState`, `C8yTestUser`, `C8yServerFetchInit`, `C8yCaller`, `C8yTestRole`, `C8yTestSubscription`, `C8yTenantOptionScope`, `ToHaveReceivedOptions`.
 - **Data model:** `C8yRef`, `C8yIdInput`, `C8yManagedObjectInput`, `C8yBinaryInput`, `C8yBinaryContent`, `C8ySeed`, `C8yMeasurementInput`, `C8yMeasurementGeneratorInput`, `C8yEventInput`, `C8yAlarmInput`, `C8yOperationInput`, `C8yNewDeviceRequestInput`, `C8yRetentionRuleInput`, `C8yAuditRecordInput`, `C8yUserInput`, `C8yGroupInput`, `C8yInventoryRoleInput`, `C8yApplicationInput`.
 - **Inspection:** `C8yDb`, `C8yDbCollection`, `C8yDbFilter`, `C8yNotificationSubscription`.
 - **Requests:** `C8yRequest`, `C8yUnhandledRequest`, `C8yRequestContext`, `C8yRequestHandler`, `UnhandledRequestStrategy`.

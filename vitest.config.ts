@@ -31,7 +31,18 @@ export default defineConfig({
           name: 'server',
           environment: 'nitro',
           include: ['tests/server/**/*.test.ts'],
-          exclude: [...exclude, 'tests/server/**/*.no-dev-user.test.ts'],
+          exclude: [...exclude, 'tests/server/**/*.no-dev-user.test.ts', 'tests/server/**/*.per-file.test.ts'],
+        },
+      },
+      // Same fixture with one service instance per file (a plugin option, so
+      // it needs its own project).
+      {
+        plugins: [nitro({ rootDir: fixtureDir }), c8yTest({ service: 'per-file' })],
+        test: {
+          name: 'server-per-file',
+          environment: 'nitro',
+          include: ['tests/server/**/*.per-file.test.ts'],
+          exclude,
         },
       },
       // Same fixture with dev user injection disabled (a module option, so it

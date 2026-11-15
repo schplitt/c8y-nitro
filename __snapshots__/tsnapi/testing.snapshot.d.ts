@@ -25,6 +25,7 @@ export interface C8yTenantOptionScope {
 export interface C8yTestOptions extends C8yTestState {
   baseUrl?: string;
   roles?: 'enforce' | 'off';
+  service?: 'per-test' | 'per-file';
 }
 export interface C8yTestState {
   tenant?: string;
@@ -50,16 +51,20 @@ export interface ToHaveReceivedOptions {
 // #endregion
 
 // #region Types
+export type C8yCaller = string | {
+  userName: string;
+  tenant?: string;
+};
 export type C8yRequestHandler = (_: C8yRequestContext) => unknown;
 export type C8yServerFetchInit = NonNullable<Parameters<typeof serverFetch$1>[1]> & {
-  as?: C8yTestUser | null;
+  as?: C8yCaller;
 };
 export type C8yTestRole = keyof C8YRoles | C8YRole;
 export type UnhandledRequestStrategy = 'error' | 'warn' | 'ignore';
 // #endregion
 
 // #region Functions
-export declare function definePersona(_: C8yTestUser): C8yTestUser;
+export declare function definePersona<const T extends C8yTestUser>(_: T): T;
 export declare function serverFetch(_: string, _?: C8yServerFetchInit): Promise<Response>;
 // #endregion
 
@@ -87,6 +92,7 @@ export declare const c8y: {
   override(pattern: string, handler: C8yRequestHandler, options?: {
     once?: boolean;
   }): void;
+  startService(): Promise<void>;
   apply(state: Partial<Omit<C8yTestState, "user">>): void;
   notifications: {
     settled(options?: {

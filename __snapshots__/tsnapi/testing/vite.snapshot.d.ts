@@ -5,6 +5,7 @@
 export interface C8yTestOptions extends C8yTestState {
   baseUrl?: string;
   roles?: 'enforce' | 'off';
+  service?: 'per-test' | 'per-file';
 }
 // #endregion
 

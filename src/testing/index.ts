@@ -1,12 +1,14 @@
+import process from 'node:process'
 import { Buffer } from 'node:buffer'
 import type { C8YTenantOptionKey } from 'c8y-nitro/types'
 import { serverFetch as nitroServerFetch } from 'nitro'
+import { TestRunner } from 'vitest'
 import type { C8yBinaryInput, C8yDb, C8yManagedObjectInput, C8yRequest, C8ySeed, C8yUnhandledRequest, NotificationSubscription } from 'fake-c8y'
 import { compileRoute, matchRoute, splitPath } from 'fake-c8y'
 import type { C8yRequestHandler, C8yTestState, C8yTestSubscription, C8yTestUser } from './types'
 import { DEFAULTS } from './defaults'
-import { arrange, assertActiveTest } from './scope'
-import { applyState, overrideFailure, refs, trackOverride, useWorld } from './world'
+import { arrange, assertActiveTest, isCollecting, isConcurrentRunning, runningSuite } from './scope'
+import { applyState, refs, restartService, shareService, syncEnv, useWorld } from './world'
 
 export type * from './types'
 export type { C8yAlarmInput, C8yAlarmSeverity, C8yAlarmStatus, C8yApplicationInput, C8yAuditRecordInput, C8yBinaryContent, C8yBinaryInput, C8yDb, C8yDbCollection, C8yDbFilter, C8yEventInput, C8yGroupInput, C8yIdInput, C8yInventoryRoleInput, C8yManagedObjectInput, C8yMeasurementGeneratorInput, C8yMeasurementInput, C8yNewDeviceRequestInput, C8yOperationInput, C8yOperationStatus, C8yRequest, C8yRetentionRuleInput, C8ySeed, C8yUnhandledRequest, C8yUserInput } from 'fake-c8y'
@@ -86,8 +88,9 @@ declare module 'vitest' {
  * Arrange calls are **scope-aware**: at the top of a file they apply to every
  * test in the file, inside `describe` to the tests of that `describe` (inner
  * scopes override outer ones), and inside a test only to that test. Before
- * every test the tenant is rebuilt from the plugin baseline, the call log is
- * cleared, and c8y-nitro's caches are invalidated, so tests are independent.
+ * every test the tenant is rebuilt from the plugin baseline and the call log
+ * is cleared, so tests are independent. Your service keeps running between
+ * tests that share an instance, with its caches (see `c8y.startService()`).
  *
  * Arrange the platform as data: users, subscriptions, tenant options,
  * managed objects (`device()`), and measurements, events, alarms, and
@@ -220,7 +223,24 @@ export const c8y = {
    */
   seed(seed: C8ySeed): void {
     arrange('c8y.seed()', () => {
-      useWorld().seed(seed)
+      const world = useWorld()
+      const tenant = seed.tenant ?? world.tenant
+      // a user with its own `tenant` (e.g. a persona) is seeded there, with
+      // the seed's roles, so `serverFetch({ as })` finds it
+      const elsewhere = new Map<string, NonNullable<C8ySeed['users']>>()
+      const users: NonNullable<C8ySeed['users']> = []
+      for (const { tenant: own, ...user } of seed.users ?? []) {
+        const target = typeof own === 'string' ? own : tenant
+        if (target === tenant) {
+          users.push(user)
+        } else {
+          elsewhere.set(target, [...(elsewhere.get(target) ?? []), user])
+        }
+      }
+      world.seed(seed.users ? { ...seed, users } : seed)
+      for (const [other, otherUsers] of elsewhere) {
+        world.seed({ tenant: other, ...(seed.roles ? { roles: seed.roles } : {}), users: otherUsers })
+      }
     })
   },
 
@@ -324,31 +344,71 @@ export const c8y = {
   override(pattern: string, handler: C8yRequestHandler, options: { once?: boolean } = {}): void {
     arrange('c8y.override()', () => {
       const once = options.once ?? false
-      trackOverride(useWorld().override(pattern, async (request, ctx) => {
+      useWorld().override(pattern, async (request, ctx) => {
         if (once && ctx.callCount > 1) {
           return ctx.next()
         }
         const url = new URL(request.url)
-        try {
-          return await handler({
-            method: request.method.toUpperCase(),
-            path: url.pathname.split('/').map(decodeURIComponent).join('/'),
-            query: Object.fromEntries(url.searchParams),
-            body: await readBody(request),
-            headers: Object.fromEntries(request.headers),
-            tenant: ctx.tenant,
-            user: ctx.user,
-            params: ctx.params,
-            request,
-            callCount: ctx.callCount,
-            next: ctx.next,
-          })
-        } catch (error) {
-          // the service sees the request fail with this error (see setup.ts)
-          return overrideFailure(error)
-        }
-      }))
+        return handler({
+          method: request.method.toUpperCase(),
+          path: url.pathname.split('/').map(decodeURIComponent).join('/'),
+          query: Object.fromEntries(url.searchParams),
+          body: await readBody(request),
+          headers: Object.fromEntries(request.headers),
+          tenant: ctx.tenant,
+          user: ctx.user,
+          params: ctx.params,
+          request,
+          callCount: ctx.callCount,
+          next: ctx.next,
+        })
+      })
     })
+  },
+
+  /**
+   * Starts an instance of your service (a new Nitro app: plugins run, c8y-nitro's
+   * caches and realtime clients start empty). By default every test gets its
+   * own (`c8yTest({ service: 'per-test' })`); use Vitest's hooks for the scope:
+   *
+   * - In `beforeAll` (file level or a `describe`): one instance for the tests of
+   *   that scope, started before its first test on the data arranged down to
+   *   that scope. Caches carry over between its tests, like on a running service.
+   * - In `beforeEach`: a new instance for every test of the scope (e.g. inside a
+   *   scope that shares one).
+   * - Inside a test: a new instance now, on what the test arranged so far.
+   *
+   * @example
+   * ```ts
+   * describe('caching', () => {
+   *   beforeAll(() => c8y.startService()) // one service for these tests
+   *   it('reads the option once', async () => {})
+   * })
+   *
+   * it('boots with the new subscription', async () => {
+   *   c8y.subscriptions.add({ tenant: 't2', user: 'service_t2', password: 'pw' })
+   *   await c8y.startService()
+   * })
+   * ```
+   */
+  startService(): Promise<void> {
+    if (isCollecting()) {
+      return Promise.reject(new Error('c8y.startService() cannot be called while Vitest collects tests. Call it in beforeAll() (one service for a describe or the file), beforeEach() (one per test), or inside a test.'))
+    }
+    if (TestRunner.getCurrentTest() === undefined && !isConcurrentRunning()) {
+      // a beforeAll: the running suite shares one instance
+      const suite = runningSuite() as { tasks?: Array<{ result?: unknown }> } | undefined
+      if (!suite) {
+        return Promise.reject(new Error('c8y.startService(): no running Vitest suite found. Call it in beforeAll(), beforeEach(), or inside a test.'))
+      }
+      if (suite.tasks?.some((task) => task.result !== undefined)) {
+        return Promise.reject(new Error('c8y.startService() cannot be called in afterAll(): the tests of the scope already ran. Call it in beforeAll(), beforeEach(), or inside a test.'))
+      }
+      shareService(suite)
+      return Promise.resolve()
+    }
+    assertActiveTest('c8y.startService()', 'in beforeAll(), beforeEach(), or inside a test')
+    return restartService()
   },
 
   /**
@@ -423,65 +483,82 @@ export const c8y = {
 }
 
 /**
+ * A user the fake tenant stores: its name (in the deployed tenant), or a user
+ * with its `tenant`, e.g. a persona from `definePersona()`.
+ */
+export type C8yCaller = string | { userName: string, tenant?: string }
+
+/**
  * Request options of `serverFetch()`: Nitro's options plus `as`.
  */
 export type C8yServerFetchInit = NonNullable<Parameters<typeof nitroServerFetch>[1]> & {
   /**
-   * The user calling the route, e.g. a persona from `definePersona()` or an
-   * inline user. `null` is a caller without a valid login. Without `as`, the
+   * The user making this call: a user that exists in the fake tenant (seed it
+   * with `c8y.seed({ users })`). Applies to this call only. Without `as`, the
    * default `user` from the `c8yTest()` config calls.
    */
-  as?: C8yTestUser | null
+  as?: C8yCaller
 }
 
 /**
- * Types a user that calls your service in tests, so it can be defined once
- * and reused (role names autocomplete). Pass it to `serverFetch(path, { as })`.
+ * Types a user once, so it can be seeded and used as a caller (role names
+ * autocomplete).
  *
  * @example
  * ```ts
  * const operator = definePersona({ userName: 'operator', roles: ['ROLE_ALARM_ADMIN'] })
- * const partner = definePersona({ userName: 'eve', roles: [], tenant: 't99999' })
+ * c8y.seed({ users: [operator] })
+ * it('…', async () => {
+ *   await serverFetch('/pumps/SN-1/check', { method: 'POST', as: operator })
+ * })
  * ```
  * @param user - The user
  */
-export function definePersona(user: C8yTestUser): C8yTestUser {
+export function definePersona<const T extends C8yTestUser>(user: T): T {
   return user
 }
 
 /**
  * Calls a route of your service, like `serverFetch()` from `nitro`. With
- * `as`, the request is sent as that user: the platform answers
- * `GET /user/currentUser` with it during the request.
+ * `as`, this call is made by that user: it must exist in the fake tenant
+ * (seeded with `c8y.seed({ users })`), the service sees it as the caller, and
+ * the platform checks the requests the service sends with its credentials
+ * against its roles. Nothing is stored, and the next call is made by the
+ * default user again.
  *
  * @example
  * ```ts
- * await serverFetch('/pumps/SN-1')                                           // default user
- * await serverFetch('/pumps/SN-1/check', { method: 'POST', as: operator })   // a persona
- * await serverFetch('/pumps/SN-1', { as: { userName: 'visitor', roles: [] } }) // inline
- * await serverFetch('/user', { as: null })                                   // not logged in
+ * c8y.seed({ users: [{ userName: 'visitor', roles: [] }] })
+ *
+ * await serverFetch('/pumps/SN-1')                                         // default user
+ * await serverFetch('/pumps/SN-1', { as: 'visitor' })                      // a seeded user
+ * await serverFetch('/pumps/SN-1/check', { method: 'POST', as: operator }) // a seeded persona
  * ```
  * @param path - Route path, including the query
  * @param init - Request options, plus `as`
  */
 export async function serverFetch(path: string, init: C8yServerFetchInit = {}): Promise<Response> {
-  if (!('as' in init)) {
-    return nitroServerFetch(path, init)
+  const { as: caller, ...requestInit } = init
+  if (caller === undefined) {
+    return nitroServerFetch(path, requestInit)
   }
-  const { as: user, ...requestInit } = init
   assertActiveTest('serverFetch({ as })')
   const world = useWorld()
-  const previous = world.user
-  world.setUser(user ?? null)
+  const userName = typeof caller === 'string' ? caller : caller.userName
+  const tenant = (typeof caller === 'string' ? undefined : caller.tenant) ?? world.tenant
+  if (!world.db.tenant(tenant).users.get(userName)) {
+    throw new Error(`serverFetch({ as }): user "${userName}" does not exist in tenant ${tenant} of the fake platform. Seed it first: c8y.seed({ ${tenant === world.tenant ? '' : `tenant: '${tenant}', `}users: [{ userName: '${userName}', roles: [...] }] }).`)
+  }
+  // dev user injection sends the dev user's credentials: this user's, for
+  // this call (with injection off, the header below reaches the service)
+  process.env.C8Y_DEVELOPMENT_TENANT = tenant
+  process.env.C8Y_DEVELOPMENT_USER = userName
   try {
     const headers = new Headers(requestInit.headers)
-    const login = user
-      ? `${user.tenant ?? world.tenant}/${user.userName}:${DEFAULTS.developmentPassword}`
-      : `${world.tenant}/anonymous:invalid`
-    headers.set('authorization', `Basic ${Buffer.from(login).toString('base64')}`)
+    headers.set('authorization', `Basic ${Buffer.from(`${tenant}/${userName}:${DEFAULTS.developmentPassword}`).toString('base64')}`)
     return await nitroServerFetch(path, { ...requestInit, headers })
   } finally {
-    world.setUser(previous)
+    syncEnv(world)
   }
 }
 

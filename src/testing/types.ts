@@ -139,12 +139,23 @@ export interface C8yTestOptions extends C8yTestState {
   baseUrl?: string
   /**
    * Whether platform requests are checked against the caller's rights, like
-   * on the platform. Only users you seed with `c8y.seed({ users })` (other
-   * than the current user) are restricted; the service's own credentials and
-   * the current user keep full access. `'off'` gives every caller full access.
+   * on the platform: users you seed with `c8y.seed({ users })`, also as
+   * callers of `serverFetch(path, { as })`, get 403 where they lack the
+   * rights. The default `user`, the service's own credentials, and requests
+   * without credentials keep full access. `'off'` gives every caller full
+   * access.
    * @default 'enforce'
    */
   roles?: 'enforce' | 'off'
+  /**
+   * How long one instance of the service (a Nitro app, with its plugins,
+   * caches, and realtime clients) lives: `'per-test'` starts a new one for
+   * every test, `'per-file'` shares one between the tests of a file (caches
+   * carry over, like on a running service). `c8y.startService()` in a
+   * `beforeAll`, `beforeEach`, or test changes it locally.
+   * @default 'per-test'
+   */
+  service?: 'per-test' | 'per-file'
 }
 
 declare module 'vitest' {

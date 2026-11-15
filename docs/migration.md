@@ -2,17 +2,31 @@
 
 ## 0.11.x to 0.12.0
 
-The fake tenant of `c8y-nitro/testing` now runs on [fake-c8y](https://github.com/schplitt/fake-c8y), which emulates much more of the platform: users and roles, applications, bulk operations, device registration, retention rules, audit records, statistics, availability, generated measurements, and cascading deletes. The testing API (`c8y`, `serverFetch`, `definePersona`, `c8yTest()`) stays the same. Tests that only arrange data and assert on responses and `c8y.db` need no changes.
+The fake tenant of `c8y-nitro/testing` now runs on [fake-c8y](https://github.com/schplitt/fake-c8y), which emulates much more of the platform: users and roles, applications, bulk operations, device registration, retention rules, audit records, statistics, availability, generated measurements, and cascading deletes. Every test now gets its own instance of your service by default (tests can share one with `c8y.startService()` in a `beforeAll`), and callers of `serverFetch({ as })` are users of the fake tenant whose roles the platform checks.
 
-### What can change in your tests
+### Breaking changes in `c8y-nitro/testing`
+
+- **A new service instance per test.** Before, the Nitro app ran for the whole file and c8y-nitro cleared its caches before every test. Now every test gets its own instance of your service by default: plugins run again before each test, on the data the test arranges, so startup work (realtime subscriptions, credential reads) sees that data. To test caching or other state that lives across requests, let tests share one with `beforeAll(() => c8y.startService())`, or set `c8yTest({ service: 'per-file' })`. See [Service Instances](/guide/testing#service-instances).
+- **Callers must exist in the fake tenant.** `serverFetch(path, { as })` makes that one call as a user the fake tenant stores, and throws for any other. Seed your personas once: `c8y.seed({ users: [operator, visitor] })` (and custom roles they have: `c8y.seed({ roles: ['MY_ROLE'], users: [...] })`; users of another tenant with `c8y.seed({ tenant, users })`). `as` also accepts the user name. Because the caller is a stored user, the platform checks its roles: a caller that reads the inventory through `useUserClient()` needs `ROLE_INVENTORY_READ`, like on the platform. Seeded users also have the two `ROLE_USER_MANAGEMENT_OWN_*` roles every platform user gets. The default `user` keeps full access.
+- **`as: null` is removed.** The platform's API gateway never forwards a request without valid credentials, so a service never sees a caller who is not logged in. Remove such tests.
+- **An override that throws** answers 500 and fails the test as a request that failed inside the fake tenant. Return a `Response` with the status you want instead.
+- **Arrange calls at file and `describe` level run before your own `beforeEach` hooks** (before, they ran in registration order with them).
+
+### Other changes you may notice
 
 - **IDs** have the platform's format (`47100001` instead of `1`). They are still the same in every test and every run. Do not assert on literal IDs: use the ref (`pump.id`).
 - **Deleting a managed object** deletes its measurements, events, alarms, and operations too, like the platform.
 - **Requests that used to fail with 501** (for example tenant statistics or user management) are now answered. Remove overrides you only added to answer them, or keep them: overrides still win.
-- **Users you seed** with `c8y.seed({ users })` are checked against their roles when your service calls the platform with their credentials. The calling user (default `user` or `as` persona) keeps full access. `c8yTest({ roles: 'off' })` turns the checks off.
-- **Notification 2.0 subscriptions** created during a test are removed before the next test. Only the subscriptions the app creates at startup stay for the whole file.
+- **Users you seed** with `c8y.seed({ users })` are checked against their roles when your service calls the platform with their credentials. The default `user` keeps full access. `c8yTest({ roles: 'off' })` turns the checks off.
+- **Notification 2.0:** subscriptions your service creates at startup stay connected for every test on that instance. Subscriptions created during a test are removed before the next test, and realtime clients created after startup are closed.
+- **Unsupported requests** during the service's startup, or after a test ended (background work), fail the test with a message that says when they happened.
 - **`targetTenant`** is no longer read: a request works in the tenant of its credentials.
-- **Types:** `C8yRequest` (in `c8y.calls`) no longer has `params` (it was always empty), and gains `id`, `status`, and `durationMs`. `C8yUnhandledRequest` gains `kind`. Override handlers get `callCount` and `next()` in addition to the request fields.
+- **A new service instance** stops the `c8yTasks()` jobs of the old one (your plugins schedule theirs again), and emits its first `c8y:tenantCredentialsUpdated` from `null`, like a freshly started service.
+- **Types:** the data and `c8y.db` types are re-exported from fake-c8y, and `c8y.db` is read-only. `C8yRequest` (in `c8y.calls`) no longer has `params` (it was always empty), and gains `id`, `status`, and `durationMs`. `C8yUnhandledRequest` gains `kind`. `C8yRequestContext` (override handlers) no longer extends `C8yRequest`: it has the request fields plus `callCount` and `next()`. `C8yNotificationSubscription` is fake-c8y's `NotificationSubscription`. `C8yServerFetchInit['as']` is now `C8yCaller` (a user name or `{ userName, tenant? }`) and no longer accepts `null`.
+
+### For contributors
+
+The contract scenarios, the `test:contract` and `gen:testing-capabilities` scripts, and the platform behavior reference moved to fake-c8y.
 
 ## 0.10.x to 0.11.0
 

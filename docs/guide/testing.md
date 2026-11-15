@@ -69,6 +69,8 @@ import { describe, expect, it } from 'vitest'
 import { c8y, definePersona, serverFetch } from 'c8y-nitro/testing'
 
 const pump = c8y.device({ name: 'Pump 1', externalIds: { c8y_Serial: 'SN-1' } })
+const visitor = definePersona({ userName: 'visitor', roles: [] })
+c8y.seed({ users: [visitor] })
 
 describe('POST /pumps/:serial/check', () => {
   describe('when the pump is too hot', () => {
@@ -100,8 +102,6 @@ describe('POST /pumps/:serial/check', () => {
   })
 
   it('requires the alarm admin role', async () => {
-    const visitor = definePersona({ userName: 'visitor', roles: [] })
-
     expect((await serverFetch('/pumps/SN-1/check', { method: 'POST', as: visitor })).status).toBe(403)
   })
 })
@@ -164,7 +164,7 @@ c8y.tenantOptions.set('maxTemperature', '100')
 ```
 
 - **Service users** of the subscribed tenants are used by `useSubscribedTenantCredentials()`, `useDeployedTenantClient()`, and the other service clients. By default, the deployed tenant `t12345` is subscribed.
-- **Data is kept per tenant.** Pass `tenant` to `c8y.device()`, `c8y.seed()`, or `c8y.tenantOptions.set()` to arrange data for another tenant.
+- **Data is kept per tenant.** Pass `tenant` to `c8y.device()` or `c8y.seed()`, or `{ tenant }` as the third argument of `c8y.tenantOptions.set()`, to arrange data for another tenant.
 
 ### Multiple Tenants
 
@@ -187,22 +187,31 @@ Each request is answered with the data of the tenant it was sent to: the tenant 
 
 ## Personas
 
-A persona is a user that calls your service. Pass it as `as` to `serverFetch()`, so one test can compare different callers. Define personas once with `definePersona()` for consistency, or write the user inline. Without `as`, the default `user` from the `c8yTest()` config calls.
+A persona is a user that calls your service. It is a user of the fake tenant: seed it with `c8y.seed({ users })`, then pass it (or its name) as `as` to `serverFetch()`, so one test can compare different callers. `definePersona()` types a user once for both (role names autocomplete: your manifest's roles plus the known platform roles). Without `as`, the default `user` from the `c8yTest()` config calls.
 
 ```ts
-import { definePersona, serverFetch } from 'c8y-nitro/testing'
+import { c8y, definePersona, serverFetch } from 'c8y-nitro/testing'
 
-const operator = definePersona({ userName: 'operator', roles: ['ROLE_ALARM_ADMIN'] })
+const operator = definePersona({ userName: 'operator', roles: ['ROLE_INVENTORY_READ', 'ROLE_ALARM_ADMIN'] })
+const visitor = definePersona({ userName: 'visitor', roles: [] })
 const partner = definePersona({ userName: 'eve', roles: ['ROLE_ALARM_ADMIN'], tenant: 't99999' })
+
+c8y.seed({ users: [operator, visitor] })
+c8y.seed({ tenant: 't99999', users: [partner] })
 
 it('only lets operators run the check', async () => {
   expect((await serverFetch('/pumps/SN-1/check', { method: 'POST', as: operator })).status).toBe(200)
-  expect((await serverFetch('/pumps/SN-1/check', { method: 'POST', as: { userName: 'visitor', roles: [] } })).status).toBe(403)
-  expect((await serverFetch('/pumps/SN-1/check', { method: 'POST', as: null })).status).toBe(500) // no valid login
+  expect((await serverFetch('/pumps/SN-1/check', { method: 'POST', as: 'visitor' })).status).toBe(403)
 })
 ```
 
-The persona reaches your service the same way a real user does, through [dev user injection](/guide/dev-user). `useUser()`, `useUserRoles()`, the auth middleware, and `useUserClient()` see the persona. A persona belongs to the deployed tenant unless you set `tenant`. Role names autocomplete: your manifest's roles plus the known platform roles.
+- **One call:** `as` applies to that call only and stores nothing. The next call without `as` is made by the default user again.
+- **Like a real user:** the caller reaches your service through [dev user injection](/guide/dev-user) (`serverFetch()` replaces an `authorization` header you pass). `useUser()`, `useUserRoles()`, the auth middleware, and `useUserClient()` see it, and the platform checks the requests your service sends with its credentials against its roles, like the platform: a caller without `ROLE_INVENTORY_READ` gets 403 from the inventory.
+- **Seeded users only:** `as` with a user the fake tenant does not store throws. A persona with a `tenant` is seeded in that tenant, also from a `c8y.seed()` for another tenant. Seeded users also get `ROLE_USER_MANAGEMENT_OWN_READ` and `ROLE_USER_MANAGEMENT_OWN_ADMIN`, like every platform user. Custom roles (your manifest's) must exist in the tenant: seed them too, `c8y.seed({ roles: ['MY_ROLE'], users: [...] })`.
+- **The default `user`** has full access on the platform, so tests that don't care about permissions work unchanged.
+- **One caller at a time:** calls with `as` cannot run concurrently in one file.
+
+There is no "not logged in" caller: the platform's API gateway never forwards a request without valid credentials to a microservice, so your service never sees one.
 
 ## Assert
 
@@ -244,7 +253,7 @@ export default definePlugin(async () => {
 
 A test follows four steps:
 
-1. **The service sets itself up.** The Nitro app and its plugins start before the first test. The subscriptions they create at startup are in place in every test of the file. Subscriptions created during a test are removed before the next one, so subscribe at startup (in a plugin), not lazily in a route.
+1. **The service sets itself up.** The service and its plugins start before the test (see [Service Instances](#service-instances)). When tests share a service, the subscriptions it created at startup stay in place, and connected, for all of them, also when a consumer reconnects; subscriptions created during a test are removed before the next one, and realtime clients your service created after startup are closed. Subscribe at startup (in a plugin), not lazily in a route.
 2. **Trigger a write**, like a device would: `c8y.seed()` or `c8y.device()` inside the test, a route of your service, or `c8y.db.operations.update()`.
 3. **Wait until it is processed:** `await c8y.notifications.settled()`. This waits until every delivered notification has been handled, including notifications caused by the handlers' own writes.
 4. **Query the fake world** with `c8y.db`.
@@ -273,7 +282,7 @@ Arrange calls apply to the scope they are called in:
 | inside `describe`                      | every test in that `describe`, including nested ones |
 | inside a test or `beforeEach`          | that test only                                       |
 
-Before every test, the fake tenant is rebuilt: the baseline first, then the file, then each enclosing `describe` from outer to inner, then the test. Nothing a test does, including data your service writes, leaks into the next test. IDs come out the same in every test and every run.
+Before every test, the fake tenant is rebuilt: the baseline first, then the file, then each enclosing `describe` from outer to inner, then the test. (The scopes a running service instance shares come back from the state saved after its startup; the deeper ones are replayed.) Nothing a test does on the platform, including data your service writes, leaks into the next test. IDs come out the same in every test and every run. Your service starts fresh for every test, unless tests share one; see [Service Instances](#service-instances).
 
 | API                                                 | Inner Scope                                    |
 | --------------------------------------------------- | ---------------------------------------------- |
@@ -282,7 +291,52 @@ Before every test, the fake tenant is rebuilt: the baseline first, then the file
 | `c8y.subscriptions.add()` / `.remove()`             | changes one tenant; `.set([...])` replaces all |
 | `c8y.override()`                                    | stacks: inner and newer overrides win          |
 
-Arrange calls cannot be used in `beforeAll()` or `afterAll()`, because state is rebuilt before every test. Use file or `describe` level instead.
+Arrange calls at file and `describe` level run before your own `beforeEach` hooks. Arrange calls cannot be used in `beforeAll()` or `afterAll()`, because state is rebuilt before every test (`c8y.startService()` is not an arrange call: it belongs in `beforeAll()`). Use file or `describe` level instead.
+
+## Service Instances
+
+By default, **every test gets its own instance of your service** (a new Nitro app): before the test, the fake tenant is arranged for it, and the service starts on that data. Plugins run, startup requests go out, realtime subscriptions connect, and caches start empty. Tests are isolated without you thinking about it.
+
+On the platform, one instance serves many requests and keeps its caches. To test that, let tests share one, with Vitest's own hooks and `c8y.startService()`:
+
+```ts
+import { beforeAll, beforeEach, describe, it } from 'vitest'
+import { c8y } from 'c8y-nitro/testing'
+
+describe('caching', () => {
+  // one service for the tests of this describe
+  beforeAll(() => c8y.startService())
+
+  it('reads the maximum temperature once', async () => { /* … */ })
+  it('serves it from the cache afterwards', async () => { /* … */ })
+
+  describe('reloading', () => {
+    // a new service for every test here
+    beforeEach(() => c8y.startService())
+  })
+})
+
+it('boots with the new subscription', async () => {
+  c8y.subscriptions.add({ tenant: 't2', user: 'service_t2', password: 'pw' })
+  await c8y.startService() // a new service now, on what this test arranged
+})
+```
+
+| Where You Call It                      | Effect                                                                                                   |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| (nothing)                              | every test gets its own service                                                                          |
+| `beforeAll(() => c8y.startService())`  | the tests of that `describe` (or of the file, at the top level), nested ones included, share one service |
+| `beforeEach(() => c8y.startService())` | every test of that scope gets a new service (inside a scope that shares one)                             |
+| `await c8y.startService()` in a test   | a new service starts now, on what the test arranged so far                                               |
+| `c8yTest({ service: 'per-file' })`     | the tests of every file share one service, unless the file says otherwise                                |
+
+- **A shared service starts before the first test of its scope,** on the data arranged down to that scope (the `c8yTest()` baseline, the file, and the `describe` blocks down to the one with the `beforeAll`). Before every test, the fake tenant goes back to the state right after that startup, and the deeper `describe` blocks' arrange calls apply on top. The service keeps running, with its caches: when a test changes what your service has cached (a tenant option, the subscribed tenants), the service only sees it once the cache expires.
+- **One service runs at a time.** Tests outside the scope get their own service again. A nested `describe` with its own `beforeAll(() => c8y.startService())` gets its own shared service, so the outer scope's tests after it get a new shared one. A test that started a new service with `await c8y.startService()` hands a new one to the next test of its scope, and keeps its own call log.
+- **`beforeEach(() => c8y.startService())`** replaces the service the test was about to run on, so the service starts twice for that test. Use it only inside a scope that shares one.
+- **Retries:** a retried test gets a new service by default. In a scope that shares one, it runs on that service again.
+- **What a new service resets:** Nitro's `close` hook runs on the old instance, plugins run again, `c8yTasks()` jobs of the old instance stop (plugins schedule theirs again), the first `c8y:tenantCredentialsUpdated` comes from `null`, and c8y-nitro's credential and tenant option caches and realtime clients start empty. It does **not** reset module state of your own files, caches you define with `defineCachedFunction` (invalidate those in a `beforeEach` if a test needs them empty), or c8y-nitro's caches of the caller's tenant id (60 s) and tenant domain (24 h): modules are loaded once per test file.
+- **Cost:** every new service runs your startup work. If that is slow, share one where tests don't depend on fresh caches.
+- **Concurrent tests** (which cannot arrange data) share one service on a clean tenant, and see each other's writes.
 
 ## Failures and Unsupported APIs: `c8y.override()`
 
@@ -298,7 +352,8 @@ it('fails while the inventory is unavailable', async () => {
 ```
 
 - **Patterns** are `"[METHOD ]/path"`. Path segments can be `:name` (captured in `params`), `*` (any one segment), or `**` (the rest of the path).
-- **The handler's return value:** return a `Response` for any status, any other value for `200` with it as JSON, or nothing for `204`. A handler that throws makes the request fail with that error, like a network error: `() => { throw new TypeError('fetch failed') }`.
+- **The handler's return value:** return a `Response` for any status, any other value for `200` with it as JSON, or nothing for `204`. A handler that throws answers 500 and fails the test after it ran, as a request that failed inside the fake tenant (likely a bug in the handler). To answer with an error on purpose, return a `Response` with that status.
+- **The handler's input:** `body` is the parsed JSON, the text, or `undefined` for uploads (multipart or binary); `request` is the raw request, with its body already read. `next()` can be called once per request.
 - **`{ once: true }`** answers only the first match, for example a single temporary failure.
 - **`next()`** passes the request on to the fake platform (or an older override) and returns its answer. Use it to add latency, to change an answer, or to let the platform store a write while your service sees an error. **`callCount`** is the number of requests this override got, this one included.
 
@@ -326,7 +381,7 @@ Answer it with `c8y.override()`, or set `onUnhandledRequest: 'warn'` or `'ignore
 
 ## What the Fake Emulates
 
-The fake tenant is a [fake-c8y](https://github.com/schplitt/fake-c8y) world: an in-memory Cumulocity platform whose endpoints, query parameters, required fields, and enum values come from the [official OpenAPI spec](https://cumulocity.com/api/core/), and whose behavior is checked by contract scenarios against a real tenant. It emulates:
+The fake tenant is a [fake-c8y](https://github.com/schplitt/fake-c8y) world: an in-memory Cumulocity platform whose endpoints, query parameters, required fields, and enum values come from the [official OpenAPI spec](https://cumulocity.com/api/core/), and whose behavior fake-c8y checks with contract scenarios against a real tenant. It emulates:
 
 - inventory with the query language, text search, hierarchies, and cascading deletes; identity; binaries
 - measurements (with series and generated history), events with attachments, alarms with deduplication, operations, bulk operations, and new device requests
@@ -339,7 +394,7 @@ The details, and where the fake simplifies, are in fake-c8y's [Emulated API](htt
 What c8y-nitro sets up on top:
 
 - **IDs** have the platform's format (managed objects get 8 digits, `47100001`). They are deterministic: the same arrangement gives the same IDs in every test and every run. Timestamps come from `Date`, so `vi.useFakeTimers()` controls them.
-- **Permissions** are checked like on the platform for users the tenant stores: a request your service sends with the credentials of a user you seeded with `c8y.seed({ users })` gets 403 where that user lacks the rights, and lists show only what it may see. The calling user (the default `user` or the `as` persona), your service's own credentials, and requests without credentials keep full access, so the roles of personas only matter in your own middleware, like `hasUserRequiredRole()`. A route called with `serverFetch(path, { as })` therefore always works as an unrestricted user; it cannot run as a restricted seeded user. `c8yTest({ roles: 'off' })` turns the checks off.
+- **Permissions** are checked like on the platform for users the tenant stores: a request your service sends with the credentials of a seeded user (for example the `as` caller of `serverFetch()`) gets 403 where that user lacks the rights, and lists show only what it may see. The default `user`, your service's own credentials, and requests without credentials keep full access. `c8yTest({ roles: 'off' })` turns the checks off.
 - **Tenant options:** default values from your manifest's settings are not applied. Set the options your test needs. `credentials.` options read as `<<Encrypted>>`, except in your microservice's own settings category, where the service gets the clear value.
 - **Tenants:** each request is answered with the data of the tenant of its credentials. The `targetTenant` parameter is not read.
 
@@ -367,5 +422,5 @@ Prefer asserting on responses and `c8y.db` over asserting on calls. Asserting on
     // c8y works here
   })
   ```
-- **Your own caches persist within a file.** c8y-nitro clears its own caches before every test, but functions you cache with `defineCachedFunction` keep their entries.
+- **Caches persist with the service instance.** Tests that share an instance share its caches (see [Service Instances](#service-instances)). A new instance clears c8y-nitro's caches, but not functions you cache with `defineCachedFunction`, and not module state of your own files.
 - **Requests to other hosts are not faked.** `@c8y/client`, c8y-realtime, and plain `fetch` calls to the platform's URL (`C8Y_BASEURL`) go to the fake tenant.

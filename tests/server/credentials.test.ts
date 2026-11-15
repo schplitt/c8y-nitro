@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { c8y } from 'c8y-nitro/testing'
-import { clearCredentialHookEvents, getCredentialHookEvents } from './fixture/plugins/tenant-credentials-updated'
+import { clearCredentialHookEvents, getCredentialHookEvents } from './fixture/plugins/00-credentials-hook-recorder'
 import { fetchJson } from './utils'
 
 c8y.subscriptions.set([
@@ -16,7 +16,8 @@ describe('tenant credentials', () => {
     expect(json.subscribedTenants).toEqual(expect.arrayContaining(['t12345', 't67890']))
     expect(json.deployedTenant).toBe('t12345')
     expect(json.userTenant).toBe('t12345')
-    expect(c8y).toHaveReceived('GET /application/currentApplication/subscriptions', { times: 1 })
+    // read during the service's startup (realtime plugin), then served from the cache
+    expect(c8y).not.toHaveReceived('GET /application/currentApplication/subscriptions')
   })
 
   it('only emits the lifecycle hook when the tenant id set changes', async () => {

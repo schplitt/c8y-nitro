@@ -1,7 +1,7 @@
 // A realtime trigger (fixture plugin realtime-overheating.ts) tested against
 // the fake tenant: the service subscribes at startup, the test writes data,
 // waits for the notifications to be processed, and checks the result.
-import { describe, expect, it } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { c8y } from 'c8y-nitro/testing'
 import { fetchJson } from './utils'
 
@@ -59,14 +59,19 @@ describe('realtime state between tests', () => {
   })
   const subscriptionNames = () => c8y.notifications.subscriptions().map((item) => `${item.tenant}/${item.subscription}`).sort()
 
+  // one service for these tests: its startup subscriptions stay connected
+  beforeAll(() => c8y.startService())
+
   let startup: string[] = []
 
   it('starts with the subscriptions of the app startup', () => {
     startup = subscriptionNames()
-    expect(startup.length).toBeGreaterThan(0)
+    expect(startup).toEqual([expect.stringMatching(/^t12345\//)])
   })
 
   describe('a subscription a test creates in another tenant', () => {
+    // a new service per test, so it reads the added subscription
+    beforeEach(() => c8y.startService())
     c8y.subscriptions.add({ tenant: 't99999', user: 'service_t99999', password: 'pw' })
 
     it('is created', async () => {
@@ -82,6 +87,7 @@ describe('realtime state between tests', () => {
     })
 
     it('is gone in the next test', () => {
+      expect(startup).not.toEqual([])
       expect(subscriptionNames()).toEqual(startup)
     })
   })
@@ -95,8 +101,14 @@ describe('realtime state between tests', () => {
       expect(subscriptionNames()).not.toEqual(startup)
     })
 
-    it('is back in the next test', () => {
+    it('is back in the next test, and the service still gets its notifications', async () => {
+      expect(startup).not.toEqual([])
       expect(subscriptionNames()).toEqual(startup)
+
+      c8y.seed({ measurements: [temperature(97)] })
+      await c8y.notifications.settled()
+
+      expect(c8y.db.alarms.find({ source: pump })).toMatchObject([{ type: 'c8y_Overheating' }])
     })
   })
 })

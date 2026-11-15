@@ -84,7 +84,9 @@ describe('overrides', () => {
     expect(await deviceName()).toBe('via-next')
   })
 
-  it('makes the request fail with what a handler throws', async () => {
+  it('answers 500 when a handler throws, and records the failure', async () => {
+    // 'error' (the default) would fail this test after it ran
+    c8y.apply({ onUnhandledRequest: 'ignore' })
     c8y.override('GET /features', () => {
       throw new TypeError('fetch failed')
     })
@@ -95,9 +97,8 @@ describe('overrides', () => {
       body: JSON.stringify({ tenant: c8y.tenant, method: 'GET', path: '/features' }),
     })
 
-    // a network-style failure, not an answer, and not an unsupported request
-    expect(json).toEqual({ error: 'TypeError: fetch failed' })
-    expect(c8y.unhandled).toEqual([])
+    expect(json).toEqual({ status: 500 })
+    expect(c8y.unhandled).toMatchObject([{ method: 'GET', path: '/features', kind: 'error' }])
   })
 
   it('counts the requests an override got', async () => {

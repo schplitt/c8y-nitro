@@ -61,7 +61,7 @@ src/
 │   ├── index.ts                # `c8y` arrange/act/assert API (entry: c8y-nitro/testing)
 │   ├── vite.ts                 # c8yTest() Vite plugin (entry: c8y-nitro/testing/vite)
 │   ├── setup.ts                # Vitest setup file the plugin injects (patches FetchClient, resets per test)
-│   ├── world.ts                # The fake-c8y world of the test file: lazy creation, per-test reset (keeps realtime), env sync, override tracking
+│   ├── world.ts                # The fake-c8y world of the test file and the service instance lifecycle: checkpoints, per-test reset, arrangement replay, restarts
 │   ├── scope.ts                # Scope-aware arrange calls (collection-time beforeEach registration)
 │   ├── defaults.ts             # Default tenant/user/env values (safe to import in the Vite config)
 │   └── types.ts                # Public testing types
@@ -204,11 +204,12 @@ pnpm test       # Run the example tests (test/) against the fake tenant
 
 `vitest.config.ts` defines three Vitest projects:
 
-| Project              | Files                                   | Environment                             |
-| -------------------- | --------------------------------------- | --------------------------------------- |
-| `unit`               | `tests/unit/**/*.test.ts`               | Node                                    |
-| `server`             | `tests/server/**/*.test.ts`             | Nitro (`tests/server/fixture`)          |
-| `server-no-dev-user` | `tests/server/**/*.no-dev-user.test.ts` | Nitro, with `c8y.dev.injectUser: false` |
+| Project              | Files                                   | Environment                                    |
+| -------------------- | --------------------------------------- | ---------------------------------------------- |
+| `unit`               | `tests/unit/**/*.test.ts`               | Node                                           |
+| `server`             | `tests/server/**/*.test.ts`             | Nitro (`tests/server/fixture`)                 |
+| `server-no-dev-user` | `tests/server/**/*.no-dev-user.test.ts` | Nitro, with `c8y.dev.injectUser: false`        |
+| `server-per-file`    | `tests/server/**/*.per-file.test.ts`    | Nitro, with `c8yTest({ service: 'per-file' })` |
 
 Run one project with `pnpm vitest run --project server`.
 
@@ -249,6 +250,9 @@ tests/server/
 ├── testing-api.test.ts       # c8y-nitro/testing itself: scopes, stacking, reset, overrides, unsupported requests
 ├── testing-data.test.ts      # A service tested against seeded platform data (the pattern users follow)
 ├── testing-api.concurrent.test.ts # c8y-nitro/testing concurrency guard
+├── service-instance.test.ts  # New service per test vs shared (c8y.startService() in hooks), caches, fresh-process behavior
+├── testing-realtime.test.ts  # Realtime plugin against the fake; startup subscriptions kept between tests
+├── service-instance.per-file.test.ts # Runs in the server-per-file project: one shared service per file
 └── dev-user.no-dev-user.test.ts # Runs in the server-no-dev-user project
 ```
 
@@ -260,6 +264,7 @@ import { c8y, definePersona, serverFetch } from 'c8y-nitro/testing'
 import { fetchJson } from './utils'
 
 const outsider = definePersona({ userName: 'testUser', roles: [], tenant: 't99999' }) // a caller
+c8y.seed({ users: [outsider] }) // callers are users of the fake tenant (seeded in their own tenant)
 
 it('is denied for users of other tenants', async () => {
   expect((await serverFetch('/deployed-tenant-only', { as: outsider })).status).toBe(403)
@@ -276,10 +281,10 @@ it('raises an overheating alarm', async () => {
 
 Key points:
 
-- **Test services, not the Cumulocity API.** Arrange platform data (`c8y.device()`, `c8y.seed()`, `c8y.tenantOptions`), call routes with `serverFetch(path, { as })` from `c8y-nitro/testing` (`as`: a `definePersona()` user, inline user, or `null`) — `c8y` is only the fake platform — and assert on responses and `c8y.db`. Use `c8y.override()` only for failures and unemulated APIs, and `toHaveReceived`/`callsTo` only where the request itself is the behavior (e.g. caching). Tests of the fake's own API semantics belong in fake-c8y.
+- **Test services, not the Cumulocity API.** Arrange platform data (`c8y.device()`, `c8y.seed()`, `c8y.tenantOptions`), call routes with `serverFetch(path, { as })` from `c8y-nitro/testing` (`as`: a seeded user, by name or as a `definePersona()` user) — `c8y` is only the fake platform — and assert on responses and `c8y.db`. Use `c8y.override()` only for failures and unemulated APIs, and `toHaveReceived`/`callsTo` only where the request itself is the behavior (e.g. caching). Tests of the fake's own API semantics belong in fake-c8y.
 - **Tests use the public API only** (`c8y-nitro/testing`, resolved from `dist`). If a test needs something the API cannot express, improve the API instead of adding a private workaround.
-- **One app per file.** Module options need a separate Vitest project, like `server-no-dev-user` (each project lists `nitro(...)` and `c8yTest()`). Everything read at request time (user, subscriptions, tenant options, handlers, dev env) can change per scope inside one file.
-- **Module state is shared.** Tests can import fixture modules directly, e.g. the credential hook recorder in `fixture/plugins/tenant-credentials-updated.ts`. Do not add fixture routes just to mutate platform state: use `c8y.*`.
+- **One app per file.** Module options and `c8yTest()` options need a separate Vitest project, like `server-no-dev-user` and `server-per-file` (each project lists `nitro(...)` and `c8yTest()`). Everything read at request time (user, subscriptions, tenant options, handlers, dev env) can change per scope inside one file.
+- **Module state is shared.** Tests can import fixture modules directly, e.g. the credential hook recorder in `fixture/plugins/00-credentials-hook-recorder.ts`. Do not add fixture routes just to mutate platform state: use `c8y.*`.
 - **Logs**: `captureLogs()` spies on `console.*`. The server runs in the test worker, so evlog wide events and `console.log` from routes and tasks land there. Wide events are emitted after the response: wait ~100 ms before asserting.
 - **Known noise**: one tslib `__extends` (or `require is not defined`) error per run comes from Nitro's Vite dev worker loading the real `@c8y/client` under the Vite builder. It does not affect test results. See "Vite builder compatibility" below.
 
@@ -484,15 +489,15 @@ This section captures project-specific knowledge, tool quirks, and lessons learn
   - Stateless helpers (e.g. `createError` from `src/utils/logging.ts`) can still be imported by relative path
 - **`c8y-nitro/testing` internals** (see `src/testing/`):
   - The plugin marks `@c8y/client` as **external in the `nitro` Vite environment**, so Node loads the real client natively (Vite cannot transform its CJS deps). The setup file patches `FetchClient.prototype.fetch`; every service and static helper of the client goes through it, so one patch answers all platform requests. Keep `getUrl()`/`getFetchOptions()` in the patch so query params and auth headers stay real.
-  - Arrange calls are scope-aware via a **phase flag**: during collection they register a `beforeEach` in the current suite (Vitest replays them outer→inner after the setup file's reset); during a test they apply directly. Do not try to map `getCurrentSuite()` collectors to run-time suites (they are different objects).
+  - Arrange calls are scope-aware via a **phase flag**: during collection they are recorded per scope (`arrangements` in `scope.ts`, keyed by `TestRunner.getCurrentSuite().suite`, or `.file` at the top level; these are the same objects tests see as `task.suite` / `task.file` at run time, and a top-level test has no `task.suite`); during a test they apply directly. The setup file's `beforeEach` replays them (`prepareTest()` in `world.ts`), so they run before the file's own `beforeEach` hooks.
   - The setup file must **not import `c8y-nitro/utils` at top level**: loading it before Nitro creates the app (in Nitro's own `beforeAll`) enters Nitro's runtime through an import cycle (`defineCachedFunction is not a function`). Import it lazily inside hooks.
   - `testing/vite.ts` runs in Vitest's main process: keep it free of Nitro runtime imports (`nitro/runtime-config` etc.); share constants via `defaults.ts`.
   - The module skips auto-bootstrap when `process.env.VITEST` is set, so tests never contact a real tenant.
-  - **The world:** `world.ts` creates the fake-c8y world on first use (it needs `useRuntimeConfig().c8ySettingsCategory`, which does not exist at setup-file load) and snapshots it as the clean baseline. After the app started (`waitForRealtimeStartup`), `markStarted()` records the Notification 2.0 subscriptions, tokens, and notification id sequence per tenant. Before every test, `resetWorld()` restores the clean snapshot **with that startup realtime state** (`world.reset()` would drop it and close the service's consumer sockets; carrying over the _current_ state instead leaks test-created subscriptions). Tenants missing from the clean snapshot get a full empty tenant (`emptyTenant()`; a partial tenant snapshot makes `restore()` throw). It also removes the overrides `c8y.override()` registered and clears the call log. Unhandled requests recorded after a test's `afterEach` fail the next `beforeEach` (or the file's `afterAll`).
-  - **Throwing overrides:** fake-c8y turns an exception in an override handler into a 500 and an unhandled request. The `c8y.override()` wrapper catches it instead and answers with a marked 500 (`overrideFailure()`); the patched `FetchClient.fetch` and global `fetch` rethrow the original error (`rethrowOverrideFailure()`), so the service sees a failed request like before. `onChange` keeps `C8Y_BOOTSTRAP_TENANT` / `C8Y_DEVELOPMENT_*` in sync with the tenant and user.
+  - **The world and service instances:** `world.ts` creates the fake-c8y world on first use (it needs `useRuntimeConfig().c8ySettingsCategory`) and takes a `clean` checkpoint. `prepareTest(task)` (serialized, so concurrent `beforeEach` calls cannot interleave a restart) finds the test's instance key: the innermost running scope in `sharedScopes` (registered at run time by `c8y.startService()` in a `beforeAll`; the setup file wraps `TestRunner.prototype.onBeforeRunSuite`/`onAfterRunSuite` to know the running suite), else the file with `c8yTest({ service: 'per-file' })`, else a new key object per run (the default: a new service per test, also on retry). A shared instance starts on the arrangements down to its scope; a per-test one on all of the test's scopes. Concurrent tests reuse the running instance. Same key as the running instance: close realtime clients created after startup (the pool is exposed through the test seam as `realtimePool`), `world.reset({ to: startup, consumers: 'keep' })` (keeps open consumers even after a reconnect), restore the startup refs and strategy, replay the deeper scopes. New key: Nitro's `close` hook on the old app, stop `c8yTasks()` jobs, invalidate c8y-nitro's caches, `reset({ to: clean })`, replay the arrangements the instance starts on, start the app (`useNitroApp().ready` + `waitForRealtimeStartup`), take the `startup` checkpoint (which also holds those arrangements and their overrides, so file-level overrides answer startup requests), then replay the deeper scopes. `c8y.startService()` in a test or `beforeEach` (internally `restartService()`) does stop+start on the test's data and drops the startup checkpoint, so the next test restarts too. Nitro's in-memory cache storage is not reachable from outside: a new instance cannot clear users' `defineCachedFunction` entries, module state, or c8y-nitro's internal tenant id/domain caches. Module state of c8y-nitro that must start fresh per instance resets on Nitro's `close` hook (realtime pool wiring, the previous credentials of `c8y:tenantCredentialsUpdated`); `c8yTasks()` registries register a stop function in the test seam (`taskRegistries`), which `stopService()` calls. A failed start is stopped again, and the closed app is replaced (`useNitroApp._instance = undefined`) only right before the next start. `onChange` keeps `C8Y_BOOTSTRAP_TENANT` / `C8Y_DEVELOPMENT_*` in sync with the tenant and user.
+  - **Callers (`serverFetch({ as })`)** must be users the fake tenant stores (seeded with `c8y.seed({ users })`); unknown users throw. The call switches `C8Y_DEVELOPMENT_*` to that user for this request only (dev-user injection sends its credentials) and restores them with `syncEnv()`. Nothing is stored and `world.setUser()` is not used, so fake-c8y enforces the caller's roles; only the world's `user` (the plugin's default) is unrestricted. Concurrent calls with `as` are not supported (one env).
   - **Extending the fake tenant** happens in fake-c8y. Here, only adapt its API to the scoped `c8y` API (refs, muted replay, override context).
   - **Realtime (Notification 2.0):** consumer sockets come from `createFakeWebSocket(world.realtime)` (`fake-c8y/realtime`). c8y-nitro's realtime client gets the fake socket through the test seam `src/utils/internal/testing.ts` (a `globalThis` symbol the setup file sets; unset in production — keep it that way, never import testing code from runtime code). c8y-realtime's REST calls use global `fetch`, which the setup file routes to the fake for the platform's origin. Replayed arrangements run inside `world.muted()` so they do not notify.
-  - The setup file **starts the Nitro app in `beforeAll`** (`useNitroApp()` + `await app.ready`, then `waitForRealtimeStartup()`): Nitro creates the app lazily on first request, so startup plugins (realtime subscriptions) would otherwise not exist in tests that never call a route.
+  - The service is started by the first `prepareTest()` (before the first test), not lazily by the first request: startup plugins (realtime subscriptions) must exist in tests that never call a route. Unhandled requests of the startup fail that test's `beforeEach` with "while the service started"; ones recorded after a test's `afterEach` fail the next `beforeEach` (judged by the strategy the finished test had) or the file's `afterAll`.
   - `@c8y/client` uploads with the Node `form-data` package; the `FetchClient` patch serializes it (`getBuffer()`/`getBoundary()`).
   - Managed objects created by `c8y.device()`/`managedObject()`/`binary()` are bound to refs at replay time (`refs` in `world.ts`), so `ref.id` only works while a test runs; ids have the platform's format and are deterministic per test.
 - Runtime registration (`registerRuntime()`) runs during module **setup**, not in `build:before`. Nitro's Vitest environment and runtime mode (`builder: false`) never run a build, so handlers registered in a build hook would be missing there. Only checks that need scanned routes (`checkProbes`) stay in `build:before`

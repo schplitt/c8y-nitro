@@ -2,12 +2,12 @@
 // file of the project, inside Nitro's `nitro` test environment.
 import { FetchClient } from '@c8y/client'
 import { compileRoute, matchRoute, splitPath } from 'fake-c8y'
-import { waitForRealtimeStartup } from 'fake-c8y/realtime'
-import { afterAll, afterEach, beforeAll, beforeEach, expect, inject } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, expect, inject, TestRunner } from 'vitest'
 import { PROVIDE_KEY } from './defaults'
-import { markRunning } from './scope'
+import { markRunning, trackSuite, trackTest } from './scope'
 import type { C8yUnhandledRequest } from 'fake-c8y'
-import { markStarted, platformUrl, resetWorld, rethrowOverrideFailure, setBaseline, unhandledMessage, useUnhandledStrategy, useWebSocket, useWorld } from './world'
+import type { UnhandledRequestStrategy } from './types'
+import { platformUrl, prepareTest, setBaseline, unhandledMessage, useUnhandledStrategy, useWebSocket, useWorld } from './world'
 import { setTestingHooks } from '../utils/internal/testing'
 
 interface FetchClientInternals {
@@ -28,9 +28,9 @@ FetchClient.prototype.fetch = async function (this: FetchClientInternals, url: s
   if (body && typeof body.getBuffer === 'function' && typeof body.getBoundary === 'function') {
     const headers = new Headers(options.headers)
     headers.set('content-type', `multipart/form-data; boundary=${body.getBoundary()}`)
-    return rethrowOverrideFailure(await useWorld().fetch(new Request(fullUrl, { ...options, headers, body: body.getBuffer() })))
+    return useWorld().fetch(new Request(fullUrl, { ...options, headers, body: body.getBuffer() }))
   }
-  return rethrowOverrideFailure(await useWorld().fetch(new Request(fullUrl, options)))
+  return useWorld().fetch(new Request(fullUrl, options))
 } as unknown as FetchClient['fetch']
 
 // Requests with the global fetch (e.g. c8y-realtime's REST calls, or a service
@@ -40,7 +40,7 @@ const originalFetch = globalThis.fetch
 globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
   const request = new Request(input, init)
   const platformOrigin = new URL(platformUrl()).origin
-  return new URL(request.url).origin === platformOrigin ? rethrowOverrideFailure(await useWorld().fetch(request)) : originalFetch(input, init)
+  return new URL(request.url).origin === platformOrigin ? useWorld().fetch(request) : originalFetch(input, init)
 }) as typeof fetch
 
 // Notification 2.0 consumers of c8y-nitro's realtime client connect to the fake.
@@ -48,60 +48,85 @@ setTestingHooks({
   get WebSocket() {
     return useWebSocket()
   },
+  taskRegistries: new Set(),
+  instanceState: new Set(),
 })
+
+// Track the suite that runs, so `c8y.startService()` in a `beforeAll` knows
+// which `describe` (or file) it shares a service with.
+const runnerHooks = TestRunner.prototype as unknown as {
+  onBeforeRunSuite?: (suite: object) => unknown
+  onAfterRunSuite?: (suite: object) => unknown
+}
+const onBeforeRunSuite = runnerHooks.onBeforeRunSuite
+const onAfterRunSuite = runnerHooks.onAfterRunSuite
+runnerHooks.onBeforeRunSuite = async function (this: unknown, suite: object) {
+  // Vitest reports only suites that run as finished: track only those
+  const { mode, result } = suite as { mode?: string, result?: { state?: string } }
+  if (mode !== 'skip' && mode !== 'todo' && result?.state !== 'fail') {
+    trackSuite(suite, true)
+  }
+  return onBeforeRunSuite?.call(this, suite)
+}
+runnerHooks.onAfterRunSuite = async function (this: unknown, suite: object) {
+  try {
+    return await onAfterRunSuite?.call(this, suite)
+  } finally {
+    trackSuite(suite, false)
+  }
+}
 
 // The world is created on first use (it needs Nitro's runtime config).
 setBaseline(inject(PROVIDE_KEY) ?? {})
 
-beforeAll(async () => {
+beforeAll(() => {
   markRunning()
-  // The deployed tenant, subscriptions, and user exist before the app starts.
-  const world = useWorld()
-  // Start the Nitro app before the first test (Nitro creates it lazily on the
-  // first request) and wait for async plugins, so startup work such as
-  // realtime subscriptions is in place even for tests that never call a route.
-  const { useNitroApp } = await import('nitro/app')
-  await (useNitroApp() as { ready?: Promise<void> }).ready
-  await waitForRealtimeStartup(world.realtime, () => world.inflight)
-  // what the app subscribed to at startup is the realtime state of every test
-  markStarted()
+  // The deployed tenant, subscriptions, and user exist before the service starts.
+  useWorld()
 })
 
 // Registered before any test file hook, so it runs first: the scope-aware
 // arrange calls of the file and its describes replay after it.
-beforeEach(async () => {
-  // requests that failed after the previous test ended (background work)
-  failUnhandled(resetWorld(), 'after the previous test ended')
-  // Imported lazily: loading c8y-nitro/utils before Nitro created the app
-  // (in its own beforeAll) would enter Nitro's runtime through an import cycle.
-  const { useSubscribedTenantCredentials, useTenantOptions } = await import('c8y-nitro/utils')
-  await useSubscribedTenantCredentials.invalidate()
-  await useTenantOptions.invalidateAll()
+beforeEach(async ({ task }) => {
+  trackTest(task, true)
+  const world = useWorld()
+  // requests that failed after the previous test ended (background work),
+  // judged by the strategy that test had
+  const late = world.unhandled
+  world.unhandled = []
+  failUnhandled(late, useUnhandledStrategy(), 'after the previous test ended')
+  // back to the startup state, on the service instance of the test's scope
+  // (started now if the scope needs a new one)
+  const startup = await prepareTest(task)
+  failUnhandled(startup, useUnhandledStrategy(), 'while the service started')
 })
 
-afterEach(() => {
+afterEach(({ task }) => {
+  trackTest(task, false)
   const world = useWorld()
   const unhandled = world.unhandled
   world.unhandled = []
-  failUnhandled(unhandled)
+  failUnhandled(unhandled, useUnhandledStrategy())
 })
 
 afterAll(() => {
-  // requests that failed after the last test of the file ended
+  // requests that failed after the last test of the file ended (Nitro's own
+  // teardown closes the service afterwards)
   const world = useWorld()
   const unhandled = world.unhandled
   world.unhandled = []
-  failUnhandled(unhandled, 'after the last test ended')
+  failUnhandled(unhandled, useUnhandledStrategy(), 'after the last test ended')
 })
 
 /**
  * Fails the current hook for unhandled requests (with `onUnhandledRequest:
  * 'error'`, the default).
  * @param unhandled - The unhandled requests
+ * @param strategy - The strategy to judge them by
  * @param when - When they happened, if not during the test
  */
-function failUnhandled(unhandled: readonly C8yUnhandledRequest[], when?: string): void {
-  if (unhandled.length > 0 && useUnhandledStrategy() === 'error') {
+function failUnhandled(unhandled: readonly C8yUnhandledRequest[], strategy: UnhandledRequestStrategy, when?: string): void {
+  if (unhandled.length > 0 && strategy === 'error') {
     throw new Error(unhandledMessage(unhandled, when))
   }
 }
