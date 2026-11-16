@@ -1,30 +1,48 @@
-import { Buffer } from 'node:buffer'
+import process from 'node:process'
 import type { C8YTenantOptionKey } from 'c8y-nitro/types'
 import { serverFetch as nitroServerFetch } from 'nitro'
-import type { C8yRequest, C8yRequestHandler, C8yTestState, C8yTestSubscription, C8yTestUser, C8yUnhandledRequest } from './types'
-import type { C8yBinaryInput, C8yDb, C8yManagedObjectInput, C8yRef, C8ySeed } from './data'
-import { applySeed, createBinaryFromInput, createDb, createFromInput, newRef } from './data'
-import { platform } from './platform'
-import { compileRoute, matchRoute, splitPath } from './router'
-import { DEFAULTS } from './defaults'
-import { arrange, assertActiveTest } from './scope'
-import type { FakeSubscription } from './realtime'
-import { realtime } from './realtime'
+import { TestRunner } from 'vitest'
+import type { C8yBinaryInput, C8yDb, C8yManagedObjectInput, C8yRequest, C8ySeed, C8yTenantOptionScope, C8yUnhandledRequest, NotificationSubscription, Realtime, RealtimeConsumer } from 'fake-c8y'
+import { basicAuth, matchesCall } from 'fake-c8y'
+import { SettleTimeoutError } from 'fake-c8y/realtime'
+import type { C8yRequestHandler, C8yTestState, C8yTestSubscription, C8yTestUser } from './types'
+import { arrange, assertActiveTest, isCollecting, isConcurrentRunning, runningSuite } from './scope'
+import { applyState, refs, restartService, shareService, syncEnv, testCalls, testUnhandled, useWorld } from './world'
 
 export type * from './types'
-export type { C8yAlarmInput, C8yBinaryContent, C8yBinaryInput, C8yDb, C8yDbCollection, C8yDbFilter, C8yEventInput, C8yIdInput, C8yManagedObjectInput, C8yMeasurementInput, C8yOperationInput, C8yRef, C8ySeed } from './data'
-export type { C8yAlarmSeverity, C8yAlarmStatus, C8yOperationStatus } from './capabilities.generated'
-export type { FakeSubscription as C8yNotificationSubscription } from './realtime'
-
-type TenantOptionKeyInput = C8YTenantOptionKey | (string & {})
+export type { C8yAlarmInput, C8yAlarmSeverity, C8yAlarmStatus, C8yApplicationInput, C8yAuditRecordInput, C8yBinaryContent, C8yBinaryInput, C8yDb, C8yDbCollection, C8yDbFilter, C8yEventInput, C8yGroupInput, C8yIdInput, C8yInventoryRoleInput, C8yManagedObjectInput, C8yMeasurementGeneratorInput, C8yMeasurementInput, C8yNewDeviceRequestInput, C8yOperationInput, C8yOperationStatus, C8yRequest, C8yRetentionRuleInput, C8ySeed, C8yTenantOptionScope, C8yUnhandledRequest, C8yUserInput } from 'fake-c8y'
+export type { NotificationSubscription as C8yNotificationSubscription } from 'fake-c8y'
 
 /**
- * Where a tenant option lives. Defaults: own settings category, deployed tenant.
+ * A managed object or binary created by `c8y.device()`, `c8y.managedObject()`,
+ * or `c8y.binary()`. Its `id` exists while a test runs (the object is rebuilt
+ * before every test).
  */
-export interface C8yTenantOptionScope {
-  category?: string
-  tenant?: string
+export interface C8yRef {
+  readonly id: string
 }
+
+class Ref implements C8yRef {
+  private readonly label: string
+
+  constructor(label: string) {
+    this.label = label
+  }
+
+  get id(): string {
+    const id = refs.get(this)
+    if (id === undefined) {
+      throw new Error(`${this.label} does not exist yet: objects created with c8y.device()/c8y.managedObject()/c8y.binary() exist while a test runs, in the scope they were created in.`)
+    }
+    return id
+  }
+
+  toJSON() {
+    return { id: this.id }
+  }
+}
+
+type TenantOptionKeyInput = C8YTenantOptionKey | (string & {})
 
 /**
  * Options of the `toHaveReceived()` matcher.
@@ -61,8 +79,9 @@ declare module 'vitest' {
  * Arrange calls are **scope-aware**: at the top of a file they apply to every
  * test in the file, inside `describe` to the tests of that `describe` (inner
  * scopes override outer ones), and inside a test only to that test. Before
- * every test the tenant is rebuilt from the plugin baseline, the call log is
- * cleared, and c8y-nitro's caches are invalidated, so tests are independent.
+ * every test the tenant is rebuilt from the plugin baseline and the call log
+ * is cleared, so tests are independent. Your service keeps running between
+ * tests that share an instance, with its caches (see `c8y.startService()`).
  *
  * Arrange the platform as data: users, subscriptions, tenant options,
  * managed objects (`device()`), and measurements, events, alarms, and
@@ -87,14 +106,14 @@ export const c8y = {
    * Tenant the microservice is deployed in (the bootstrap tenant).
    */
   get tenant(): string {
-    return platform.tenant
+    return useWorld().tenant
   },
 
   /**
    * Every request the microservice sent to the platform in this test, in order.
    */
   get calls(): readonly C8yRequest[] {
-    return platform.calls
+    return testCalls()
   },
 
   /**
@@ -103,7 +122,7 @@ export const c8y = {
    * fails after it ran if this is not empty.
    */
   get unhandled(): readonly C8yUnhandledRequest[] {
-    return platform.unhandled
+    return testUnhandled()
   },
 
   /**
@@ -116,10 +135,9 @@ export const c8y = {
    * c8y.db.operations.update(operationId, { status: 'SUCCESSFUL' })
    * ```
    */
-  db: {
-    ...createDb(() => platform.tenant),
-    tenant: (tenant: string) => createDb(() => tenant),
-  } as C8yDb,
+  get db(): C8yDb {
+    return useWorld().db
+  },
 
   /**
    * Creates a managed object in the fake tenant (in the current scope).
@@ -132,8 +150,10 @@ export const c8y = {
    * @param input - Fragments, plus `children`/`assets`/`additions`, `externalIds`, and `tenant`
    */
   managedObject(input: C8yManagedObjectInput = {}): C8yRef {
-    const ref = newRef(`c8y.managedObject(${JSON.stringify(input.name ?? input.type ?? '')})`)
-    arrange('c8y.managedObject()', () => createFromInput(ref, input))
+    const ref = new Ref(`c8y.managedObject(${JSON.stringify(input.name ?? input.type ?? '')})`)
+    arrange('c8y.managedObject()', () => {
+      refs.set(ref, useWorld().managedObject(input))
+    })
     return ref
   },
 
@@ -150,8 +170,10 @@ export const c8y = {
    * @param input - Fragments, plus `children`/`assets`/`additions`, `externalIds`, and `tenant`
    */
   device(input: C8yManagedObjectInput = {}): C8yRef {
-    const ref = newRef(`c8y.device(${JSON.stringify(input.name ?? '')})`)
-    arrange('c8y.device()', () => createFromInput(ref, { c8y_IsDevice: {}, ...input }))
+    const ref = new Ref(`c8y.device(${JSON.stringify(input.name ?? '')})`)
+    arrange('c8y.device()', () => {
+      refs.set(ref, useWorld().device(input))
+    })
     return ref
   },
 
@@ -166,15 +188,20 @@ export const c8y = {
    * @param input - Name, content, optional content type, tenant, and fragments
    */
   binary(input: C8yBinaryInput): C8yRef {
-    const ref = newRef(`c8y.binary(${JSON.stringify(input.name)})`)
-    arrange('c8y.binary()', () => createBinaryFromInput(ref, input))
+    const ref = new Ref(`c8y.binary(${JSON.stringify(input.name)})`)
+    arrange('c8y.binary()', () => {
+      refs.set(ref, useWorld().binary(input))
+    })
     return ref
   },
 
   /**
-   * Seeds measurements, events, alarms, and operations (in the current scope).
-   * They are validated like API writes (required fields, enums, existing
-   * source), and alarms are deduplicated like on the platform.
+   * Seeds everything other data does not point to (in the current scope):
+   * measurements (also generated history), events, alarms, operations, new
+   * device requests, retention rules, audit records, users, groups, roles,
+   * inventory roles, and applications. They are validated like API writes
+   * (required fields, enums, existing source), and alarms are deduplicated
+   * like on the platform.
    *
    * @example
    * ```ts
@@ -186,7 +213,9 @@ export const c8y = {
    * @param seed - Data to seed
    */
   seed(seed: C8ySeed): void {
-    arrange('c8y.seed()', () => applySeed(seed))
+    arrange('c8y.seed()', () => {
+      useWorld().seed(seed)
+    })
   },
 
   /**
@@ -197,7 +226,7 @@ export const c8y = {
      * Current subscriptions.
      */
     list(): readonly C8yTestSubscription[] {
-      return platform.subscriptions
+      return useWorld().subscriptions
     },
     /**
      * Adds a subscription, or replaces the one of the same tenant.
@@ -205,7 +234,8 @@ export const c8y = {
      */
     add(subscription: C8yTestSubscription): void {
       arrange('c8y.subscriptions.add()', () => {
-        platform.subscriptions = [...platform.subscriptions.filter((item) => item.tenant !== subscription.tenant), { ...subscription }]
+        const world = useWorld()
+        world.apply({ subscriptions: [...world.subscriptions.filter((item) => item.tenant !== subscription.tenant), { ...subscription }] })
       })
     },
     /**
@@ -214,7 +244,8 @@ export const c8y = {
      */
     remove(tenant: string): void {
       arrange('c8y.subscriptions.remove()', () => {
-        platform.subscriptions = platform.subscriptions.filter((item) => item.tenant !== tenant)
+        const world = useWorld()
+        world.apply({ subscriptions: world.subscriptions.filter((item) => item.tenant !== tenant) })
       })
     },
     /**
@@ -223,7 +254,7 @@ export const c8y = {
      */
     set(subscriptions: C8yTestSubscription[]): void {
       arrange('c8y.subscriptions.set()', () => {
-        platform.subscriptions = subscriptions.map((subscription) => ({ ...subscription }))
+        useWorld().apply({ subscriptions: subscriptions.map((subscription) => ({ ...subscription })) })
       })
     },
   },
@@ -240,7 +271,9 @@ export const c8y = {
      * @param scope - Category and tenant, default own category in the deployed tenant
      */
     set(key: TenantOptionKeyInput, value: string, scope?: C8yTenantOptionScope): void {
-      arrange('c8y.tenantOptions.set()', () => platform.setOption(key, value, scope))
+      arrange('c8y.tenantOptions.set()', () => {
+        useWorld().options.set(key, value, scope)
+      })
     },
     /**
      * Deletes an option in this scope.
@@ -249,7 +282,7 @@ export const c8y = {
      */
     delete(key: TenantOptionKeyInput, scope?: C8yTenantOptionScope): void {
       arrange('c8y.tenantOptions.delete()', () => {
-        platform.deleteOption(key, scope)
+        useWorld().options.delete(key, scope)
       })
     },
     /**
@@ -258,7 +291,7 @@ export const c8y = {
      * @param scope - Category and tenant
      */
     get(key: TenantOptionKeyInput, scope?: C8yTenantOptionScope): string | undefined {
-      return platform.getOption(key, scope)
+      return useWorld().options.get(key, scope)
     },
   },
 
@@ -284,8 +317,72 @@ export const c8y = {
    */
   override(pattern: string, handler: C8yRequestHandler, options: { once?: boolean } = {}): void {
     arrange('c8y.override()', () => {
-      platform.override(pattern, handler, options.once ?? false)
+      const once = options.once ?? false
+      useWorld().override(pattern, (request, ctx) => {
+        if (once && ctx.callCount > 1) {
+          return ctx.next()
+        }
+        const { method, path, query, body, headers } = ctx.call
+        return handler({
+          method,
+          path,
+          query,
+          body,
+          headers,
+          tenant: ctx.tenant,
+          user: ctx.user,
+          params: ctx.params,
+          request,
+          callCount: ctx.callCount,
+          next: ctx.next,
+        })
+      })
     })
+  },
+
+  /**
+   * Starts an instance of your service (a new Nitro app: plugins run, c8y-nitro's
+   * caches and realtime clients start empty). By default every test gets its
+   * own (`c8yTest({ service: 'per-test' })`); use Vitest's hooks for the scope:
+   *
+   * - In `beforeAll` (file level or a `describe`): one instance for the tests of
+   *   that scope, started before its first test on the data arranged down to
+   *   that scope. Caches carry over between its tests, like on a running service.
+   * - In `beforeEach`: a new instance for every test of the scope (e.g. inside a
+   *   scope that shares one).
+   * - Inside a test: a new instance now, on what the test arranged so far.
+   *
+   * @example
+   * ```ts
+   * describe('caching', () => {
+   *   beforeAll(() => c8y.startService()) // one service for these tests
+   *   it('reads the option once', async () => {})
+   * })
+   *
+   * it('boots with the new subscription', async () => {
+   *   c8y.subscriptions.add({ tenant: 't2', user: 'service_t2', password: 'pw' })
+   *   await c8y.startService()
+   * })
+   * ```
+   */
+  startService(): Promise<void> {
+    if (isCollecting()) {
+      return Promise.reject(new Error('c8y.startService() cannot be called while Vitest collects tests. Call it in beforeAll() (one service for a describe or the file), beforeEach() (one per test), or inside a test.'))
+    }
+    if (TestRunner.getCurrentTest() === undefined && !isConcurrentRunning()) {
+      // a beforeAll: the running suite shares one instance
+      const suite = runningSuite() as { tasks?: Array<{ result?: unknown }> } | undefined
+      if (!suite) {
+        return Promise.reject(new Error('c8y.startService(): no running Vitest suite found. Call it in beforeAll(), beforeEach(), or inside a test.'))
+      }
+      if (suite.tasks?.some((task) => task.result !== undefined)) {
+        return Promise.reject(new Error('c8y.startService() cannot be called in afterAll(): the tests of the scope already ran. Call it in beforeAll(), beforeEach(), or inside a test.'))
+      }
+      shareService(suite)
+      return Promise.resolve()
+    }
+    assertActiveTest('c8y.startService()', 'in beforeAll(), beforeEach(), or inside a test')
+    return restartService()
   },
 
   /**
@@ -294,7 +391,9 @@ export const c8y = {
    * @param state - Partial tenant state
    */
   apply(state: Partial<Omit<C8yTestState, 'user'>>): void {
-    arrange('c8y.apply()', () => platform.apply(state))
+    arrange('c8y.apply()', () => {
+      applyState(state)
+    })
   },
 
   /**
@@ -306,7 +405,8 @@ export const c8y = {
     /**
      * Waits until every notification delivered to your service's realtime
      * handlers has been processed (acknowledged), including notifications
-     * caused by the handlers' own writes.
+     * caused by the handlers' own writes. Notifications of a subscription
+     * without a consumer are not waited for.
      *
      * @example
      * ```ts
@@ -319,29 +419,44 @@ export const c8y = {
      */
     async settled(options: { timeout?: number } = {}): Promise<void> {
       const timeout = options.timeout ?? 5000
-      const start = Date.now()
-      const tick = () => new Promise<void>((resolve) => {
-        setTimeout(resolve, 1)
-      })
-      // give subscriptions created just now a moment to get a consumer
-      while (Date.now() - start < 500 && realtime.subscriptions.some((item) => ![...realtime.tokens.values()].some((token) => token.tenant === item.tenant && token.subscription === item.subscription))) {
-        await tick()
-      }
-      let quietTicks = 0
-      while (quietTicks < 3) {
-        await tick()
-        quietTicks = realtime.pending() === 0 ? quietTicks + 1 : 0
-        if (Date.now() - start > timeout) {
-          throw new Error(`c8y.notifications.settled(): ${realtime.pending()} notification(s) still not processed after ${timeout} ms`)
+      try {
+        await useWorld().realtime.settled({ timeout })
+      } catch (error) {
+        if (error instanceof SettleTimeoutError) {
+          const open = Object.entries(error.status).filter(([, count]) => count > 0).map(([field, count]) => `${field} ${count}`)
+          throw new Error(`c8y.notifications.settled(): notifications still not processed after ${timeout} ms (${open.join(', ') || 'nothing open at the last check'})`, { cause: error })
         }
+        throw error
       }
     },
 
     /**
      * Notification 2.0 subscriptions your service created (all tenants).
      */
-    subscriptions(): readonly FakeSubscription[] {
-      return realtime.subscriptions
+    subscriptions(): readonly NotificationSubscription[] {
+      return useWorld().realtime.subscriptions
+    },
+
+    /**
+     * The open consumer sockets (listeners) of your service, one entry per
+     * socket (sockets still connecting are not listed). `settled()` waits
+     * only for work it can see: for a listener your service opens later
+     * (a lazy route, its own timer, a reconnect after a drop), poll until it
+     * is open, then call `settled()`.
+     *
+     * @example
+     * ```ts
+     * // count first: listeners opened at startup are listed too
+     * const before = c8y.notifications.consumers({ tenant: 't12345' }).length
+     * await serverFetch('/alarms/listen', { method: 'POST' }) // opens a listener lazily
+     * await expect.poll(() => c8y.notifications.consumers({ tenant: 't12345' }).length).toBe(before + 1)
+     * c8y.seed({ alarms: [{ source: pump, type: 'c8y_Test', text: 'Test', severity: 'MINOR' }] })
+     * await c8y.notifications.settled()
+     * ```
+     * @param filter - Only sockets of this tenant, subscription, subscriber, or token
+     */
+    consumers(filter?: Parameters<Realtime['consumers']>[0]): RealtimeConsumer[] {
+      return useWorld().realtime.consumers(filter)
     },
   },
 
@@ -350,70 +465,88 @@ export const c8y = {
    * @param pattern - Route pattern, e.g. `'GET /tenant/options/**'`
    */
   callsTo(pattern: string): C8yRequest[] {
-    const route = compileRoute(pattern)
-    return platform.calls.filter((call) => matchRoute(route, call.method, splitPath(call.path)))
+    return testCalls().filter((call) => matchesCall(pattern, call))
   },
 
 }
+
+/**
+ * A user the fake tenant stores: its name (in the deployed tenant), or a user
+ * with its `tenant`, e.g. a persona from `definePersona()`.
+ */
+export type C8yCaller = string | { userName: string, tenant?: string }
 
 /**
  * Request options of `serverFetch()`: Nitro's options plus `as`.
  */
 export type C8yServerFetchInit = NonNullable<Parameters<typeof nitroServerFetch>[1]> & {
   /**
-   * The user calling the route, e.g. a persona from `definePersona()` or an
-   * inline user. `null` is a caller without a valid login. Without `as`, the
-   * default `user` from the `c8yTest()` config calls.
+   * The user making this call: a seeded user (`c8y.seed({ users })`), by
+   * name or as `{ userName, tenant? }`. Applies to this call only and creates
+   * no data. Without `as`, the default `user` from the `c8yTest()` config
+   * calls.
    */
-  as?: C8yTestUser | null
+  as?: C8yCaller
 }
 
 /**
- * Types a user that calls your service in tests, so it can be defined once
- * and reused (role names autocomplete). Pass it to `serverFetch(path, { as })`.
+ * Types a user once, so it can be seeded and used as a caller (role names
+ * autocomplete).
  *
  * @example
  * ```ts
  * const operator = definePersona({ userName: 'operator', roles: ['ROLE_ALARM_ADMIN'] })
- * const partner = definePersona({ userName: 'eve', roles: [], tenant: 't99999' })
+ * c8y.seed({ users: [operator] })
+ * it('…', async () => {
+ *   await serverFetch('/pumps/SN-1/check', { method: 'POST', as: operator })
+ * })
  * ```
  * @param user - The user
  */
-export function definePersona(user: C8yTestUser): C8yTestUser {
+export function definePersona<const T extends C8yTestUser>(user: T): T {
   return user
 }
 
 /**
  * Calls a route of your service, like `serverFetch()` from `nitro`. With
- * `as`, the request is sent as that user: the platform answers
- * `GET /user/currentUser` with it during the request.
+ * `as`, this call is made by that user: it must exist in the fake tenant
+ * (seeded with `c8y.seed({ users })`), the service sees it as the caller, and
+ * the platform checks the requests the service sends with its credentials
+ * against its roles. Nothing is stored, and the next call is made by the
+ * default user again.
  *
  * @example
  * ```ts
- * await serverFetch('/pumps/SN-1')                                           // default user
- * await serverFetch('/pumps/SN-1/check', { method: 'POST', as: operator })   // a persona
- * await serverFetch('/pumps/SN-1', { as: { userName: 'visitor', roles: [] } }) // inline
- * await serverFetch('/user', { as: null })                                   // not logged in
+ * c8y.seed({ users: [{ userName: 'visitor', roles: [] }] })
+ *
+ * await serverFetch('/pumps/SN-1')                                         // default user
+ * await serverFetch('/pumps/SN-1', { as: 'visitor' })                      // a seeded user
+ * await serverFetch('/pumps/SN-1/check', { method: 'POST', as: operator }) // a seeded persona
  * ```
  * @param path - Route path, including the query
  * @param init - Request options, plus `as`
  */
 export async function serverFetch(path: string, init: C8yServerFetchInit = {}): Promise<Response> {
-  if (!('as' in init)) {
-    return nitroServerFetch(path, init)
+  const { as: caller, ...requestInit } = init
+  if (caller === undefined) {
+    return nitroServerFetch(path, requestInit)
   }
-  const { as: user, ...requestInit } = init
   assertActiveTest('serverFetch({ as })')
-  const previous = platform.user
-  platform.setUser(user ?? null)
+  const world = useWorld()
+  const userName = typeof caller === 'string' ? caller : caller.userName
+  const tenant = (typeof caller === 'string' ? undefined : caller.tenant) ?? world.tenant
+  if (!world.db.tenant(tenant).users.get(userName)) {
+    throw new Error(`serverFetch({ as }): user "${userName}" does not exist in tenant ${tenant} of the fake platform. Seed it first: c8y.seed({ ${tenant === world.tenant ? '' : `tenant: '${tenant}', `}users: [{ userName: '${userName}', roles: [...] }] }).`)
+  }
+  // dev user injection sends the dev user's credentials: this user's, for
+  // this call (with injection off, the header below reaches the service)
+  process.env.C8Y_DEVELOPMENT_TENANT = tenant
+  process.env.C8Y_DEVELOPMENT_USER = userName
   try {
     const headers = new Headers(requestInit.headers)
-    const login = user
-      ? `${user.tenant ?? platform.tenant}/${user.userName}:${DEFAULTS.developmentPassword}`
-      : `${platform.tenant}/anonymous:invalid`
-    headers.set('authorization', `Basic ${Buffer.from(login).toString('base64')}`)
+    headers.set('authorization', basicAuth({ tenant, user: userName }))
     return await nitroServerFetch(path, { ...requestInit, headers })
   } finally {
-    platform.setUser(previous)
+    syncEnv(world)
   }
 }

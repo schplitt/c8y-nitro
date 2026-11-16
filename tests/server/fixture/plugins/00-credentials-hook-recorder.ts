@@ -1,3 +1,6 @@
+// Named `00-…` so Nitro loads it before the other fixture plugins: the
+// realtime plugin reads the credentials at startup, and the first
+// c8y:tenantCredentialsUpdated of a new service must already be recorded.
 import type { TenantCredentials } from 'c8y-nitro/types'
 import { consola } from 'consola'
 import { definePlugin } from 'nitro'

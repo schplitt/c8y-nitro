@@ -50,8 +50,15 @@ describe('scopes', () => {
     expect(c8y.tenantOptions.get('scopeOption')).toBe('file')
   })
 
-  it('rebuilds data before every test (stable ids)', () => {
-    expect(pump.id).toBe('1')
+  let firstId: string | undefined
+  it('rebuilds data before every test', () => {
+    firstId = pump.id
+    expect(c8y.db.managedObjects.find({ name: 'file-pump' })).toHaveLength(1)
+  })
+
+  it('gives rebuilt data the same ids in every test', () => {
+    expect(pump.id).toBe(firstId)
+    expect(c8y.db.managedObjects.find({ name: 'file-pump' })).toHaveLength(1)
   })
 })
 
@@ -70,6 +77,65 @@ describe('overrides', () => {
     // middleware turns upstream errors into a 500
     expect((await fetchJson(`/devices/${pump.id}`)).res.status).toBe(500)
   })
+
+  it('passes a request on to the platform with next()', async () => {
+    c8y.override('GET /inventory/managedObjects/:id', async ({ next }) => ({ ...await (await next()).json() as object, name: 'via-next' }))
+
+    expect(await deviceName()).toBe('via-next')
+  })
+
+  it('answers 500 when a handler throws, and records the failure', async () => {
+    // 'error' (the default) would fail this test after it ran
+    c8y.apply({ onUnhandledRequest: 'ignore' })
+    c8y.override('GET /features', () => {
+      throw new TypeError('fetch failed')
+    })
+
+    const { json } = await fetchJson('/platform/request', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ tenant: c8y.tenant, method: 'GET', path: '/features' }),
+    })
+
+    expect(json).toEqual({ status: 500 })
+    expect(c8y.unhandled).toMatchObject([{ method: 'GET', path: '/features', kind: 'error' }])
+  })
+
+  it('gives the handler the request', async () => {
+    let context: unknown
+    c8y.override('POST /event/:kind', (ctx) => {
+      context = ctx
+      return Response.json({}, { status: 201 })
+    })
+
+    const { json } = await fetchJson('/platform/request', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ tenant: c8y.tenant, method: 'POST', path: '/event/events?source=1', body: { type: 'door_open' } }),
+    })
+
+    expect(json).toEqual({ status: 201 })
+    expect(context).toMatchObject({
+      method: 'POST',
+      path: '/event/events',
+      query: { source: '1' },
+      body: { type: 'door_open' },
+      headers: expect.objectContaining({ 'content-type': 'application/json' }),
+      tenant: c8y.tenant,
+      user: expect.stringMatching(/^service_/),
+      params: { kind: 'events' },
+      request: expect.any(Request),
+      callCount: 1,
+      next: expect.any(Function),
+    })
+  })
+
+  it('counts the requests an override got', async () => {
+    c8y.override('GET /inventory/managedObjects/:id', ({ callCount, next }) => callCount === 1 ? Response.json({ message: 'Unavailable' }, { status: 503 }) : next())
+
+    expect((await fetchJson(`/devices/${pump.id}`)).res.status).toBe(500)
+    expect(await deviceName()).toBe('file-pump')
+  })
 })
 
 describe('tenant options', () => {
@@ -85,6 +151,38 @@ describe('tenant options', () => {
 
   it('is back outside of it', async () => {
     expect(c8y.tenantOptions.get('myOption')).toBe('file-value')
+  })
+})
+
+// the fixture's manifest (tests/server/fixture/nitro.config.ts) shapes the fake tenant
+describe('the manifest', () => {
+  const platformRequest = (method: string, path: string, body?: unknown) => fetchJson('/platform/request', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ tenant: c8y.tenant, method, path, body }),
+  })
+
+  it('gives the service users only its requiredRoles', async () => {
+    // ROLE_INVENTORY_READ is required, ROLE_INVENTORY_ADMIN is not
+    expect((await platformRequest('GET', '/inventory/managedObjects')).json).toEqual({ status: 200 })
+    expect((await platformRequest('POST', '/inventory/managedObjects', { name: 'pump' })).json).toEqual({ status: 403 })
+  })
+
+  it('stores its settings defaults as tenant options', async () => {
+    const { json } = await fetchJson('/tenant-options')
+
+    expect(json).toMatchObject({ 'myOption': 'default', 'credentials.secret': 'change-me', 'cacheExpiryOption': 'cache-default' })
+  })
+
+  describe('with a user that has its roles', () => {
+    // not seeded as roles: the manifest's roles exist in the tenant already
+    c8y.seed({ users: [{ userName: 'manifest-user', roles: ['SOME_CUSTOM_ROLE', 'ANOTHER_ROLE'] }] })
+
+    it('has them in the tenant', async () => {
+      const { json } = await fetchJson('/user', { as: 'manifest-user' })
+
+      expect(json.roles).toEqual(expect.arrayContaining(['SOME_CUSTOM_ROLE', 'ANOTHER_ROLE']))
+    })
   })
 })
 
@@ -107,16 +205,17 @@ describe('unsupported requests', () => {
     // 'error' (the default) would fail this test after it ran
     c8y.apply({ onUnhandledRequest: 'ignore' })
 
-    const { json } = await fetchJson('/platform/statistics')
+    const { json } = await fetchJson('/platform/features')
 
-    expect(json.status).toBe(501)
-    expect(c8y.unhandled).toMatchObject([{ method: 'GET', path: '/tenant/statistics/summary', reason: 'endpoint not emulated' }])
+    // the message names c8y.override(), the way to answer it in a c8y-nitro test
+    expect(json).toMatchObject({ status: 501, body: { message: 'GET /features: endpoint not emulated by the fake Cumulocity platform. Answer it with c8y.override(\'GET /features\', ...).' } })
+    expect(c8y.unhandled).toMatchObject([{ method: 'GET', path: '/features', reason: 'endpoint not emulated', kind: 'endpoint' }])
   })
 
   it('can be answered with an override', async () => {
-    c8y.override('GET /tenant/statistics/summary', () => ({ deviceCount: 3 }))
+    c8y.override('GET /features', () => [{ key: 'my-feature', active: true }])
 
-    expect((await fetchJson('/platform/statistics')).json).toEqual({ status: 200, body: { deviceCount: 3 } })
+    expect((await fetchJson('/platform/features')).json).toEqual({ status: 200, body: [{ key: 'my-feature', active: true }] })
   })
 })
 

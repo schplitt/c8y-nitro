@@ -10,8 +10,33 @@ import { getCurrentUserTenantId } from './internal/tenant'
 import { credsEqual } from './internal/common'
 import { useRuntimeConfig } from 'nitro/runtime-config'
 import { useNitroHooks } from 'nitro/app'
+import { useTestingHooks } from './internal/testing'
 
 let prevCredentials: TenantCredentials | null = null
+let closeWired = false
+
+// Tests: a new service instance starts without the previous credentials, also
+// when late background work wired the close hook to the closed app.
+useTestingHooks()?.instanceState?.add(() => {
+  prevCredentials = null
+  closeWired = false
+})
+
+/**
+ * Forgets the previous credentials when the app closes, so a new app instance
+ * (e.g. a restarted service in tests) emits its first
+ * `c8y:tenantCredentialsUpdated` from `null`, like a freshly started service.
+ */
+function wireClose(): void {
+  if (closeWired) {
+    return
+  }
+  closeWired = true
+  useNitroHooks().hook('close', () => {
+    prevCredentials = null
+    closeWired = false
+  })
+}
 
 function shouldEmitTenantCredentialsUpdated(prev: TenantCredentials | null, next: TenantCredentials): boolean {
   if (!prev) {
@@ -73,6 +98,7 @@ const cachedSubscribedTenantCredentials = defineCachedFunction(async () => {
     {} as TenantCredentials,
   )
 
+  wireClose()
   if (shouldEmitTenantCredentialsUpdated(prevCredentials, newCredentials)) {
     useNitroHooks().callHook('c8y:tenantCredentialsUpdated', prevCredentials, newCredentials)
   }

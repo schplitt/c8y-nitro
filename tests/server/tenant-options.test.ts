@@ -45,6 +45,35 @@ describe('tenant options', () => {
     expect(json.afterDelete).toBeNull()
   })
 
+  describe('setEditable()', () => {
+    const editableCalls = () => c8y.callsTo('PUT /tenant/options/*/*/editable')
+
+    it('sends the flag for the target tenant and resolves without a value', async () => {
+      // only the management tenant may change the flag: answer as it would
+      c8y.override('PUT /tenant/options/*/*/editable', () => ({ category: 'c8y-nitro', key: 'myOption', value: 'v', editable: 'false' }))
+
+      const { res, json } = await fetchJson('/tenant-option-editable?key=myOption&editable=false&targetTenant=t12345')
+
+      expect(res.status).toBe(200)
+      expect(json.result).toBeNull()
+      expect(editableCalls()).toMatchObject([{
+        path: '/tenant/options/c8y-nitro/myOption/editable',
+        query: { targetTenant: 't12345' },
+        body: { editable: false },
+      }])
+    })
+
+    it('fails with a 500 that does not expose the platform\'s answer when the platform refuses', async () => {
+      // the deployed tenant is not the management tenant: the platform answers 403
+      const { res, json } = await fetchJson('/tenant-option-editable?key=myOption&editable=true&targetTenant=t12345')
+
+      expect(editableCalls()).toMatchObject([{ status: 403, body: { editable: true } }])
+      expect(res.status).toBe(500)
+      expect(json.message).toBe('Internal Server Error')
+      expect(JSON.stringify(json)).not.toContain('security/Forbidden')
+    })
+  })
+
   it('bulk sets and lists options of the own category', async () => {
     const { res, json } = await fetchJson('/tenant-options-category')
 

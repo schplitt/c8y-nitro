@@ -65,6 +65,20 @@ const pool = new Map<string, RealtimeClient>()
 
 let lifecycleWired = false
 let sweepTimer: ReturnType<typeof setInterval> | undefined
+
+// Tests: a stopped service instance takes its clients and wiring with it, also
+// when late background work wired them to the closed app.
+useTestingHooks()?.instanceState?.add(() => {
+  if (sweepTimer) {
+    clearInterval(sweepTimer)
+    sweepTimer = undefined
+  }
+  for (const client of pool.values()) {
+    client.close().catch(() => {})
+  }
+  pool.clear()
+  lifecycleWired = false
+})
 let sweeping = false
 
 function realtimeConfig(): ResolvedRealtimeConfig {
@@ -222,6 +236,10 @@ function ensureLifecycleWired(): void {
     return
   }
   lifecycleWired = true
+  const testingHooks = useTestingHooks()
+  if (testingHooks) {
+    testingHooks.realtimePool = pool
+  }
 
   sweepTimer = setInterval(() => {
     repairUnhealthyClients().catch((error) => {

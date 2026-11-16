@@ -2,13 +2,18 @@ import { describe, expect, it } from 'vitest'
 import { c8y, definePersona, serverFetch } from 'c8y-nitro/testing'
 import { fetchJson, readJson } from './utils'
 
-// Personas: users that call the service. Without `as`, requests come from the
-// default user of the c8yTest() config.
+// Personas: users that call the service. They exist in the fake tenant (seeded
+// below); without `as`, requests come from the default user of the c8yTest() config.
 const inventoryReader = definePersona({ userName: 'testUser', roles: ['ROLE_INVENTORY_READ', 'ROLE_ALARM_READ', 'ROLE_DEVICE_CONTROL'] })
 const someUser = definePersona({ userName: 'someUser', roles: ['SOME_CUSTOM_ROLE'] })
 const admin = definePersona({ userName: 'adminUser', roles: ['ADMIN_ROLE', 'ROLE_B'] })
 const otherTenantUser = definePersona({ userName: 'testUser', roles: [], tenant: 't00000' })
 const subscribedTenantUser = definePersona({ userName: 'testUser', roles: [], tenant: 't99999' })
+
+// roles outside the manifest exist in the tenant's role catalogue (the manifest's
+// roles, like SOME_CUSTOM_ROLE, are there already); a user with its own
+// `tenant` is seeded in that tenant
+c8y.seed({ roles: ['ROLE_DEVICE_CONTROL', 'ADMIN_ROLE', 'ROLE_B'], users: [inventoryReader, someUser, admin, otherTenantUser, subscribedTenantUser] })
 
 describe('user resources', () => {
   it('returns the current user and their roles', async () => {
@@ -17,20 +22,22 @@ describe('user resources', () => {
 
     expect(res.status).toBe(200)
     expect(json.userName).toBe('testUser')
-    expect(json.roles).toEqual(['ROLE_INVENTORY_READ', 'ROLE_ALARM_READ', 'ROLE_DEVICE_CONTROL'])
-  })
-
-  it('fails when the platform rejects the caller', async () => {
-    const res = await serverFetch('/user', { as: null })
-
-    // The platform answers 401; @c8y/client throws { res, data } and the
-    // c8y-client middleware turns upstream errors into a 500.
-    expect(res.status).toBe(500)
+    // plus the user-management roles every platform user gets
+    expect(json.roles).toEqual(expect.arrayContaining(['ROLE_INVENTORY_READ', 'ROLE_ALARM_READ', 'ROLE_DEVICE_CONTROL', 'ROLE_USER_MANAGEMENT_OWN_READ']))
     expect(c8y).toHaveReceived('GET /user/currentUser')
   })
 
   it('calls as the default user without a persona', async () => {
     expect((await fetchJson('/user')).json.userName).toBe('test-user')
+  })
+
+  it('calls as a seeded user by name, for that call only', async () => {
+    expect((await readJson(await serverFetch('/user', { as: 'someUser' }))).userName).toBe('someUser')
+    expect((await fetchJson('/user')).json.userName).toBe('test-user')
+  })
+
+  it('rejects a caller the fake tenant does not store', async () => {
+    await expect(serverFetch('/user', { as: 'nobody' })).rejects.toThrow('user "nobody" does not exist in tenant t12345')
   })
 })
 

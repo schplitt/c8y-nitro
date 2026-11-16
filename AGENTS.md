@@ -61,14 +61,9 @@ src/
 │   ├── index.ts                # `c8y` arrange/act/assert API (entry: c8y-nitro/testing)
 │   ├── vite.ts                 # c8yTest() Vite plugin (entry: c8y-nitro/testing/vite)
 │   ├── setup.ts                # Vitest setup file the plugin injects (patches FetchClient, resets per test)
-│   ├── platform.ts             # Fake tenant: user/subscriptions/options state, request dispatch, overrides
-│   ├── store.ts                # In-memory platform data per tenant (managed objects, relations, external ids, measurements, events, alarms, operations)
-│   ├── data.ts                 # c8y.device()/managedObject() refs, c8y.seed(), c8y.db views
-│   ├── api/                    # Emulated REST APIs: inventory.ts, identity.ts, data.ts (measurements/events/alarms/operations), query.ts (query language subset), http.ts (paging, errors, spec validation)
-│   ├── capabilities.generated.ts # GENERATED from the OpenAPI spec (pnpm gen:testing-capabilities): query params, required fields, enums
+│   ├── world.ts                # The fake-c8y world of the test file and the service instance lifecycle: checkpoints, per-test reset, arrangement replay, restarts
 │   ├── scope.ts                # Scope-aware arrange calls (collection-time beforeEach registration)
-│   ├── router.ts               # Route pattern matcher for c8y.override()
-│   ├── defaults.ts             # Default tenant/user/env values (safe to import in the Vite config)
+│   ├── defaults.ts             # PROVIDE_KEY: the key the plugin provides its options under (safe to import in the Vite config)
 │   └── types.ts                # Public testing types
 └── utils/
     ├── index.ts                # Utility exports
@@ -85,17 +80,11 @@ src/
       ├── tenantOptionFetchers.ts # Internal tenant option fetcher registry for runtime handlers
       └── tenant.ts           # Internal current-user tenant resolution and cache helpers
 tests/
-├── contract/                   # Contract scenarios for the fake tenant (scenarios/<area>.ts; run against the fake and, via pnpm test:contract, a real tenant)
-│   ├── deviations.ts           # Where the platform deviates from its spec (statuses, body shapes), by behavior id
-│   ├── schema.ts               # Small JSON schema checker for the spec contract test
-│   └── spec.generated.json     # GENERATED (pnpm gen:testing-capabilities): documented query parameter facts and response schemas of the emulated endpoints
 ├── unit/                       # Unit tests for individual functions
 │   ├── apiClient.test.ts       # API client generation tests
 │   ├── c8yzip.test.ts          # Zip creation tests
 │   ├── docker.test.ts          # Docker generation tests
 │   ├── manifest.test.ts        # Manifest generation tests
-│   ├── platform-behavior.test.ts # Keeps docs/reference/platform-behavior.md and the scenarios' `verifies` ids in sync
-│   ├── query-language.test.ts  # Seeded property test of the fake's inventory query language against an oracle
 │   └── runtime.test.ts         # Runtime setup tests
 └── server/                     # Server integration tests (Nitro Vitest environment + c8yTest())
     ├── *.test.ts               # One Nitro app per file
@@ -182,26 +171,9 @@ runs it weekly and opens a PR when the roles change, so manual runs are only
 needed when you want an update sooner. Regenerating changes the public API, so
 run `pnpm build` afterwards to refresh the tsnapi snapshot.
 
-### Generating the testing capability table (`gen:testing-capabilities`)
+### The fake tenant (`fake-c8y`)
 
-`src/testing/capabilities.generated.ts` holds what the fake tenant of `c8y-nitro/testing` derives from the core OpenAPI spec instead of assuming: the query parameters of every emulated endpoint, required request-body fields, enums (alarm severity/status, operation status), and `C8Y_SPEC_PATHS`, every `METHOD /path` of the spec (the fake answers 404 for a path the platform does not have and 405 for a wrong method, instead of "not emulated"). The same run writes `tests/contract/spec.generated.json`, the documented query parameter facts (type, enum, default, limits) and response schemas of the emulated endpoints (read-only properties become required, except the ones in `OPTIONAL_READ_ONLY`), which `tests/server/contract-spec.test.ts` checks every response of the fake against (kept out of the package). Both are **generated, not hand-edited**:
-
-```sh
-pnpm gen:testing-capabilities                          # fetch the live spec
-pnpm gen:testing-capabilities -- --file ./c8y-oas.json # or parse a local spec
-```
-
-When you emulate a new endpoint, add it to `ENDPOINTS` in `scripts/generate-testing-capabilities.ts` and regenerate.
-
-### Contract scenarios against a real tenant (`test:contract`)
-
-`tests/contract/scenarios/*.ts` (one file per API area, combined in `tests/contract/scenarios.ts`, shared helpers in `tests/contract/helpers.ts`) run against the fake in `pnpm test` (`tests/server/contract.test.ts`) and against a **real tenant** with:
-
-```sh
-pnpm test:contract
-```
-
-Credentials come from the environment or `.env` / `playground/.env` (`C8Y_CONTRACT_BASEURL/TENANT/USER/PASSWORD`, else `C8Y_BASEURL` + `C8Y_DEVELOPMENT_*`). Never print or read them in agent sessions; the runner loads them itself. Every scenario names its data with a unique run id and the runner deletes it afterwards. Not part of `pnpm test` or CI. Run it after changing fake behavior; a failure there means the fake is wrong. **Coverage rule:** the fake runner fails if any emulated endpoint (the generated table plus the built-in endpoints) is never called by a scenario. Run `C8Y_CONTRACT_COVERAGE=1 npx vitest run --project server tests/server/contract.test.ts --disableConsoleIntercept` to print untested endpoints and spec query parameters. A new emulated endpoint or parameter needs a scenario that passes against both. Scenarios must pass on both: use `eventually()` for writes the platform applies asynchronously (bulk deletes, parent indexing). The real platform differs from the API docs in places (e.g. 422 instead of 400, unvalidated alarm severities, `next` links past the end): when a real-tenant run disagrees with the docs, the platform wins — fix the fake, mark the code with `verified against the platform`, note it in the guide's assumptions, and **give it an id**: a row in `docs/reference/platform-behavior.md` (what the docs say vs. what the platform does) and that id in the scenario's `verifies` list. `tests/unit/platform-behavior.test.ts` fails when a documented id has no scenario or a scenario names an undocumented id. `tests/server/contract-spec.test.ts` checks every response of the fake against the spec's schemas and documented statuses; a status the platform answers but the spec does not document goes into `DEVIATIONS` in `tests/contract/deviations.ts` with the same id (a wrong documented body shape into `SCHEMA_DEVIATIONS`); the test fails for a deviation no response needs and for a documented success status no request reaches (`UNREACHABLE` lists the ones that cannot be, with the reason). `tests/unit/query-language.test.ts` is a seeded property test of the query parser (random worlds and expressions against an oracle; `C8Y_QUERY_SEED=<n>` reproduces a failing seed). The runner's cleanup deletes binaries through `/inventory/binaries` (the inventory API refuses them).
+The platform emulation behind `c8y-nitro/testing` is the [fake-c8y](https://github.com/schplitt/fake-c8y) package (a dependency): emulated endpoints, the OpenAPI capability table, the platform-behavior catalog, and the contract scenarios against a real tenant all live there. c8y-nitro only adapts a fake-c8y `World` to Vitest (`src/testing/world.ts`, `setup.ts`, `scope.ts`). A missing endpoint or a wrong platform behavior is fixed in fake-c8y, not here; bump the dependency afterwards.
 
 ### Testing the Playground
 
@@ -232,11 +204,12 @@ pnpm test       # Run the example tests (test/) against the fake tenant
 
 `vitest.config.ts` defines three Vitest projects:
 
-| Project              | Files                                   | Environment                             |
-| -------------------- | --------------------------------------- | --------------------------------------- |
-| `unit`               | `tests/unit/**/*.test.ts`               | Node                                    |
-| `server`             | `tests/server/**/*.test.ts`             | Nitro (`tests/server/fixture`)          |
-| `server-no-dev-user` | `tests/server/**/*.no-dev-user.test.ts` | Nitro, with `c8y.dev.injectUser: false` |
+| Project              | Files                                   | Environment                                    |
+| -------------------- | --------------------------------------- | ---------------------------------------------- |
+| `unit`               | `tests/unit/**/*.test.ts`               | Node                                           |
+| `server`             | `tests/server/**/*.test.ts`             | Nitro (`tests/server/fixture`)                 |
+| `server-no-dev-user` | `tests/server/**/*.no-dev-user.test.ts` | Nitro, with `c8y.dev.injectUser: false`        |
+| `server-per-file`    | `tests/server/**/*.per-file.test.ts`    | Nitro, with `c8yTest({ service: 'per-file' })` |
 
 Run one project with `pnpm vitest run --project server`.
 
@@ -274,11 +247,12 @@ tests/server/
 ├── tenant-options.test.ts    # Tenant option handles, caching, invalidation route
 ├── logging.test.ts           # evlog wide events
 ├── openapi.test.ts           # OpenAPI transformation
-├── contract-spec.test.ts     # Every response of the fake against the OpenAPI spec's documented statuses and schemas
 ├── testing-api.test.ts       # c8y-nitro/testing itself: scopes, stacking, reset, overrides, unsupported requests
 ├── testing-data.test.ts      # A service tested against seeded platform data (the pattern users follow)
-├── contract.test.ts          # Runs tests/contract/scenarios.ts against the fake tenant
 ├── testing-api.concurrent.test.ts # c8y-nitro/testing concurrency guard
+├── service-instance.test.ts  # New service per test vs shared (c8y.startService() in hooks), caches, fresh-process behavior
+├── testing-realtime.test.ts  # Realtime plugin against the fake; startup subscriptions kept between tests
+├── service-instance.per-file.test.ts # Runs in the server-per-file project: one shared service per file
 └── dev-user.no-dev-user.test.ts # Runs in the server-no-dev-user project
 ```
 
@@ -290,6 +264,7 @@ import { c8y, definePersona, serverFetch } from 'c8y-nitro/testing'
 import { fetchJson } from './utils'
 
 const outsider = definePersona({ userName: 'testUser', roles: [], tenant: 't99999' }) // a caller
+c8y.seed({ users: [outsider] }) // callers are users of the fake tenant (seeded in their own tenant)
 
 it('is denied for users of other tenants', async () => {
   expect((await serverFetch('/deployed-tenant-only', { as: outsider })).status).toBe(403)
@@ -306,10 +281,10 @@ it('raises an overheating alarm', async () => {
 
 Key points:
 
-- **Test services, not the Cumulocity API.** Arrange platform data (`c8y.device()`, `c8y.seed()`, `c8y.tenantOptions`), call routes with `serverFetch(path, { as })` from `c8y-nitro/testing` (`as`: a `definePersona()` user, inline user, or `null`) — `c8y` is only the fake platform — and assert on responses and `c8y.db`. Use `c8y.override()` only for failures and unemulated APIs, and `toHaveReceived`/`callsTo` only where the request itself is the behavior (e.g. caching). Tests of the fake's own API semantics belong in `tests/contract/scenarios.ts`.
+- **Test services, not the Cumulocity API.** Arrange platform data (`c8y.device()`, `c8y.seed()`, `c8y.tenantOptions`), call routes with `serverFetch(path, { as })` from `c8y-nitro/testing` (`as`: a seeded user, by name or as a `definePersona()` user) — `c8y` is only the fake platform — and assert on responses and `c8y.db`. Use `c8y.override()` only for failures and unemulated APIs, and `toHaveReceived`/`callsTo` only where the request itself is the behavior (e.g. caching). Tests of the fake's own API semantics belong in fake-c8y.
 - **Tests use the public API only** (`c8y-nitro/testing`, resolved from `dist`). If a test needs something the API cannot express, improve the API instead of adding a private workaround.
-- **One app per file.** Module options need a separate Vitest project, like `server-no-dev-user` (each project lists `nitro(...)` and `c8yTest()`). Everything read at request time (user, subscriptions, tenant options, handlers, dev env) can change per scope inside one file.
-- **Module state is shared.** Tests can import fixture modules directly, e.g. the credential hook recorder in `fixture/plugins/tenant-credentials-updated.ts`. Do not add fixture routes just to mutate platform state: use `c8y.*`.
+- **One app per file.** Module options and `c8yTest()` options need a separate Vitest project, like `server-no-dev-user` and `server-per-file` (each project lists `nitro(...)` and `c8yTest()`). Everything read at request time (user, subscriptions, tenant options, handlers, dev env) can change per scope inside one file.
+- **Module state is shared.** Tests can import fixture modules directly, e.g. the credential hook recorder in `fixture/plugins/00-credentials-hook-recorder.ts`. Do not add fixture routes just to mutate platform state: use `c8y.*`.
 - **Logs**: `captureLogs()` spies on `console.*`. The server runs in the test worker, so evlog wide events and `console.log` from routes and tasks land there. Wide events are emitted after the response: wait ~100 ms before asserting.
 - **Known noise**: one tslib `__extends` (or `require is not defined`) error per run comes from Nitro's Vite dev worker loading the real `@c8y/client` under the Vite builder. It does not affect test results. See "Vite builder compatibility" below.
 
@@ -383,7 +358,6 @@ User-facing documentation belongs in `docs/` first:
 - Runtime hooks → `docs/reference/runtime-hooks.md`
 - Environment variables → `docs/reference/environment-variables.md`
 - Generated runtime exports or generated types → `docs/reference/runtime-module.md`
-- Platform behavior the fake tenant emulates that differs from the API docs → `docs/reference/platform-behavior.md` (one row per id, verified by a contract scenario)
 - Changes to existing API behavior → update the relevant `docs/guide/**` and `docs/reference/**` pages
 - Any feature that users can configure, use, or interact with
 
@@ -514,16 +488,21 @@ This section captures project-specific knowledge, tool quirks, and lessons learn
   - If a runtime file needs **shared state** (e.g. the tenant option fetcher registry behind `useTenantOption`), import the public `c8y-nitro/utils` entry. It is `neverBundle` in the runtime tsdown config, so Nitro bundles one copy for user routes and runtime handlers. Example: `runtime/handlers/invalidateTenantOptions.ts` (a relative import made the invalidation route a silent no-op)
   - Stateless helpers (e.g. `createError` from `src/utils/logging.ts`) can still be imported by relative path
 - **`c8y-nitro/testing` internals** (see `src/testing/`):
-  - The plugin marks `@c8y/client` as **external in the `nitro` Vite environment**, so Node loads the real client natively (Vite cannot transform its CJS deps). The setup file patches `FetchClient.prototype.fetch`; every service and static helper of the client goes through it, so one patch answers all platform requests. Keep `getUrl()`/`getFetchOptions()` in the patch so query params and auth headers stay real.
-  - Arrange calls are scope-aware via a **phase flag**: during collection they register a `beforeEach` in the current suite (Vitest replays them outer→inner after the setup file's reset); during a test they apply directly. Do not try to map `getCurrentSuite()` collectors to run-time suites (they are different objects).
+  - The plugin marks `@c8y/client` as **external in the `nitro` Vite environment**, so Node loads the real client natively (Vite cannot transform its CJS deps). The setup file patches `FetchClient.prototype.fetch` with fake-c8y's `installFetchClient(FetchClient, () => useWorld())` (`fake-c8y/c8y-client`); every service and static helper of the client goes through it, so one patch answers all platform requests, with the client's own URL, query, and auth header handling. Global `fetch` to the platform's origin goes to the world through `interceptFetch(() => useWorld(), { origin })`. Both read the world per request, so it stays lazy.
+  - Arrange calls are scope-aware via a **phase flag**: during collection they are recorded per scope (`arrangements` in `scope.ts`, keyed by `TestRunner.getCurrentSuite().suite`, or `.file` at the top level; these are the same objects tests see as `task.suite` / `task.file` at run time, and a top-level test has no `task.suite`); during a test they apply directly. The setup file's `beforeEach` replays them (`prepareTest()` in `world.ts`), so they run before the file's own `beforeEach` hooks.
   - The setup file must **not import `c8y-nitro/utils` at top level**: loading it before Nitro creates the app (in Nitro's own `beforeAll`) enters Nitro's runtime through an import cycle (`defineCachedFunction is not a function`). Import it lazily inside hooks.
-  - `testing/vite.ts` runs in Vitest's main process: keep it free of Nitro runtime imports (`nitro/runtime-config` etc.); share constants via `defaults.ts`.
+  - `testing/vite.ts` runs in Vitest's main process: keep it free of Nitro runtime imports (`nitro/runtime-config` etc.); share constants via `defaults.ts`. Default values (tenant, base URL, user, passwords) come from fake-c8y's light entry `fake-c8y/defaults`, the only fake-c8y import allowed there.
   - The module skips auto-bootstrap when `process.env.VITEST` is set, so tests never contact a real tenant.
-  - **Extending the fake tenant:** derive what the spec defines (regenerate the capability table), hand-write behavior in `src/testing/api/`, and fail loudly (`UnsupportedRequestError`) for anything not emulated — never return a silently wrong result. Every new behavior needs a scenario in `tests/contract/scenarios.ts` and a row/assumption in the "What the Fake Emulates" section of `docs/guide/testing.md`. Spec-known query parameters a handler does not emulate must fail loudly (`checkQuery`); unknown parameters are ignored like the real API.
-  - **Realtime (Notification 2.0):** `src/testing/realtime.ts` holds subscriptions, tokens, and `FakeWebSocket` consumers; `api/notifications.ts` the REST API. c8y-nitro's realtime client gets the fake socket through the test seam `src/utils/internal/testing.ts` (a `globalThis` symbol the setup file sets; unset in production — keep it that way, never import testing code from runtime code). c8y-realtime's REST calls use global `fetch`, which the setup file routes to the fake for the platform's origin. Every data write calls `notify()`; replayed arrangements set `store.silent` so they do not notify. Realtime state lives for the whole test file; only data resets.
-  - The setup file **starts the Nitro app in `beforeAll`** (`useNitroApp()` + `await app.ready`, then `waitForRealtimeStartup()`): Nitro creates the app lazily on first request, so startup plugins (realtime subscriptions) would otherwise not exist in tests that never call a route.
-  - `@c8y/client` uploads with the Node `form-data` package; the `FetchClient` patch serializes it (`getBuffer()`/`getBoundary()`). Handlers that need raw bytes or repeated query params use `raw(call)` from `api/http.ts`.
-  - Managed objects created by `c8y.device()`/`managedObject()` are bound to refs at replay time (`store.refs`), so `ref.id` only works while a test runs; ids are sequential and reset per test.
+  - **The world and service instances:** `world.ts` creates the fake-c8y world on first use (it needs `useRuntimeConfig().c8ySettingsCategory`), with the service's manifest from the virtual module `c8y-nitro/runtime` (`createWorld({ manifest })`: manifest roles in the tenants, settings defaults as tenant options, service users limited to `requiredRoles`; the fixture's and the playground's manifests list every role their service users need) and takes a `clean` checkpoint. `prepareTest(task)` (serialized, so concurrent `beforeEach` calls cannot interleave a restart) finds the test's instance key: the innermost running scope in `sharedScopes` (registered at run time by `c8y.startService()` in a `beforeAll`; the setup file wraps `TestRunner.prototype.onBeforeRunSuite`/`onAfterRunSuite` to know the running suite), else the file with `c8yTest({ service: 'per-file' })`, else a new key object per run (the default: a new service per test, also on retry). A shared instance starts on the arrangements down to its scope; a per-test one on all of the test's scopes. Concurrent tests reuse the running instance. Same key as the running instance: close realtime clients created after startup (the pool is exposed through the test seam as `realtimePool`), `world.reset({ to: startup, consumers: 'keep' })` (keeps open consumers even after a reconnect), restore the startup refs and strategy, replay the deeper scopes. New key: Nitro's `close` hook on the old app, stop `c8yTasks()` jobs, invalidate c8y-nitro's caches, `reset({ to: clean })`, replay the arrangements the instance starts on, start the app (`useNitroApp().ready` + `world.realtime.settled()`: waits for the live work that runs through the fake, i.e. requests, scheduled callbacks, connecting sockets, unacknowledged frames, not for stored backlog or tokens without a socket; a startup still busy 5 s after `app.ready` fails the test with c8y-nitro's own message, fake-c8y's `SettleTimeoutError` as `cause`; the log mark of the start is taken before `useNitroApp()` creates the app, so requests sync plugins send during creation count as the start's), take the `startup` checkpoint (which also holds those arrangements and their overrides, so file-level overrides answer startup requests), then replay the deeper scopes. `c8y.startService()` in a test or `beforeEach` (internally `restartService()`) does stop+start on the test's data and drops the startup checkpoint, so the next test restarts too. Nitro's in-memory cache storage is not reachable from outside: a new instance cannot clear users' `defineCachedFunction` entries or module state. Module state of c8y-nitro that must start fresh per instance registers a reset in the test seam (`instanceState`: realtime pool wiring, the previous credentials of `c8y:tenantCredentialsUpdated`, the internal tenant id/domain caches); `c8yTasks()` registries register a stop function (`taskRegistries`); `stopService()` calls both and invalidates the public caches (`useSubscribedTenantCredentials.invalidate()`, `useTenantOptions.invalidateAll()`). The internal caches without a clear-all (`getCurrentUserTenantId`, the tenant domain cache in `src/utils/internal/tenant.ts`) change their cache key instead: the reset draws a new key salt and bumps a generation that is part of the domain key (0, the plain key, in production), and clears the in-process `fastDomainCache`. Runtime handlers that import `internal/tenant.ts` by relative path get their own copy, which registers its own reset. The domain part (generation bump, `fastDomainCache` clear) is untested: its only users (the request URL rewrite and the OpenAPI server URL) run outside dev mode, and tests run the `nitro-dev` preset. `tests/server/service-instance.no-dev-user.test.ts` covers the tenant id cache. A failed start is stopped again, and the closed app is replaced (`useNitroApp._instance = undefined`) only right before the next start. `onChange` keeps `C8Y_BOOTSTRAP_TENANT` / `C8Y_DEVELOPMENT_*` in sync with the tenant and user.
+  - **The test's call log** uses fake-c8y's log marks, not the `world.calls` / `world.unhandled` arrays: after each reset (and service start) for a test, `prepare()` takes a test mark; `c8y.calls` / `callsTo()` / `toHaveReceived` are `callsSince(testMark, undefined, { except: restarts })` (filtered with `matchesCall`), where `restarts` are the ranges of `c8y.startService()` inside the test; `c8y.unhandled` is `unhandledSince(testMark)`. `startService()` takes its startup's unhandled requests with `takeUnhandledSince()` (reported by the caller, dropped on a failed start), so they are in no test's log. The setup file's `afterEach` takes the test's unhandled requests; what a later take returns was recorded afterwards (background work), reported by the next `beforeEach` or the file's `afterAll`. Marks of the log before a `reset()` throw: every reset path releases the old marks first (`releaseTestLog()`) and takes new ones after.
+  - **Callers (`serverFetch({ as })`)** must be users the fake tenant stores (seeded with `c8y.seed({ users })`); unknown users throw. The call switches `C8Y_DEVELOPMENT_*` to that user for this request only (dev-user injection sends its credentials) and restores them with `syncEnv()`. Nothing is stored and `world.setUser()` is not used, so fake-c8y enforces the caller's roles; only the world's `user` (the plugin's default) is unrestricted. Concurrent calls with `as` are not supported (one env).
+  - **Extending the fake tenant** happens in fake-c8y. Here, only adapt its API to the scoped `c8y` API (refs, muted replay, override context).
+  - **No tests of fake-c8y's own behavior here** (validation, deduplication, seeding semantics, query behavior): those belong in fake-c8y. Test c8y-nitro's adapter and the service through its routes. When the fake is wrong or missing something, file an issue on schplitt/fake-c8y instead of working around it in the adapter.
+  - **Realtime (Notification 2.0):** consumer sockets come from `createFakeWebSocket(world.realtime, { flavor: 'ws' })` (`fake-c8y/realtime`: events like the `ws` package's). `c8y.notifications.settled()` is `world.realtime.settled()`, with its own timeout message. `c8y.notifications.consumers(filter?)` passes `world.realtime.consumers()` through as is (fake-c8y's types): `settled()` does not wait for a listener opened later (lazy route, own timer, reconnect), so tests poll `consumers()` first. fake-c8y delivers notifications on the real timers, so `vi.useFakeTimers()` does not hold them back (unless a setup file fakes timers before `c8y-nitro/testing` loads). c8y-nitro's realtime client gets the fake socket through the test seam `src/utils/internal/testing.ts` (a `globalThis` symbol the setup file sets; unset in production — keep it that way, never import testing code from runtime code). c8y-realtime's REST calls use global `fetch`, which `interceptFetch()` routes to the fake for the platform's origin. Replayed arrangements run inside `world.muted()` so they do not notify.
+  - The service is started by the first `prepareTest()` (before the first test), not lazily by the first request: startup plugins (realtime subscriptions) must exist in tests that never call a route. Unhandled requests of the startup fail that test's `beforeEach` with "while the service started"; ones recorded after a test's `afterEach` fail the next `beforeEach` (judged by the strategy the finished test had) or the file's `afterAll`.
+  - `@c8y/client` uploads with the Node `form-data` package; `installFetchClient()` serializes it (`getBuffer()`/`getBoundary()`).
+  - **Override context:** the `c8y.override()` wrapper builds `C8yRequestContext` from fake-c8y's `ctx.call` (method, decoded path, query, parsed body, headers), so the handler's `request` copy keeps its body. The 501 of an unsupported request is fake-c8y's developer answer, with `overrideHint` naming `c8y.override(...)`. `serverFetch({ as })` builds its header with fake-c8y's `basicAuth()`. `C8yTestUser` / `C8yTestState` are fake-c8y's `C8yUser` / `C8yWorldState` narrowed to c8y-nitro's role and option key types.
+  - Managed objects created by `c8y.device()`/`managedObject()`/`binary()` are bound to refs at replay time (`refs` in `world.ts`), so `ref.id` only works while a test runs; ids have the platform's format and are deterministic per test.
 - Runtime registration (`registerRuntime()`) runs during module **setup**, not in `build:before`. Nitro's Vitest environment and runtime mode (`builder: false`) never run a build, so handlers registered in a build hook would be missing there. Only checks that need scanned routes (`checkProbes`) stay in `build:before`
 - **Vite builder compatibility** — `@c8y/client` does not load under Nitro's Vite builder yet: tslib's CJS entry (`__extends` destructure error) and CJS `cross-fetch` (`require is not defined`). The `tslib` alias lives in `rolldownConfig.resolve.alias` on purpose: a `nitro.options.alias` entry resolves from the project root, where pnpm does not expose `tslib`, and breaks production builds
 - Runtime handlers/middleware/plugins must be in `src/module/runtime/` directory structure:

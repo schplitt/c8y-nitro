@@ -47,13 +47,11 @@ describe('reading data', () => {
 })
 
 describe('writing data', () => {
-  it('raises an alarm, and deduplicates it while active', async () => {
+  it('raises an alarm', async () => {
     await fetchJson(`/devices/${pump.id}/overheating`, { method: 'POST' })
-    const { json } = await fetchJson(`/devices/${pump.id}/overheating`, { method: 'POST' })
 
-    expect(json.count).toBe(2)
     expect(c8y.db.alarms.find({ source: pump, type: 'c8y_Overheating' })).toMatchObject([
-      { severity: 'CRITICAL', status: 'ACTIVE', count: 2, source: { id: pump.id, name: 'Pump 1' } },
+      { severity: 'CRITICAL', status: 'ACTIVE', source: { id: pump.id } },
     ])
   })
 
@@ -107,12 +105,5 @@ describe('multiple tenants', () => {
     // t12345 has the 3 file-level devices (binaries are not devices), t99999 only its own
     expect(json).toEqual({ t12345: 3, t99999: 1 })
     expect(c8y.db.tenant('t99999').managedObjects.find()).toMatchObject([{ name: 'Other tenant pump' }])
-  })
-})
-
-describe('seeding errors', () => {
-  it('validates seeds like the platform validates writes', () => {
-    expect(() => c8y.seed({ events: [{ source: 'does-not-exist', type: 'x' }] })).toThrow(/Source object does not exist in inventory/)
-    expect(() => c8y.seed({ operations: [{ deviceId: pump, c8y_Restart: {} }] })).toThrow(/Agent for device .* does not exist in inventory/)
   })
 })

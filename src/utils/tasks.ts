@@ -2,6 +2,7 @@
 import type { TaskContext, TaskPayload } from 'nitro/types'
 import { Cron } from 'croner'
 import { ms } from 'itty-time'
+import { useTestingHooks } from './internal/testing'
 
 /**
  * Concurrency policy for a single job.
@@ -333,6 +334,12 @@ function resolveOnceDate(schedule: { in: number | string } | { at: Date | string
 export function c8yTasks(): TaskRegistry {
   const tasks = new Map<string, TaskDefinition>()
   const jobs = new Map<string, JobRecord>()
+  // tests: a stopped service instance takes its jobs with it
+  useTestingHooks()?.taskRegistries?.add(() => {
+    for (const name of [...jobs.keys()]) {
+      cancelJob(name)
+    }
+  })
 
   function execute(
     record: JobRecord,
