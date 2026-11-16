@@ -446,8 +446,10 @@ export const c8y = {
      *
      * @example
      * ```ts
+     * // count first: listeners opened at startup are listed too
+     * const before = c8y.notifications.consumers({ tenant: 't12345' }).length
      * await serverFetch('/alarms/listen', { method: 'POST' }) // opens a listener lazily
-     * await expect.poll(() => c8y.notifications.consumers({ tenant: 't12345' }).length).toBe(1)
+     * await expect.poll(() => c8y.notifications.consumers({ tenant: 't12345' }).length).toBe(before + 1)
      * c8y.seed({ alarms: [{ source: pump, type: 'c8y_Test', text: 'Test', severity: 'MINOR' }] })
      * await c8y.notifications.settled()
      * ```

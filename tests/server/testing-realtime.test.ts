@@ -68,6 +68,25 @@ describe('realtime triggers', () => {
     expect(c8y.db.alarms.find({ source: pump })).toMatchObject([{ type: 'c8y_Overheating' }])
   })
 
+  it('waits for a listener a route opens lazily next to the startup listener', async () => {
+    const tenant = c8y.tenant
+    const before = c8y.notifications.consumers({ tenant }).length
+    await fetchJson('/realtime-alarms', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ tenant }),
+    })
+    await expect.poll(() => c8y.notifications.consumers({ tenant }).length).toBe(before + 1)
+
+    expect(before).toBe(1)
+    expect(c8y.notifications.consumers({ tenant }).map((consumer) => consumer.subscription)).toEqual([
+      expect.stringMatching(/Measurements$/),
+      expect.stringMatching(/Alarms$/),
+    ])
+    c8y.seed({ alarms: [{ source: pump, type: 'c8y_Test', text: 'Test', severity: 'MINOR' }] })
+    await c8y.notifications.settled()
+  })
+
   describe('a realtime client the service created after startup', () => {
     c8y.subscriptions.add({ tenant: 't99999', user: 'service_t99999', password: 'pw' })
 
@@ -100,13 +119,19 @@ describe('realtime triggers', () => {
   })
 
   describe('with an existing hot measurement in the arranged data', () => {
-    // arranged (replayed) data is not a change: no notification
-    c8y.seed({ measurements: [temperature(99)] })
+    // a shared service listens already when the nested seed is replayed:
+    // arranged (replayed) data is not a change, so no notification
+    beforeAll(() => c8y.startService())
 
-    it('does not react to arranged data', async () => {
-      await c8y.notifications.settled()
+    describe('arranged after the service started', () => {
+      c8y.seed({ measurements: [temperature(99)] })
 
-      expect(c8y.db.alarms.find()).toEqual([])
+      it('does not react to arranged data', async () => {
+        await c8y.notifications.settled()
+
+        expect(c8y.db.measurements.find({ source: pump })).toHaveLength(1)
+        expect(c8y.db.alarms.find()).toEqual([])
+      })
     })
   })
 })

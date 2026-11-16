@@ -206,7 +206,7 @@ it('only lets operators run the check', async () => {
 
 - **One call:** `as` applies to that call only and stores nothing. The next call without `as` is made by the default user again.
 - **Like a real user:** the caller reaches your service through [dev user injection](/guide/dev-user) (`serverFetch()` replaces an `authorization` header you pass). `useUser()`, `useUserRoles()`, the auth middleware, and `useUserClient()` see it, and the platform checks the requests your service sends with its credentials against its roles, like the platform: a caller without `ROLE_INVENTORY_READ` gets 403 from the inventory.
-- **Seeded users only:** `as` with a user the fake tenant does not store throws. A persona of another tenant is seeded in its own `tenant`, also in the same call as the others: `c8y.seed({ users: [operator, partner] })`. Seeded users also get `ROLE_USER_MANAGEMENT_OWN_READ` and `ROLE_USER_MANAGEMENT_OWN_ADMIN`, like every platform user. Your manifest's `roles` exist in the tenant already; other custom roles must be seeded too: `c8y.seed({ roles: ['MY_ROLE'], users: [...] })`.
+- **Seeded users only:** `as` with a user the fake tenant does not store throws. A persona of another tenant is seeded in its own `tenant`, also in the same call as the others: `c8y.seed({ users: [operator, partner] })`. Seeded users also get `ROLE_USER_MANAGEMENT_OWN_READ` and `ROLE_USER_MANAGEMENT_OWN_ADMIN`, like every platform user. Your manifest's `roles` exist already in every subscribed tenant; other custom roles must be seeded too: `c8y.seed({ roles: ['MY_ROLE'], users: [...] })`.
 - **The default `user`** has full access on the platform, so tests that don't care about permissions work unchanged.
 - **One caller at a time:** calls with `as` cannot run concurrently in one file.
 
@@ -254,7 +254,7 @@ A test follows four steps:
 
 1. **The service sets itself up.** The service and its plugins start before the test (see [Service Instances](#service-instances)). When tests share a service, the subscriptions it created at startup stay in place, and connected, for all of them, also when a consumer reconnects; subscriptions created during a test are removed before the next one, and realtime clients your service created after startup are closed. Subscribe at startup (in a plugin), not lazily in a route. The start waits until the startup work that runs through the fake tenant is done (requests, realtime clients that are connecting). If that work still runs 5 seconds after your plugins have finished, the test fails. Your manifest's `requiredRoles` must list `ROLE_NOTIFICATION_2_ADMIN`: without it, the realtime client stops with a 403 in the log and no listener opens.
 2. **Trigger a write**, like a device would: `c8y.seed()` or `c8y.device()` inside the test, a route of your service, or `c8y.db.operations.update()`.
-3. **Wait until it is processed:** `await c8y.notifications.settled()`. This waits until every delivered notification has been handled, including notifications caused by the handlers' own writes. Notifications of a subscription without a consumer are not waited for. Notifications are delivered on the real timers, also after `vi.useFakeTimers()`.
+3. **Wait until it is processed:** `await c8y.notifications.settled()`. This waits until every delivered notification has been handled, including notifications caused by the handlers' own writes. Notifications of a subscription without a consumer are not waited for. Notifications are delivered on the real timers, also after `vi.useFakeTimers()`, unless a setup file installs fake timers before `c8y-nitro/testing` is loaded.
 4. **Query the fake world** with `c8y.db`.
 
 ```ts [test/overheating-trigger.test.ts]
@@ -272,15 +272,18 @@ Data arranged at file or `describe` level is rebuilt before every test, but it i
 
 ### When to poll first
 
-`settled()` waits only for work the fake tenant can see. Some listeners open later than that: a realtime client a route creates lazily, one your service opens on its own timer, or a reconnect after a dropped connection (about 1 second later). Poll until the listener is open, then call `settled()`:
+`settled()` waits only for work the fake tenant can see. Some listeners open later than that: a realtime client a route creates lazily, one your service opens on its own timer, or a reconnect after a dropped connection (about 1 second later). Poll until the new listener is open, then call `settled()`. Compare with the count before the call: listeners your service opened at startup are counted too.
 
 ```ts
+const before = c8y.notifications.consumers({ tenant: c8y.tenant }).length
 await serverFetch('/alarms/listen', { method: 'POST' }) // opens a listener lazily
-await expect.poll(() => c8y.notifications.consumers({ tenant: c8y.tenant }).length).toBe(1)
+await expect.poll(() => c8y.notifications.consumers({ tenant: c8y.tenant }).length).toBe(before + 1)
 
 c8y.seed({ alarms: [{ source: pump, type: 'pump_Test', text: 'Test', severity: 'MINOR' }] })
 await c8y.notifications.settled()
 ```
+
+Your service opens one listener per API (alarms, measurements, and so on) and tenant. A route that listens to two APIs adds two, and one that reuses an open listener adds none: adjust the expected count.
 
 `consumers(filter?)` lists the open listeners, one per socket. Filter by `tenant`, `subscription`, `subscriber`, or `token`.
 
