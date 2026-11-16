@@ -2,8 +2,10 @@ import { fileURLToPath } from 'node:url'
 import type { Plugin } from 'vite'
 // Also adds Vitest's `configureVitest` hook and `test` config to Vite's types.
 import type { ViteUserConfig } from 'vitest/config'
-import type { C8yTestOptions } from './types'
-import { DEFAULTS, PROVIDE_KEY } from './defaults'
+// The light entry of fake-c8y: it imports nothing else.
+import { DEFAULTS } from 'fake-c8y/defaults'
+import type { C8yTestOptions, C8yTestUser } from './types'
+import { PROVIDE_KEY } from './defaults'
 
 export type { C8yTestOptions } from './types'
 
@@ -32,7 +34,7 @@ export type { C8yTestOptions } from './types'
 export function c8yTest(options: C8yTestOptions = {}): Plugin {
   const setupFile = fileURLToPath(new URL('./setup.mjs', import.meta.url))
   const tenant = options.tenant ?? DEFAULTS.tenant
-  const user = options.user === undefined ? DEFAULTS.user : options.user
+  const user: C8yTestUser | null = options.user === undefined ? DEFAULTS.user : options.user
 
   return {
     name: 'c8y-nitro:test',
@@ -44,7 +46,7 @@ export function c8yTest(options: C8yTestOptions = {}): Plugin {
         C8Y_BOOTSTRAP_PASSWORD: DEFAULTS.bootstrapPassword,
         C8Y_DEVELOPMENT_TENANT: user?.tenant ?? tenant,
         C8Y_DEVELOPMENT_USER: user?.userName ?? DEFAULTS.user.userName,
-        C8Y_DEVELOPMENT_PASSWORD: DEFAULTS.developmentPassword,
+        C8Y_DEVELOPMENT_PASSWORD: DEFAULTS.userPassword,
       }
       const result: ViteUserConfig = {
         test: {

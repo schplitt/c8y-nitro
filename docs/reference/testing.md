@@ -10,16 +10,16 @@ import { c8yTest } from 'c8y-nitro/testing/vite'
 
 Vite plugin. Add it next to `nitro()` in `vitest.config.ts`. `options` is the baseline of the fake tenant for every test:
 
-| Option               | Type                            | Default                                | Description                                                                                                  |
-| -------------------- | ------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `tenant`             | `string`                        | `'t12345'`                             | Tenant the microservice is deployed in (`C8Y_BOOTSTRAP_TENANT`).                                             |
-| `user`               | `C8yTestUser \| null`           | `{ userName: 'test-user', roles: [] }` | Default caller of `serverFetch()`, full access on the platform. `null`: `GET /user/currentUser` answers 401. |
-| `subscriptions`      | `C8yTestSubscription[]`         | the deployed tenant                    | Subscribed tenants and their service users.                                                                  |
-| `tenantOptions`      | `Record<string, string>`        | `{}`                                   | Options of the own settings category in the deployed tenant.                                                 |
-| `onUnhandledRequest` | `'error' \| 'warn' \| 'ignore'` | `'error'`                              | What happens to platform requests the fake cannot answer.                                                    |
-| `baseUrl`            | `string`                        | `'https://t12345.cumulocity.test'`     | `C8Y_BASEURL` of the fake platform.                                                                          |
-| `roles`              | `'enforce' \| 'off'`            | `'enforce'`                            | Permission checks for users seeded with `c8y.seed({ users })`.                                               |
-| `service`            | `'per-test' \| 'per-file'`      | `'per-test'`                           | How long one service instance lives: a new one per test, or one per file.                                    |
+| Option               | Type                            | Default                                | Description                                                                                                                              |
+| -------------------- | ------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `tenant`             | `string`                        | `'t12345'`                             | Tenant the microservice is deployed in (`C8Y_BOOTSTRAP_TENANT`).                                                                         |
+| `user`               | `C8yTestUser \| null`           | `{ userName: 'test-user', roles: [] }` | Default caller of `serverFetch()`, full access on the platform. `null`: `GET /user/currentUser` answers 401.                             |
+| `subscriptions`      | `C8yTestSubscription[]`         | the deployed tenant                    | Subscribed tenants and their service users.                                                                                              |
+| `tenantOptions`      | `Record<string, string>`        | `{}`                                   | Options of the own settings category in the deployed tenant.                                                                             |
+| `onUnhandledRequest` | `'error' \| 'warn' \| 'ignore'` | `'error'`                              | What happens to platform requests the fake cannot answer.                                                                                |
+| `baseUrl`            | `string`                        | `'https://t12345.cumulocity.test'`     | `C8Y_BASEURL` of the fake platform.                                                                                                      |
+| `roles`              | `'enforce' \| 'off'`            | `'enforce'`                            | Permission checks for users seeded with `c8y.seed({ users })` and for service users (the manifest's `requiredRoles` plus `ROLE_SYSTEM`). |
+| `service`            | `'per-test' \| 'per-file'`      | `'per-test'`                           | How long one service instance lives: a new one per test, or one per file.                                                                |
 
 The plugin sets these environment variables unless `test.env` sets them: `C8Y_BASEURL`, `C8Y_BOOTSTRAP_TENANT`, `C8Y_BOOTSTRAP_USER`, `C8Y_BOOTSTRAP_PASSWORD`, `C8Y_DEVELOPMENT_TENANT`, `C8Y_DEVELOPMENT_USER`, `C8Y_DEVELOPMENT_PASSWORD`.
 
@@ -70,23 +70,24 @@ import { definePersona, serverFetch } from 'c8y-nitro/testing'
 
 ### Assert
 
-| Member                                                                            | Description                                                                                |
-| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `c8y.db.managedObjects` / `.measurements` / `.events` / `.alarms` / `.operations` | `get(idOrRef)` and `find(filter?)`: the platform's data as the API would return it.        |
-| `c8y.db.operations.update(id, { status, failureReason? })`                        | Updates an operation like a device would.                                                  |
-| `c8y.db.externalIds.find(managedObject?)`                                         | External IDs, optionally of one managed object.                                            |
-| `c8y.db.binaries.get(id)` / `.find()` / `.content(id)`                            | Binaries, and their content (`name`, `contentType`, `bytes`, `text()`).                    |
-| `c8y.db.events.attachment(eventId)`                                               | An event's attachment (`name`, `contentType`, `bytes`, `text()`).                          |
-| `await c8y.notifications.settled({ timeout? })`                                   | Waits until every notification delivered to your service's realtime handlers is processed. |
-| `c8y.notifications.subscriptions()`                                               | Notification 2.0 subscriptions your service created.                                       |
-| `c8y.db.users` / `.groups` / `.roles` / `.auditRecords` / `.retentionRules` / …   | The other collections of the fake platform, with `get()` and `find()`.                     |
-| `c8y.db.tenant(tenant)`                                                           | The same views for another tenant.                                                         |
-| `c8y.tenantOptions.get(key, scope?)`                                              | Current value of an option.                                                                |
-| `c8y.subscriptions.list()`                                                        | Current subscriptions.                                                                     |
-| `c8y.tenant`                                                                      | Deployed tenant id.                                                                        |
-| `c8y.calls` / `c8y.callsTo(pattern)`                                              | Platform requests of the current test (for debugging and caching checks).                  |
-| `c8y.unhandled`                                                                   | Requests of the current test the fake could not answer, with `reason` and `kind`.          |
-| `expect(c8y).toHaveReceived(pattern, { times? })`                                 | Asserts a matching platform request was sent.                                              |
+| Member                                                                            | Description                                                                                                                                                                 |
+| --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `c8y.db.managedObjects` / `.measurements` / `.events` / `.alarms` / `.operations` | `get(idOrRef)` and `find(filter?)`: the platform's data as the API would return it.                                                                                         |
+| `c8y.db.operations.update(id, { status, failureReason? })`                        | Updates an operation like a device would.                                                                                                                                   |
+| `c8y.db.externalIds.find(managedObject?)`                                         | External IDs, optionally of one managed object.                                                                                                                             |
+| `c8y.db.binaries.get(id)` / `.find()` / `.content(id)`                            | Binaries, and their content (`name`, `contentType`, `bytes`, `text()`).                                                                                                     |
+| `c8y.db.events.attachment(eventId)`                                               | An event's attachment (`name`, `contentType`, `bytes`, `text()`).                                                                                                           |
+| `await c8y.notifications.settled({ timeout? })`                                   | Waits until every notification delivered to your service's realtime handlers is processed. Notifications of a subscription without a consumer are not waited for.           |
+| `c8y.notifications.subscriptions()`                                               | Notification 2.0 subscriptions your service created.                                                                                                                        |
+| `c8y.notifications.consumers(filter?)`                                            | Open listeners (consumer sockets) of your service. `filter`: `{ tenant?, subscription?, subscriber?, token? }`. Poll it for a listener opened later, then call `settled()`. |
+| `c8y.db.users` / `.groups` / `.roles` / `.auditRecords` / `.retentionRules` / …   | The other collections of the fake platform, with `get()` and `find()`.                                                                                                      |
+| `c8y.db.tenant(tenant)`                                                           | The same views for another tenant.                                                                                                                                          |
+| `c8y.tenantOptions.get(key, scope?)`                                              | Current value of an option.                                                                                                                                                 |
+| `c8y.subscriptions.list()`                                                        | Current subscriptions.                                                                                                                                                      |
+| `c8y.tenant`                                                                      | Deployed tenant id.                                                                                                                                                         |
+| `c8y.calls` / `c8y.callsTo(pattern)`                                              | Platform requests of the current test (for debugging and caching checks).                                                                                                   |
+| `c8y.unhandled`                                                                   | Requests of the current test the fake could not answer, with `reason` and `kind`.                                                                                           |
+| `expect(c8y).toHaveReceived(pattern, { times? })`                                 | Asserts a matching platform request was sent.                                                                                                                               |
 
 ## Override Patterns
 
@@ -99,7 +100,7 @@ import { definePersona, serverFetch } from 'c8y-nitro/testing'
 | `*`     | any one segment                                           |
 | `**`    | the rest of the path (also empty), captured as `params._` |
 
-The handler receives the request: `method`, `path`, `params`, `query`, `body` (parsed JSON), `headers`, `tenant`, `user`, and the raw `request`, plus `callCount` (the requests this override got, this one included) and `next()` (answers the request as if the override did not exist and returns that `Response`; once per request). `body` is `undefined` for uploads. A handler that throws answers 500 and fails the test. Return a `Response` for full control, any other value to answer `200` with it as JSON, or nothing to answer `204`.
+The handler receives the request: `method`, `path`, `params`, `query`, `body` (parsed JSON), `headers`, `tenant`, `user`, and `request` (a copy of the `Request` the service sent, with a readable body, e.g. the bytes of an upload), plus `callCount` (the requests this override got, this one included) and `next()` (answers the request as if the override did not exist and returns that `Response`; once per request). `body` is `undefined` for uploads. A handler that throws answers 500 and fails the test. Return a `Response` for full control, any other value to answer `200` with it as JSON, or nothing to answer `204`.
 
 ## Types
 

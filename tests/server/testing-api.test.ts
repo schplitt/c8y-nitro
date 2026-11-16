@@ -101,6 +101,35 @@ describe('overrides', () => {
     expect(c8y.unhandled).toMatchObject([{ method: 'GET', path: '/features', kind: 'error' }])
   })
 
+  it('gives the handler the request', async () => {
+    let context: unknown
+    c8y.override('POST /event/:kind', (ctx) => {
+      context = ctx
+      return Response.json({}, { status: 201 })
+    })
+
+    const { json } = await fetchJson('/platform/request', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ tenant: c8y.tenant, method: 'POST', path: '/event/events?source=1', body: { type: 'door_open' } }),
+    })
+
+    expect(json).toEqual({ status: 201 })
+    expect(context).toMatchObject({
+      method: 'POST',
+      path: '/event/events',
+      query: { source: '1' },
+      body: { type: 'door_open' },
+      headers: expect.objectContaining({ 'content-type': 'application/json' }),
+      tenant: c8y.tenant,
+      user: expect.stringMatching(/^service_/),
+      params: { kind: 'events' },
+      request: expect.any(Request),
+      callCount: 1,
+      next: expect.any(Function),
+    })
+  })
+
   it('counts the requests an override got', async () => {
     c8y.override('GET /inventory/managedObjects/:id', ({ callCount, next }) => callCount === 1 ? Response.json({ message: 'Unavailable' }, { status: 503 }) : next())
 
@@ -125,6 +154,38 @@ describe('tenant options', () => {
   })
 })
 
+// the fixture's manifest (tests/server/fixture/nitro.config.ts) shapes the fake tenant
+describe('the manifest', () => {
+  const platformRequest = (method: string, path: string, body?: unknown) => fetchJson('/platform/request', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ tenant: c8y.tenant, method, path, body }),
+  })
+
+  it('gives the service users only its requiredRoles', async () => {
+    // ROLE_INVENTORY_READ is required, ROLE_INVENTORY_ADMIN is not
+    expect((await platformRequest('GET', '/inventory/managedObjects')).json).toEqual({ status: 200 })
+    expect((await platformRequest('POST', '/inventory/managedObjects', { name: 'pump' })).json).toEqual({ status: 403 })
+  })
+
+  it('stores its settings defaults as tenant options', async () => {
+    const { json } = await fetchJson('/tenant-options')
+
+    expect(json).toMatchObject({ 'myOption': 'default', 'credentials.secret': 'change-me', 'cacheExpiryOption': 'cache-default' })
+  })
+
+  describe('with a user that has its roles', () => {
+    // not seeded as roles: the manifest's roles exist in the tenant already
+    c8y.seed({ users: [{ userName: 'manifest-user', roles: ['SOME_CUSTOM_ROLE', 'ANOTHER_ROLE'] }] })
+
+    it('has them in the tenant', async () => {
+      const { json } = await fetchJson('/user', { as: 'manifest-user' })
+
+      expect(json.roles).toEqual(expect.arrayContaining(['SOME_CUSTOM_ROLE', 'ANOTHER_ROLE']))
+    })
+  })
+})
+
 describe('call log', () => {
   it('records platform requests', async () => {
     await deviceName()
@@ -146,7 +207,8 @@ describe('unsupported requests', () => {
 
     const { json } = await fetchJson('/platform/features')
 
-    expect(json.status).toBe(501)
+    // the message names c8y.override(), the way to answer it in a c8y-nitro test
+    expect(json).toMatchObject({ status: 501, body: { message: 'GET /features: endpoint not emulated by the fake Cumulocity platform. Answer it with c8y.override(\'GET /features\', ...).' } })
     expect(c8y.unhandled).toMatchObject([{ method: 'GET', path: '/features', reason: 'endpoint not emulated', kind: 'endpoint' }])
   })
 

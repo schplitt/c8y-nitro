@@ -196,8 +196,7 @@ const operator = definePersona({ userName: 'operator', roles: ['ROLE_INVENTORY_R
 const visitor = definePersona({ userName: 'visitor', roles: [] })
 const partner = definePersona({ userName: 'eve', roles: ['ROLE_ALARM_ADMIN'], tenant: 't99999' })
 
-c8y.seed({ users: [operator, visitor] })
-c8y.seed({ tenant: 't99999', users: [partner] })
+c8y.seed({ users: [operator, visitor, partner] }) // partner is seeded in t99999
 
 it('only lets operators run the check', async () => {
   expect((await serverFetch('/pumps/SN-1/check', { method: 'POST', as: operator })).status).toBe(200)
@@ -207,7 +206,7 @@ it('only lets operators run the check', async () => {
 
 - **One call:** `as` applies to that call only and stores nothing. The next call without `as` is made by the default user again.
 - **Like a real user:** the caller reaches your service through [dev user injection](/guide/dev-user) (`serverFetch()` replaces an `authorization` header you pass). `useUser()`, `useUserRoles()`, the auth middleware, and `useUserClient()` see it, and the platform checks the requests your service sends with its credentials against its roles, like the platform: a caller without `ROLE_INVENTORY_READ` gets 403 from the inventory.
-- **Seeded users only:** `as` with a user the fake tenant does not store throws. Seed a persona of another tenant in that tenant: `c8y.seed({ tenant: 't99999', users: [partner] })`. Seeded users also get `ROLE_USER_MANAGEMENT_OWN_READ` and `ROLE_USER_MANAGEMENT_OWN_ADMIN`, like every platform user. Custom roles (your manifest's) must exist in the tenant: seed them too, `c8y.seed({ roles: ['MY_ROLE'], users: [...] })`.
+- **Seeded users only:** `as` with a user the fake tenant does not store throws. A persona of another tenant is seeded in its own `tenant`, also in the same call as the others: `c8y.seed({ users: [operator, partner] })`. Seeded users also get `ROLE_USER_MANAGEMENT_OWN_READ` and `ROLE_USER_MANAGEMENT_OWN_ADMIN`, like every platform user. Your manifest's `roles` exist in the tenant already; other custom roles must be seeded too: `c8y.seed({ roles: ['MY_ROLE'], users: [...] })`.
 - **The default `user`** has full access on the platform, so tests that don't care about permissions work unchanged.
 - **One caller at a time:** calls with `as` cannot run concurrently in one file.
 
@@ -253,9 +252,9 @@ export default definePlugin(async () => {
 
 A test follows four steps:
 
-1. **The service sets itself up.** The service and its plugins start before the test (see [Service Instances](#service-instances)). When tests share a service, the subscriptions it created at startup stay in place, and connected, for all of them, also when a consumer reconnects; subscriptions created during a test are removed before the next one, and realtime clients your service created after startup are closed. Subscribe at startup (in a plugin), not lazily in a route.
+1. **The service sets itself up.** The service and its plugins start before the test (see [Service Instances](#service-instances)). When tests share a service, the subscriptions it created at startup stay in place, and connected, for all of them, also when a consumer reconnects; subscriptions created during a test are removed before the next one, and realtime clients your service created after startup are closed. Subscribe at startup (in a plugin), not lazily in a route. The start waits until the startup work that runs through the fake tenant is done (requests, realtime clients that are connecting). If that work still runs 5 seconds after your plugins have finished, the test fails. Your manifest's `requiredRoles` must list `ROLE_NOTIFICATION_2_ADMIN`: without it, the realtime client stops with a 403 in the log and no listener opens.
 2. **Trigger a write**, like a device would: `c8y.seed()` or `c8y.device()` inside the test, a route of your service, or `c8y.db.operations.update()`.
-3. **Wait until it is processed:** `await c8y.notifications.settled()`. This waits until every delivered notification has been handled, including notifications caused by the handlers' own writes.
+3. **Wait until it is processed:** `await c8y.notifications.settled()`. This waits until every delivered notification has been handled, including notifications caused by the handlers' own writes. Notifications of a subscription without a consumer are not waited for. Notifications are delivered on the real timers, also after `vi.useFakeTimers()`.
 4. **Query the fake world** with `c8y.db`.
 
 ```ts [test/overheating-trigger.test.ts]
@@ -269,7 +268,21 @@ it('raises an alarm when a pump reports a high temperature', async () => {
 })
 ```
 
-Data arranged at file or `describe` level is rebuilt before every test, but it is not a change, so it does not send notifications. Only writes during the test do. `c8y.notifications.subscriptions()` lists the subscriptions your service created.
+Data arranged at file or `describe` level is rebuilt before every test, but it is not a change, so it does not send notifications. Only writes during the test do. `c8y.notifications.subscriptions()` lists the subscriptions your service created, and `c8y.notifications.consumers()` the listeners it has open.
+
+### When to poll first
+
+`settled()` waits only for work the fake tenant can see. Some listeners open later than that: a realtime client a route creates lazily, one your service opens on its own timer, or a reconnect after a dropped connection (about 1 second later). Poll until the listener is open, then call `settled()`:
+
+```ts
+await serverFetch('/alarms/listen', { method: 'POST' }) // opens a listener lazily
+await expect.poll(() => c8y.notifications.consumers({ tenant: c8y.tenant }).length).toBe(1)
+
+c8y.seed({ alarms: [{ source: pump, type: 'pump_Test', text: 'Test', severity: 'MINOR' }] })
+await c8y.notifications.settled()
+```
+
+`consumers(filter?)` lists the open listeners, one per socket. Filter by `tenant`, `subscription`, `subscriber`, or `token`.
 
 ## Scopes
 
@@ -353,7 +366,7 @@ it('fails while the inventory is unavailable', async () => {
 
 - **Patterns** are `"[METHOD ]/path"`. Path segments can be `:name` (captured in `params`), `*` (any one segment), or `**` (the rest of the path).
 - **The handler's return value:** return a `Response` for any status, any other value for `200` with it as JSON, or nothing for `204`. A handler that throws answers 500 and fails the test after it ran, as a request that failed inside the fake tenant (likely a bug in the handler). To answer with an error on purpose, return a `Response` with that status.
-- **The handler's input:** `body` is the parsed JSON, the text, or `undefined` for uploads (multipart or binary); `request` is the raw request, with its body already read. `next()` can be called once per request.
+- **The handler's input:** `body` is the parsed JSON, the text, or `undefined` for uploads (multipart or binary); `request` is a copy of the raw request whose body you can read (for example the bytes of an upload). `next()` can be called once per request.
 - **`{ once: true }`** answers only the first match, for example a single temporary failure.
 - **`next()`** passes the request on to the fake platform (or an older override) and returns its answer. Use it to add latency, to change an answer, or to let the platform store a write while your service sees an error. **`callCount`** is the number of requests this override got, this one included.
 
@@ -394,8 +407,9 @@ The details, and where the fake simplifies, are in fake-c8y's [Emulated API](htt
 What c8y-nitro sets up on top:
 
 - **IDs** have the platform's format (managed objects get 8 digits, `47100001`). They are deterministic: the same arrangement gives the same IDs in every test and every run. Timestamps come from `Date`, so `vi.useFakeTimers()` controls them.
-- **Permissions** are checked like on the platform for users the tenant stores: a request your service sends with the credentials of a seeded user (for example the `as` caller of `serverFetch()`) gets 403 where that user lacks the rights, and lists show only what it may see. The default `user`, your service's own credentials, and requests without credentials keep full access. `c8yTest({ roles: 'off' })` turns the checks off.
-- **Tenant options:** default values from your manifest's settings are not applied. Set the options your test needs. `credentials.` options read as `<<Encrypted>>`, except in your microservice's own settings category, where the service gets the clear value.
+- **Permissions** are checked like on the platform for users the tenant stores: a request your service sends with the credentials of a seeded user (for example the `as` caller of `serverFetch()`) gets 403 where that user lacks the rights, and lists show only what it may see. Your service's service users (`useSubscribedTenantClients()` and the like) have the `requiredRoles` of your manifest plus `ROLE_SYSTEM`, like on the platform: a request that needs a role the manifest does not list answers 403 `security/Forbidden`. That 403 does not fail the test by itself (it is not an unsupported request): your route sees the error, and `c8y.calls` shows the request with `status: 403` and the service user (`service_<tenant>`). Add the role to `requiredRoles` in your manifest. The default `user` and requests without credentials keep full access. `c8yTest({ roles: 'off' })` turns the checks off.
+- **Manifest:** your manifest's `roles` exist in every subscribed tenant, and the `defaultValue`s of its `settings` are tenant options of your settings category (`c8y.tenantOptions.set()` or `c8y.tenantOptions.delete()` changes them for a test).
+- **Tenant options:** `credentials.` options read as `<<Encrypted>>`, except in your microservice's own settings category, where the service gets the clear value.
 - **Tenants:** each request is answered with the data of the tenant of its credentials. The `targetTenant` parameter is not read.
 - **Applications:** every tenant has the platform's default applications (Administration, Cockpit, Device Management, and microservices such as `smartrule`, `apama-ctrl-mt`, and `report-agent`), subscribed like on a new tenant. Calls to these microservices (`/service/smartrule/**`) are not emulated: they are unsupported requests (501, the test fails by default), so answer them with `c8y.override('POST /service/smartrule/**', ...)`. A microservice the tenant does not have answers 404 `microservice/Not Found`, like on the platform. `c8y.seed({ defaultApplications: false })` removes the default applications.
 

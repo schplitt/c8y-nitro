@@ -17,6 +17,10 @@ describe('realtime triggers', () => {
     }))
   })
 
+  it('listens at startup', () => {
+    expect(c8y.notifications.consumers()).toEqual([expect.objectContaining({ tenant: c8y.tenant })])
+  })
+
   it('raises an alarm when a measurement is too hot', async () => {
     c8y.seed({ measurements: [temperature(95)] })
     await c8y.notifications.settled()
@@ -29,6 +33,70 @@ describe('realtime triggers', () => {
     await c8y.notifications.settled()
 
     expect(c8y.db.alarms.find()).toEqual([])
+  })
+
+  it('fails settled() when notifications are not processed within the timeout', async () => {
+    // the handler's alarm request takes 100 ms: longer than the timeout
+    c8y.override('POST /alarm/alarms', async ({ next }) => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 100)
+      })
+      return next()
+    })
+    c8y.seed({ measurements: [temperature(95)] })
+
+    await expect(c8y.notifications.settled({ timeout: 50 })).rejects.toThrow(/^c8y\.notifications\.settled\(\): notifications still not processed after 50 ms \(.*(inflight|unacknowledged) [1-9]/)
+    await c8y.notifications.settled()
+  })
+
+  it('does not wait for notifications of a subscription without a consumer', async () => {
+    const { json } = await fetchJson('/platform/request', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        tenant: 't12345',
+        method: 'POST',
+        path: '/notification2/subscriptions',
+        body: { context: 'tenant', subscription: 'noConsumer', subscriptionFilter: { apis: ['measurements'] } },
+      }),
+    })
+    expect(json).toEqual({ status: 201 })
+
+    c8y.seed({ measurements: [temperature(95)] })
+    await c8y.notifications.settled({ timeout: 1000 })
+
+    expect(c8y.db.alarms.find({ source: pump })).toMatchObject([{ type: 'c8y_Overheating' }])
+  })
+
+  describe('a realtime client the service created after startup', () => {
+    c8y.subscriptions.add({ tenant: 't99999', user: 'service_t99999', password: 'pw' })
+
+    it('does not block startService() inside the test, nor settled() for its leftover subscription', async () => {
+      await fetchJson('/realtime-alarms', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ tenant: 't99999' }),
+      })
+      // the route opens its listener after it answered: poll for it
+      await expect.poll(() => c8y.notifications.consumers({ tenant: 't99999' }).length).toBe(1)
+      await c8y.notifications.settled()
+      expect(c8y.notifications.subscriptions().map((item) => item.tenant)).toContain('t99999')
+
+      await c8y.startService()
+
+      // the t99999 subscription is still listed, without a listener
+      expect(c8y.notifications.subscriptions().map((item) => item.tenant)).toContain('t99999')
+      expect(c8y.notifications.consumers({ tenant: 't99999' })).toEqual([])
+      const sensor = c8y.device({ name: 'Sensor', tenant: 't99999' })
+      c8y.seed({ tenant: 't99999', alarms: [{ source: sensor, type: 'c8y_Test', text: 'Test', severity: 'MINOR' }] })
+      await c8y.notifications.settled()
+
+      // the startup plugin listens again on the new service
+      expect(c8y.notifications.consumers({ tenant: c8y.tenant })).toHaveLength(1)
+      c8y.seed({ measurements: [temperature(95)] })
+      await c8y.notifications.settled()
+      expect(c8y.db.alarms.find({ source: pump })).toMatchObject([{ type: 'c8y_Overheating' }])
+    })
   })
 
   describe('with an existing hot measurement in the arranged data', () => {

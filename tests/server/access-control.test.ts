@@ -10,10 +10,10 @@ const admin = definePersona({ userName: 'adminUser', roles: ['ADMIN_ROLE', 'ROLE
 const otherTenantUser = definePersona({ userName: 'testUser', roles: [], tenant: 't00000' })
 const subscribedTenantUser = definePersona({ userName: 'testUser', roles: [], tenant: 't99999' })
 
-// custom roles exist in the tenant's role catalogue, like a manifest's roles on the platform
-c8y.seed({ roles: ['ROLE_DEVICE_CONTROL', 'SOME_CUSTOM_ROLE', 'ADMIN_ROLE', 'ROLE_B'], users: [inventoryReader, someUser, admin] })
-c8y.seed({ tenant: 't00000', users: [otherTenantUser] })
-c8y.seed({ tenant: 't99999', users: [subscribedTenantUser] })
+// roles outside the manifest exist in the tenant's role catalogue (the manifest's
+// roles, like SOME_CUSTOM_ROLE, are there already); a user with its own
+// `tenant` is seeded in that tenant
+c8y.seed({ roles: ['ROLE_DEVICE_CONTROL', 'ADMIN_ROLE', 'ROLE_B'], users: [inventoryReader, someUser, admin, otherTenantUser, subscribedTenantUser] })
 
 describe('user resources', () => {
   it('returns the current user and their roles', async () => {

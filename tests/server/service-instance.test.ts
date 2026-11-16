@@ -1,7 +1,8 @@
 // Service instances: which tests share one Nitro app (plugins, caches,
 // realtime clients). Order-dependent on purpose: tests compare with the
 // instance the previous test saw.
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import process from 'node:process'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { c8y } from 'c8y-nitro/testing'
 import { clearCredentialHookEvents, getCredentialHookEvents } from './fixture/plugins/00-credentials-hook-recorder'
 import { fetchJson } from './utils'
@@ -176,8 +177,32 @@ describe('startService() inside a test keeps the test\'s own log', () => {
     await c8y.startService()
 
     expect(c8y).toHaveReceived('GET /features', { times: 1 })
+    // the restart's startup requests (realtime subscriptions) are not the test's
+    expect(c8y.calls.map((call) => `${call.method} ${call.path}`)).toEqual(['GET /features'])
     expect(c8y.unhandled).toMatchObject([{ path: '/features' }])
   })
+})
+
+// The fixture plugin 01-sync-startup-request.ts sends GET /features while the
+// app is created, before any await: the start's log must include it. The
+// start fails the test in a setup hook, so the error is checked in afterAll
+// (an assertion failing there fails the run).
+describe('an unsupported request a plugin sends while the app is created', () => {
+  let errors = ''
+  beforeAll(() => {
+    process.env.FIXTURE_SYNC_STARTUP_REQUEST = '1'
+  })
+  afterEach(({ task }) => {
+    delete process.env.FIXTURE_SYNC_STARTUP_REQUEST
+    errors = (task.result?.errors ?? []).map((error) => error.message).join('\n')
+  })
+  afterAll(() => {
+    delete process.env.FIXTURE_SYNC_STARTUP_REQUEST
+    expect(errors).toContain('request(s) while the service started')
+    expect(errors).toContain('GET /features')
+  })
+
+  it.fails('fails the test that started the service, as a request while it started', () => {})
 })
 
 describe('concurrent tests', () => {

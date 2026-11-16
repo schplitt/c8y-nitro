@@ -12,14 +12,14 @@
  * `clean`, and a new instance starts.
  */
 import process from 'node:process'
-import { Buffer } from 'node:buffer'
 import { useRuntimeConfig } from 'nitro/runtime-config'
-import type { C8yCheckpoint, C8yUnhandledRequest, World } from 'fake-c8y'
+import { c8yManifest } from 'c8y-nitro/runtime'
+import type { C8yCheckpoint, C8yLogMark, C8yLogRange, C8yMicroserviceManifest, C8yRequest, C8yUnhandledRequest, World } from 'fake-c8y'
 import { createWorld } from 'fake-c8y'
 import type { FakeWebSocketClass } from 'fake-c8y/realtime'
-import { createFakeWebSocket, waitForRealtimeStartup } from 'fake-c8y/realtime'
+import { createFakeWebSocket, SettleTimeoutError } from 'fake-c8y/realtime'
 import type { C8yTestOptions, C8yTestState, UnhandledRequestStrategy } from './types'
-import { DEFAULTS } from './defaults'
+import { DEFAULTS } from 'fake-c8y/defaults'
 import { arrangementsOf, concurrentError, isConcurrentRunning } from './scope'
 import { useTestingHooks } from '../utils/internal/testing'
 
@@ -37,6 +37,11 @@ interface WorldState {
   startup: C8yCheckpoint | undefined
   WebSocket: FakeWebSocketClass
 }
+
+/**
+ * Milliseconds the startup work through the fake may take.
+ */
+const STARTUP_TIMEOUT = 5000
 
 let state: WorldState | undefined
 let baseline: C8yTestOptions = {}
@@ -75,17 +80,18 @@ function useState(): WorldState {
       tenant: baseline.tenant,
       user: baseline.user === undefined ? DEFAULTS.user : baseline.user,
       ...(baseline.subscriptions ? { subscriptions: baseline.subscriptions } : {}),
-      ...(baseline.tenantOptions ? { tenantOptions: baseline.tenantOptions as Record<string, string> } : {}),
+      ...(baseline.tenantOptions ? { tenantOptions: baseline.tenantOptions } : {}),
       baseUrl: platformUrl(),
       bootstrapUser: process.env.C8Y_BOOTSTRAP_USER || DEFAULTS.bootstrapUser,
       settingsCategory: useRuntimeConfig().c8ySettingsCategory as string,
+      // manifest roles exist in the tenants, settings defaults are tenant
+      // options, and service users have the manifest's requiredRoles
+      // cast: fake-c8y's manifest type has an index signature that a typed interface cannot satisfy; remove it once fake-c8y accepts it
+      manifest: c8yManifest as unknown as C8yMicroserviceManifest,
       // read Date at call time, so vi.useFakeTimers() controls timestamps
       now: () => Date.now(),
       roles: baseline.roles ?? 'enforce',
-      unsupported: (request) => Response.json(
-        { error: 'c8y-nitro/testing/unsupported', message: `${request.method} ${request.path}: ${request.reason}. Answer it with c8y.override('${request.method} ${request.path}', ...).` },
-        { status: 501 },
-      ),
+      overrideHint: (request) => `c8y.override('${request.method} ${request.path}', ...)`,
       onUnsupported: (request) => {
         if (onUnhandledRequest === 'warn') {
           console.warn(unhandledMessage([request]))
@@ -97,7 +103,7 @@ function useState(): WorldState {
       world,
       clean: world.checkpoint(),
       startup: undefined,
-      WebSocket: createFakeWebSocket(world.realtime, { encodeMessage: (text) => Buffer.from(text) }),
+      WebSocket: createFakeWebSocket(world.realtime, { flavor: 'ws' }),
     }
     syncEnv(world)
   }
@@ -148,6 +154,17 @@ let startupStrategy: UnhandledRequestStrategy = 'error'
  * Realtime clients that existed when the current instance finished starting.
  */
 let startupRealtimeTenants = new Set<string>()
+
+/**
+ * Where the current test's part of the call log starts: taken after the
+ * platform was reset (and the service started) for the test.
+ */
+let testMark: C8yLogMark | undefined
+/**
+ * The service restarts inside the current test (`c8y.startService()`): their
+ * requests are not the test's.
+ */
+let restarts: C8yLogRange[] = []
 
 /**
  * Gives the tests of a scope one shared service instance, started (before
@@ -234,11 +251,13 @@ async function prepare(task: TaskLike & { name?: string, concurrent?: boolean })
     if (current.startup && currentInstance === key) {
       return []
     }
+    releaseTestLog()
     await stopService()
     world.reset({ to: current.clean })
     refs.clear()
     const unhandled = await startService()
     currentInstance = key
+    markTest()
     return unhandled
   }
   if (isConcurrentRunning()) {
@@ -250,6 +269,7 @@ async function prepare(task: TaskLike & { name?: string, concurrent?: boolean })
   // service starts; the deeper ones before each test
   const { key, scope } = instanceKey(task)
   const shared = scope === undefined ? scopes.length : scopes.indexOf(scope) + 1
+  releaseTestLog()
   if (current.startup && currentInstance === key) {
     await closeRealtimeClientsSinceStartup()
     world.reset({ to: current.startup, consumers: 'keep' })
@@ -259,6 +279,7 @@ async function prepare(task: TaskLike & { name?: string, concurrent?: boolean })
     }
     onUnhandledRequest = startupStrategy
     replay(scopes.slice(shared))
+    markTest()
     return []
   }
   await stopService()
@@ -271,6 +292,7 @@ async function prepare(task: TaskLike & { name?: string, concurrent?: boolean })
   // a strategy set by the shared arrangements (`c8y.apply()`) is not world state
   startupStrategy = onUnhandledRequest
   replay(scopes.slice(shared))
+  markTest()
   return unhandled
 }
 
@@ -300,33 +322,54 @@ async function startService(): Promise<C8yUnhandledRequest[]> {
   // wait for async plugins, so startup work such as realtime subscriptions is
   // in place even for tests that never call a route. The closed app is
   // replaced only now, so background work of the previous test cannot create
-  // the new one on stale data.
-  const { useNitroApp } = await import('nitro/app')
-  if (replaceApp) {
-    // late background work of the old instance may have touched module state
-    resetRuntimeState()
-    ;(useNitroApp as { _instance?: unknown })._instance = undefined
-    replaceApp = false
-  }
-  const app = useNitroApp() as { ready?: Promise<void> }
-  running = true
+  // the new one on stale data. The startup requests are not part of any
+  // test's call log; marked before the app exists, so requests that plugins
+  // send while it is created count too.
+  const from = world.mark()
   try {
+    const { useNitroApp } = await import('nitro/app')
+    if (replaceApp) {
+      // late background work of the old instance may have touched module state
+      resetRuntimeState()
+      ;(useNitroApp as { _instance?: unknown })._instance = undefined
+      replaceApp = false
+    }
+    const app = useNitroApp() as { ready?: Promise<void> }
+    running = true
     await app.ready
-    await waitForRealtimeStartup(world.realtime, () => world.inflight)
+    // the startup work that runs through the fake (requests, connecting
+    // sockets) is done; a start still busy after 5 s fails
+    await settleStartup(world)
   } catch (error) {
     // a failed start is closed, so the next test starts a new instance; the
     // start error fails this test, its unhandled requests are dropped
-    world.unhandled = []
+    world.takeUnhandledSince(from)
+    from.release()
     await stopService()
     throw error
   }
-  const unhandled = world.unhandled
-  world.unhandled = []
-  // the startup requests are not part of any test's call log
-  world.calls = []
+  const unhandled = world.takeUnhandledSince(from)
+  from.release()
   current.startup = world.checkpoint()
   startupRealtimeTenants = new Set(useTestingHooks()?.realtimePool?.keys() ?? [])
   return unhandled
+}
+
+/**
+ * Waits for the startup work that runs through the fake, with a c8y-nitro
+ * message when it does not finish within `STARTUP_TIMEOUT`.
+ * @param world - The world
+ */
+async function settleStartup(world: World): Promise<void> {
+  try {
+    await world.realtime.settled({ timeout: STARTUP_TIMEOUT })
+  } catch (error) {
+    if (error instanceof SettleTimeoutError) {
+      const open = Object.entries(error.status).filter(([, count]) => count > 0).map(([field, count]) => `${field} ${count}`)
+      throw new Error(`c8y-nitro/testing: the service start did not finish within ${STARTUP_TIMEOUT} ms, its work through the fake tenant still runs (${open.join(', ') || 'nothing open at the last check'})`, { cause: error })
+    }
+    throw error
+  }
 }
 
 /**
@@ -380,19 +423,17 @@ function resetRuntimeState(): void {
 export async function restartService(): Promise<void> {
   const current = useState()
   const { world } = current
-  // the test's own requests stay in its log; the restart's startup does not
-  // (fake-c8y appends to the array in place: the restart gets its own)
-  const calls = world.calls
-  const before = world.unhandled
-  world.calls = []
-  world.unhandled = []
-  let unhandled: C8yUnhandledRequest[]
+  // the test's own requests stay in its log; the restart's do not
+  const from = world.mark()
+  let unhandled: C8yUnhandledRequest[] = []
   try {
     await stopService()
     unhandled = await startService()
   } finally {
-    world.calls = calls
-    world.unhandled = before
+    const until = world.mark()
+    restarts.push({ from, until })
+    // the ones of the stop (the start took its own); dropped if the start failed
+    unhandled = [...world.takeUnhandledSince(from, until), ...unhandled]
   }
   // the startup checkpoint holds this test's data: no other test may use it
   current.startup = undefined
@@ -420,6 +461,55 @@ async function closeRealtimeClientsSinceStartup(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// The test's call log
+
+/**
+ * Starts the current test's part of the call log (after a reset: marks of the
+ * log before it are no longer valid).
+ */
+function markTest(): void {
+  releaseTestLog()
+  testMark = useWorld().mark()
+}
+
+/**
+ * Releases the marks of the current test's call log (before a reset, and when
+ * the file ends).
+ */
+export function releaseTestLog(): void {
+  testMark?.release()
+  for (const { from, until } of restarts) {
+    from.release()
+    until?.release()
+  }
+  testMark = undefined
+  restarts = []
+}
+
+/**
+ * The requests of the current test, without the ones of service restarts.
+ */
+export function testCalls(): C8yRequest[] {
+  return testMark ? useWorld().callsSince(testMark, undefined, { except: restarts }) : []
+}
+
+/**
+ * The requests of the current test the fake tenant could not answer, and not
+ * reported yet.
+ */
+export function testUnhandled(): C8yUnhandledRequest[] {
+  return testMark ? useWorld().unhandledSince(testMark) : []
+}
+
+/**
+ * Like `testUnhandled()`, and marks them reported: a later call returns only
+ * the ones recorded since (e.g. background work after the test ended).
+ */
+export function takeTestUnhandled(): C8yUnhandledRequest[] {
+  return testMark ? useWorld().takeUnhandledSince(testMark) : []
+}
+
+// ---------------------------------------------------------------------------
 // State helpers
 
 /**
@@ -428,7 +518,7 @@ async function closeRealtimeClientsSinceStartup(): Promise<void> {
  */
 export function applyState(partial: Partial<Omit<C8yTestState, 'user'>>): void {
   const { onUnhandledRequest: strategy, tenantOptions, ...rest } = partial
-  useWorld().apply({ ...rest, ...(tenantOptions ? { tenantOptions: tenantOptions as Record<string, string> } : {}) })
+  useWorld().apply({ ...rest, ...(tenantOptions ? { tenantOptions } : {}) })
   if (strategy !== undefined) {
     onUnhandledRequest = strategy
   }

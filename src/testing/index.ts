@@ -1,14 +1,13 @@
 import process from 'node:process'
-import { Buffer } from 'node:buffer'
 import type { C8YTenantOptionKey } from 'c8y-nitro/types'
 import { serverFetch as nitroServerFetch } from 'nitro'
 import { TestRunner } from 'vitest'
-import type { C8yBinaryInput, C8yDb, C8yManagedObjectInput, C8yRequest, C8ySeed, C8yTenantOptionScope, C8yUnhandledRequest, NotificationSubscription } from 'fake-c8y'
-import { compileRoute, matchRoute, splitPath } from 'fake-c8y'
+import type { C8yBinaryInput, C8yDb, C8yManagedObjectInput, C8yRequest, C8ySeed, C8yTenantOptionScope, C8yUnhandledRequest, NotificationSubscription, Realtime, RealtimeConsumer } from 'fake-c8y'
+import { basicAuth, matchesCall } from 'fake-c8y'
+import { SettleTimeoutError } from 'fake-c8y/realtime'
 import type { C8yRequestHandler, C8yTestState, C8yTestSubscription, C8yTestUser } from './types'
-import { DEFAULTS } from './defaults'
 import { arrange, assertActiveTest, isCollecting, isConcurrentRunning, runningSuite } from './scope'
-import { applyState, refs, restartService, shareService, syncEnv, useWorld } from './world'
+import { applyState, refs, restartService, shareService, syncEnv, testCalls, testUnhandled, useWorld } from './world'
 
 export type * from './types'
 export type { C8yAlarmInput, C8yAlarmSeverity, C8yAlarmStatus, C8yApplicationInput, C8yAuditRecordInput, C8yBinaryContent, C8yBinaryInput, C8yDb, C8yDbCollection, C8yDbFilter, C8yEventInput, C8yGroupInput, C8yIdInput, C8yInventoryRoleInput, C8yManagedObjectInput, C8yMeasurementGeneratorInput, C8yMeasurementInput, C8yNewDeviceRequestInput, C8yOperationInput, C8yOperationStatus, C8yRequest, C8yRetentionRuleInput, C8ySeed, C8yTenantOptionScope, C8yUnhandledRequest, C8yUserInput } from 'fake-c8y'
@@ -114,7 +113,7 @@ export const c8y = {
    * Every request the microservice sent to the platform in this test, in order.
    */
   get calls(): readonly C8yRequest[] {
-    return useWorld().calls
+    return testCalls()
   },
 
   /**
@@ -123,7 +122,7 @@ export const c8y = {
    * fails after it ran if this is not empty.
    */
   get unhandled(): readonly C8yUnhandledRequest[] {
-    return useWorld().unhandled
+    return testUnhandled()
   },
 
   /**
@@ -319,17 +318,17 @@ export const c8y = {
   override(pattern: string, handler: C8yRequestHandler, options: { once?: boolean } = {}): void {
     arrange('c8y.override()', () => {
       const once = options.once ?? false
-      useWorld().override(pattern, async (request, ctx) => {
+      useWorld().override(pattern, (request, ctx) => {
         if (once && ctx.callCount > 1) {
           return ctx.next()
         }
-        const url = new URL(request.url)
+        const { method, path, query, body, headers } = ctx.call
         return handler({
-          method: request.method.toUpperCase(),
-          path: url.pathname.split('/').map(decodeURIComponent).join('/'),
-          query: Object.fromEntries(url.searchParams),
-          body: await readBody(request),
-          headers: Object.fromEntries(request.headers),
+          method,
+          path,
+          query,
+          body,
+          headers,
           tenant: ctx.tenant,
           user: ctx.user,
           params: ctx.params,
@@ -406,7 +405,8 @@ export const c8y = {
     /**
      * Waits until every notification delivered to your service's realtime
      * handlers has been processed (acknowledged), including notifications
-     * caused by the handlers' own writes.
+     * caused by the handlers' own writes. Notifications of a subscription
+     * without a consumer are not waited for.
      *
      * @example
      * ```ts
@@ -419,22 +419,14 @@ export const c8y = {
      */
     async settled(options: { timeout?: number } = {}): Promise<void> {
       const timeout = options.timeout ?? 5000
-      const start = Date.now()
-      const realtime = useWorld().realtime
-      const tick = () => new Promise<void>((resolve) => {
-        setTimeout(resolve, 1)
-      })
-      // give subscriptions created just now a moment to get a consumer
-      while (Date.now() - start < 500 && realtime.subscriptions.some((item) => ![...realtime.tokens.values()].some((token) => token.tenant === item.tenant && token.subscription === item.subscription))) {
-        await tick()
-      }
-      let quietTicks = 0
-      while (quietTicks < 3) {
-        await tick()
-        quietTicks = realtime.pending() === 0 ? quietTicks + 1 : 0
-        if (Date.now() - start > timeout) {
-          throw new Error(`c8y.notifications.settled(): ${realtime.pending()} notification(s) still not processed after ${timeout} ms`)
+      try {
+        await useWorld().realtime.settled({ timeout })
+      } catch (error) {
+        if (error instanceof SettleTimeoutError) {
+          const open = Object.entries(error.status).filter(([, count]) => count > 0).map(([field, count]) => `${field} ${count}`)
+          throw new Error(`c8y.notifications.settled(): notifications still not processed after ${timeout} ms (${open.join(', ') || 'nothing open at the last check'})`, { cause: error })
         }
+        throw error
       }
     },
 
@@ -444,6 +436,26 @@ export const c8y = {
     subscriptions(): readonly NotificationSubscription[] {
       return useWorld().realtime.subscriptions
     },
+
+    /**
+     * The open consumer sockets (listeners) of your service, one entry per
+     * socket (sockets still connecting are not listed). `settled()` waits
+     * only for work it can see: for a listener your service opens later
+     * (a lazy route, its own timer, a reconnect after a drop), poll until it
+     * is open, then call `settled()`.
+     *
+     * @example
+     * ```ts
+     * await serverFetch('/alarms/listen', { method: 'POST' }) // opens a listener lazily
+     * await expect.poll(() => c8y.notifications.consumers({ tenant: 't12345' }).length).toBe(1)
+     * c8y.seed({ alarms: [{ source: pump, type: 'c8y_Test', text: 'Test', severity: 'MINOR' }] })
+     * await c8y.notifications.settled()
+     * ```
+     * @param filter - Only sockets of this tenant, subscription, subscriber, or token
+     */
+    consumers(filter?: Parameters<Realtime['consumers']>[0]): RealtimeConsumer[] {
+      return useWorld().realtime.consumers(filter)
+    },
   },
 
   /**
@@ -451,8 +463,7 @@ export const c8y = {
    * @param pattern - Route pattern, e.g. `'GET /tenant/options/**'`
    */
   callsTo(pattern: string): C8yRequest[] {
-    const route = compileRoute(pattern)
-    return useWorld().calls.filter((call) => matchRoute(route, call.method, splitPath(call.path)))
+    return testCalls().filter((call) => matchesCall(pattern, call))
   },
 
 }
@@ -468,9 +479,10 @@ export type C8yCaller = string | { userName: string, tenant?: string }
  */
 export type C8yServerFetchInit = NonNullable<Parameters<typeof nitroServerFetch>[1]> & {
   /**
-   * The user making this call: a user that exists in the fake tenant (seed it
-   * with `c8y.seed({ users })`). Applies to this call only. Without `as`, the
-   * default `user` from the `c8yTest()` config calls.
+   * The user making this call: a seeded user (`c8y.seed({ users })`), by
+   * name or as `{ userName, tenant? }`. Applies to this call only and creates
+   * no data. Without `as`, the default `user` from the `c8yTest()` config
+   * calls.
    */
   as?: C8yCaller
 }
@@ -530,30 +542,9 @@ export async function serverFetch(path: string, init: C8yServerFetchInit = {}): 
   process.env.C8Y_DEVELOPMENT_USER = userName
   try {
     const headers = new Headers(requestInit.headers)
-    headers.set('authorization', `Basic ${Buffer.from(`${tenant}/${userName}:${DEFAULTS.developmentPassword}`).toString('base64')}`)
+    headers.set('authorization', basicAuth({ tenant, user: userName }))
     return await nitroServerFetch(path, { ...requestInit, headers })
   } finally {
     syncEnv(world)
-  }
-}
-
-/**
- * The body of an overridden request: parsed JSON, text, or `undefined`
- * (also for binary uploads).
- * @param request - The request copy the override got
- */
-async function readBody(request: Request): Promise<unknown> {
-  const contentType = request.headers.get('content-type') ?? ''
-  if (!request.body || contentType.startsWith('multipart/') || contentType.includes('octet-stream')) {
-    return undefined
-  }
-  const text = await request.text()
-  if (!text) {
-    return undefined
-  }
-  try {
-    return JSON.parse(text)
-  } catch {
-    return text
   }
 }

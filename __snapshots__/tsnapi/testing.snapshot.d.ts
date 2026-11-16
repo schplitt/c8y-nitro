@@ -23,23 +23,8 @@ export interface C8yTestOptions extends C8yTestState {
   roles?: 'enforce' | 'off';
   service?: 'per-test' | 'per-file';
 }
-export interface C8yTestState {
-  tenant?: string;
-  user?: C8yTestUser | null;
-  subscriptions?: C8yTestSubscription[];
-  tenantOptions?: Partial<Record<C8YTenantOptionKey, string>> & Record<string, string>;
+export interface C8yTestState extends C8yWorldState<C8yTestRole, C8YTenantOptionKey> {
   onUnhandledRequest?: UnhandledRequestStrategy;
-}
-export interface C8yTestSubscription {
-  tenant: string;
-  user: string;
-  password: string;
-}
-export interface C8yTestUser {
-  userName: string;
-  roles?: C8yTestRole[];
-  tenant?: string;
-  [field: string]: unknown;
 }
 export interface ToHaveReceivedOptions {
   times?: number;
@@ -56,6 +41,8 @@ export type C8yServerFetchInit = NonNullable<Parameters<typeof serverFetch$1>[1]
   as?: C8yCaller;
 };
 export type C8yTestRole = keyof C8YRoles | C8YRole;
+export type C8yTestSubscription = C8ySubscription;
+export type C8yTestUser = C8yUser<C8yTestRole>;
 export type UnhandledRequestStrategy = 'error' | 'warn' | 'ignore';
 // #endregion
 
@@ -95,6 +82,7 @@ export declare const c8y: {
       timeout?: number;
     }): Promise<void>;
     subscriptions(): readonly NotificationSubscription[];
+    consumers(filter?: Parameters<Realtime["consumers"]>[0]): RealtimeConsumer[];
   };
   callsTo(pattern: string): C8yRequest$1[];
 };

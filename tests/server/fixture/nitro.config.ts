@@ -25,7 +25,16 @@ export default defineConfig({
         { key: 'credentials.secret', defaultValue: 'change-me' },
         { key: 'cacheExpiryOption', defaultValue: 'cache-default' },
       ],
-      requiredRoles: ['ROLE_OPTION_MANAGEMENT_READ'],
+      requiredRoles: [
+        'ROLE_OPTION_MANAGEMENT_READ',
+        'ROLE_OPTION_MANAGEMENT_ADMIN',
+        'ROLE_INVENTORY_READ',
+        'ROLE_IDENTITY_READ',
+        'ROLE_MEASUREMENT_READ',
+        'ROLE_ALARM_ADMIN',
+        'ROLE_DEVICE_CONTROL_ADMIN',
+        'ROLE_NOTIFICATION_2_ADMIN',
+      ],
     },
     cache: {
       credentialsTTL: 400,

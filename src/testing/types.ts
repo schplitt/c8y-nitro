@@ -1,4 +1,5 @@
 import type { C8YRole, C8YRoles, C8YTenantOptionKey } from 'c8y-nitro/types'
+import type { C8ySubscription, C8yUser, C8yWorldState } from 'fake-c8y'
 
 /**
  * A role: the manifest's custom roles, known platform roles, or any string.
@@ -6,33 +7,17 @@ import type { C8YRole, C8YRoles, C8YTenantOptionKey } from 'c8y-nitro/types'
 export type C8yTestRole = keyof C8YRoles | C8YRole
 
 /**
- * The user calling the microservice (returned by `GET /user/currentUser`).
+ * The user calling the microservice (returned by `GET /user/currentUser`):
+ * `userName`, `roles`, `tenant` (default: the tenant the microservice is
+ * deployed in; drives the injected dev user's auth header), and any other
+ * `ICurrentUser` fields (email, firstName, …).
  */
-export interface C8yTestUser {
-  userName: string
-  /**
-   * Effective roles of the user.
-   */
-  roles?: C8yTestRole[]
-  /**
-   * Tenant the user belongs to. Defaults to the tenant the microservice is
-   * deployed in. Drives the injected dev user's auth header.
-   */
-  tenant?: string
-  /**
-   * Any other `ICurrentUser` fields (email, firstName, …).
-   */
-  [field: string]: unknown
-}
+export type C8yTestUser = C8yUser<C8yTestRole>
 
 /**
  * Service user credentials of a tenant subscribed to the microservice.
  */
-export interface C8yTestSubscription {
-  tenant: string
-  user: string
-  password: string
-}
+export type C8yTestSubscription = C8ySubscription
 
 /**
  * What to do with platform requests no handler answers.
@@ -44,27 +29,7 @@ export type UnhandledRequestStrategy = 'error' | 'warn' | 'ignore'
  * `c8yTest()` plugin config, and as partial overrides in
  * `c8y.apply()`.
  */
-export interface C8yTestState {
-  /**
-   * Tenant the microservice is deployed in (the bootstrap tenant).
-   * @default 't12345'
-   */
-  tenant?: string
-  /**
-   * User calling the microservice. `null` makes `GET /user/currentUser`
-   * answer 401.
-   * @default { userName: 'test-user', roles: [] }
-   */
-  user?: C8yTestUser | null
-  /**
-   * Tenants subscribed to the microservice, with their service users.
-   * @default one subscription for the deployed tenant
-   */
-  subscriptions?: C8yTestSubscription[]
-  /**
-   * Tenant options of the microservice's own settings category, in the deployed tenant.
-   */
-  tenantOptions?: Partial<Record<C8YTenantOptionKey, string>> & Record<string, string>
+export interface C8yTestState extends C8yWorldState<C8yTestRole, C8YTenantOptionKey> {
   /**
    * What to do with platform requests that no handler answers. `'error'`
    * fails the test after it ran.
@@ -104,7 +69,8 @@ export interface C8yRequestContext {
    */
   params: Record<string, string>
   /**
-   * The raw request, body already consumed.
+   * A copy of the `Request` the service sent, with a readable body (e.g.
+   * the bytes of a binary upload).
    */
   request: Request
   /**
@@ -141,9 +107,9 @@ export interface C8yTestOptions extends C8yTestState {
    * Whether platform requests are checked against the caller's rights, like
    * on the platform: users you seed with `c8y.seed({ users })`, also as
    * callers of `serverFetch(path, { as })`, get 403 where they lack the
-   * rights. The default `user`, the service's own credentials, and requests
-   * without credentials keep full access. `'off'` gives every caller full
-   * access.
+   * rights, and your service's service users have only the manifest's
+   * `requiredRoles`. The default `user` and requests without credentials keep
+   * full access. `'off'` gives every caller full access.
    * @default 'enforce'
    */
   roles?: 'enforce' | 'off'
