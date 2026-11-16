@@ -1,6 +1,6 @@
 # Migration
 
-## 0.11.x to 0.12.0
+## 0.11.2 to 0.11.3
 
 The fake tenant of `c8y-nitro/testing` now runs on [fake-c8y](https://github.com/schplitt/fake-c8y), which emulates much more of the platform: users and roles, applications, bulk operations, device registration, retention rules, audit records, statistics, availability, generated measurements, and cascading deletes. Every test now gets its own instance of your service by default (tests can share one with `c8y.startService()` in a `beforeAll`), and callers of `serverFetch({ as })` are users of the fake tenant whose roles the platform checks.
 
