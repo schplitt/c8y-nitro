@@ -14,6 +14,12 @@ C8Y_DEVELOPMENT_PASSWORD=your-password
 
 This enables testing of access control middlewares like `hasUserRequiredRole()` and `isUserFromAllowedTenant()` without needing to manually set authorization headers.
 
+The development user is only injected when the request has no `authorization` header. A request that sends its own header keeps it, so you can call your service as another user, a device, or a user of a subscribed subtenant:
+
+```sh
+curl -u 't222/device_abc:secret' http://localhost:3000/api/measurements
+```
+
 ## When To Turn It Off
 
 Disable this when another local layer already provides the real auth context, for example a local proxy or gateway setup that forwards the incoming user session.

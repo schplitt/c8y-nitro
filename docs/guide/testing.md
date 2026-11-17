@@ -205,7 +205,7 @@ it('only lets operators run the check', async () => {
 ```
 
 - **One call:** `as` applies to that call only and stores nothing. The next call without `as` is made by the default user again.
-- **Like a real user:** the caller reaches your service through [dev user injection](/guide/dev-user) (`serverFetch()` replaces an `authorization` header you pass). `useUser()`, `useUserRoles()`, the auth middleware, and `useUserClient()` see it, and the platform checks the requests your service sends with its credentials against its roles, like the platform: a caller without `ROLE_INVENTORY_READ` gets 403 from the inventory.
+- **Like a real user:** the caller reaches your service as a Basic `authorization` header, which [dev user injection](/guide/dev-user) keeps (`as` replaces an `authorization` header you pass). `useUser()`, `useUserRoles()`, the auth middleware, and `useUserClient()` see it, and the platform checks the requests your service sends with its credentials against its roles, like the platform: a caller without `ROLE_INVENTORY_READ` gets 403 from the inventory.
 - **Seeded users only:** `as` with a user the fake tenant does not store throws. A persona of another tenant is seeded in its own `tenant`, also in the same call as the others: `c8y.seed({ users: [operator, partner] })`. Seeded users also get `ROLE_USER_MANAGEMENT_OWN_READ` and `ROLE_USER_MANAGEMENT_OWN_ADMIN`, like every platform user. Your manifest's `roles` exist already in every subscribed tenant; other custom roles must be seeded too: `c8y.seed({ roles: ['MY_ROLE'], users: [...] })`.
 - **The default `user`** has full access on the platform, so tests that don't care about permissions work unchanged.
 - **One caller at a time:** calls with `as` cannot run concurrently in one file.

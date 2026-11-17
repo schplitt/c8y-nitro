@@ -1,4 +1,3 @@
-import process from 'node:process'
 import type { C8YTenantOptionKey } from 'c8y-nitro/types'
 import { serverFetch as nitroServerFetch } from 'nitro'
 import { TestRunner } from 'vitest'
@@ -7,7 +6,7 @@ import { basicAuth, matchesCall } from 'fake-c8y'
 import { SettleTimeoutError } from 'fake-c8y/realtime'
 import type { C8yRequestHandler, C8yTestState, C8yTestSubscription, C8yTestUser } from './types'
 import { arrange, assertActiveTest, isCollecting, isConcurrentRunning, runningSuite } from './scope'
-import { applyState, refs, restartService, shareService, syncEnv, testCalls, testUnhandled, useWorld } from './world'
+import { applyState, refs, restartService, shareService, testCalls, testUnhandled, useWorld } from './world'
 
 export type * from './types'
 export type { C8yAlarmInput, C8yAlarmSeverity, C8yAlarmStatus, C8yApplicationInput, C8yAuditRecordInput, C8yBinaryContent, C8yBinaryInput, C8yDb, C8yDbCollection, C8yDbFilter, C8yEventInput, C8yGroupInput, C8yIdInput, C8yInventoryRoleInput, C8yManagedObjectInput, C8yMeasurementGeneratorInput, C8yMeasurementInput, C8yNewDeviceRequestInput, C8yOperationInput, C8yOperationStatus, C8yRequest, C8yRetentionRuleInput, C8ySeed, C8yTenantOptionScope, C8yUnhandledRequest, C8yUserInput } from 'fake-c8y'
@@ -538,15 +537,8 @@ export async function serverFetch(path: string, init: C8yServerFetchInit = {}): 
   if (!world.db.tenant(tenant).users.get(userName)) {
     throw new Error(`serverFetch({ as }): user "${userName}" does not exist in tenant ${tenant} of the fake platform. Seed it first: c8y.seed({ ${tenant === world.tenant ? '' : `tenant: '${tenant}', `}users: [{ userName: '${userName}', roles: [...] }] }).`)
   }
-  // dev user injection sends the dev user's credentials: this user's, for
-  // this call (with injection off, the header below reaches the service)
-  process.env.C8Y_DEVELOPMENT_TENANT = tenant
-  process.env.C8Y_DEVELOPMENT_USER = userName
-  try {
-    const headers = new Headers(requestInit.headers)
-    headers.set('authorization', basicAuth({ tenant, user: userName }))
-    return await nitroServerFetch(path, { ...requestInit, headers })
-  } finally {
-    syncEnv(world)
-  }
+  // dev user injection keeps a sent header, so this user calls the service
+  const headers = new Headers(requestInit.headers)
+  headers.set('authorization', basicAuth({ tenant, user: userName }))
+  return nitroServerFetch(path, { ...requestInit, headers })
 }

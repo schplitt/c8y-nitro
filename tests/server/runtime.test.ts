@@ -10,6 +10,24 @@ describe('dev user injection', () => {
 
     expect(json.authHeader).toBe(`Basic ${Buffer.from(`${process.env.C8Y_DEVELOPMENT_TENANT}/${process.env.C8Y_DEVELOPMENT_USER}:${process.env.C8Y_DEVELOPMENT_PASSWORD}`).toString('base64')}`)
   })
+
+  it('keeps an authorization header the request sends', async () => {
+    const sentAuthHeader = `Basic ${Buffer.from('t222/device_abc:secret').toString('base64')}`
+
+    const { json } = await fetchJson('/authHeader', {
+      headers: { authorization: sentAuthHeader },
+    })
+
+    expect(json.authHeader).toBe(sentAuthHeader)
+  })
+
+  it('injects the development user for an empty authorization header', async () => {
+    const { json } = await fetchJson('/authHeader', {
+      headers: { authorization: '' },
+    })
+
+    expect(json.authHeader).toBe(`Basic ${Buffer.from(`${process.env.C8Y_DEVELOPMENT_TENANT}/${process.env.C8Y_DEVELOPMENT_USER}:${process.env.C8Y_DEVELOPMENT_PASSWORD}`).toString('base64')}`)
+  })
 })
 
 describe('probes', () => {
