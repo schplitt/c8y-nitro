@@ -1,18 +1,21 @@
 import { vol, fs as memFs } from 'memfs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Buffer } from 'node:buffer'
-import JSZip from 'jszip'
+import { strFromU8, unzipSync } from 'fflate'
 import type { C8YManifest } from '../../src/types/manifest'
 import { createC8yZip, resolveZipOutputPath } from '../../src/module/c8yzip'
 
-// Mock spinnies to silence output
-vi.mock('spinnies', () => ({
-  default: class {
-    add() {}
-    update() {}
-    remove() {}
-    stopAll() {}
-  },
+// Mock yocto-spinner to silence output
+vi.mock('yocto-spinner', () => ({
+  default: () => ({
+    start() {
+      return this
+    },
+    stop() {
+      return this
+    },
+    text: '',
+  }),
 }))
 
 // Mock docker module to return fake tar path
@@ -219,9 +222,9 @@ describe('c8yzip', () => {
 
       const zipPath = '/project/test-service-1.0.0.zip'
       const zipBuffer = vol.readFileSync(zipPath) as Buffer
-      const zip = await JSZip.loadAsync(zipBuffer)
+      const files = unzipSync(zipBuffer)
 
-      const fileNames = Object.keys(zip.files)
+      const fileNames = Object.keys(files)
       expect(fileNames).toHaveLength(2)
       expect(fileNames).toContain('image.tar')
       expect(fileNames).toContain('cumulocity.json')
@@ -234,14 +237,14 @@ describe('c8yzip', () => {
 
       const zipPath = '/project/test-service-1.0.0.zip'
       const zipBuffer = vol.readFileSync(zipPath) as Buffer
-      const zip = await JSZip.loadAsync(zipBuffer)
+      const files = unzipSync(zipBuffer)
 
       // Verify image.tar content matches input
-      const imageTarContent = await zip.file('image.tar')!.async('string')
+      const imageTarContent = strFromU8(files['image.tar']!)
       expect(imageTarContent).toBe('fake docker image content')
 
       // Verify cumulocity.json content matches manifest
-      const manifestContent = await zip.file('cumulocity.json')!.async('string')
+      const manifestContent = strFromU8(files['cumulocity.json']!)
       const parsedManifest = JSON.parse(manifestContent)
       expect(parsedManifest).toEqual({
         name: 'test-service',
@@ -273,9 +276,9 @@ describe('c8yzip', () => {
       expect(vol.existsSync(zipPath)).toBe(true)
 
       const zipBuffer = vol.readFileSync(zipPath) as Buffer
-      const zip = await JSZip.loadAsync(zipBuffer)
+      const files = unzipSync(zipBuffer)
 
-      const manifestContent = await zip.file('cumulocity.json')!.async('string')
+      const manifestContent = strFromU8(files['cumulocity.json']!)
       const parsedManifest = JSON.parse(manifestContent)
       expect(parsedManifest.name).toBe('test-service-ñ')
       expect(parsedManifest.provider.name).toBe('Company™ Corp')
@@ -293,9 +296,9 @@ describe('c8yzip', () => {
 
       const zipPath = '/project/test-service-1.0.0.zip'
       const zipBuffer = vol.readFileSync(zipPath) as Buffer
-      const zip = await JSZip.loadAsync(zipBuffer)
+      const files = unzipSync(zipBuffer)
 
-      const imageTarContent = await zip.file('image.tar')!.async('nodebuffer')
+      const imageTarContent = files['image.tar']!
       expect(imageTarContent.length).toBe(1024)
     })
 
@@ -343,9 +346,9 @@ describe('c8yzip', () => {
 
       const zipPath = '/project/advanced-service-3.2.1.zip'
       const zipBuffer = vol.readFileSync(zipPath) as Buffer
-      const zip = await JSZip.loadAsync(zipBuffer)
+      const files = unzipSync(zipBuffer)
 
-      const manifestContent = await zip.file('cumulocity.json')!.async('string')
+      const manifestContent = strFromU8(files['cumulocity.json']!)
       const parsedManifest = JSON.parse(manifestContent)
 
       expect(parsedManifest.requiredRoles).toEqual(['ROLE_INVENTORY_READ', 'ROLE_INVENTORY_ADMIN'])

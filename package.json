@@ -65,19 +65,18 @@
     "croner": "catalog:",
     "evlog": "catalog:",
     "fake-c8y": "catalog:",
+    "fflate": "catalog:",
     "itty-time": "catalog:",
-    "jszip": "catalog:",
     "pathe": "catalog:",
     "pkg-types": "catalog:",
-    "spinnies": "catalog:",
     "tinyexec": "catalog:",
-    "ws": "catalog:"
+    "ws": "catalog:",
+    "yocto-spinner": "catalog:"
   },
   "devDependencies": {
     "@c8y/client": "catalog:",
     "@schplitt/eslint-config": "catalog:",
     "@types/node": "catalog:",
-    "@types/spinnies": "catalog:",
     "@types/ws": "catalog:",
     "bumpp": "catalog:",
     "changelogithub": "catalog:",
