@@ -4,7 +4,7 @@ import { resolve } from 'pathe'
 import process from 'node:process'
 import { createNitro } from 'nitro/builder'
 import { writeAPIClient } from '../../module/apiClient'
-import { C8Y_NITRO_TYPES_DIR, C8Y_NITRO_TYPES_FILE } from '../../module/constants'
+import { C8Y_NITRO_RUNTIME_TYPES_FILE, C8Y_NITRO_TYPES_DIR, C8Y_NITRO_TYPES_FILE } from '../../module/constants'
 
 export default defineCommand({
   meta: {
@@ -31,7 +31,7 @@ export default defineCommand({
     // the Docker image and zip for non-dev presets, which is not what typegen is.
     const nitro = await createNitro({ rootDir })
 
-    consola.success(`Generated types at ${C8Y_NITRO_TYPES_DIR}/${C8Y_NITRO_TYPES_FILE}`)
+    consola.success(`Generated types at ${C8Y_NITRO_TYPES_DIR}/${C8Y_NITRO_TYPES_FILE} and ${C8Y_NITRO_TYPES_DIR}/${C8Y_NITRO_RUNTIME_TYPES_FILE}`)
 
     // Routes are scanned right after the modules install, so the client sees the
     // user's handlers. The module's own handlers (probes, OpenAPI) are registered

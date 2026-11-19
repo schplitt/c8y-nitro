@@ -1,6 +1,7 @@
 // Files used to emulate imported runtime values in Nitro runtime
 // Necessary if virtual values are used by e.g. utils
-// Should match the generated types in module/runtime.ts
+// Loose version of the types generated in module/runtime.ts
+// (`readonly string[]` instead of the literal tuple)
 
 declare module 'c8y-nitro/runtime' {
   import type { C8YRoles, C8YManifest } from 'c8y-nitro/types'
