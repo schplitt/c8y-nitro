@@ -4,6 +4,17 @@ import { join } from 'pathe'
 import { writeFileSync, mkdirSync } from 'fs'
 import { C8Y_NITRO_RUNTIME_TYPES_FILE, C8Y_NITRO_TYPES_DIR, C8Y_NITRO_TYPES_FILE } from './constants'
 
+/**
+ * A single-quoted string literal that is valid in both TypeScript and JavaScript.
+ * Role names, setting keys, and the settings category come from the manifest
+ * unchecked, so a quote, backslash, or line break must not end the literal.
+ * @param value The raw name from the manifest
+ */
+function quote(value: string): string {
+  const escaped = JSON.stringify(value).slice(1, -1).replace(/\\"/g, '"').replace(/'/g, '\\\'')
+  return `'${escaped}'`
+}
+
 export function setupRuntime(nitro: Nitro, manifest: C8YManifest): void {
   nitro.logger.debug('Setting up C8Y nitro runtime')
   const roles = manifest.roles ?? []
@@ -27,11 +38,11 @@ export {}
 
 declare module 'c8y-nitro/types' {
   interface C8YRoles {
-${roles.map((role) => `    '${role}': '${role}';`).join('\n')}
+${roles.map((role) => `    ${quote(role)}: ${quote(role)};`).join('\n')}
   }
   interface C8YGenerated {
-    tenantOptionKey: ${settingKeys.length > 0 ? `${settingKeys.map((k) => `'${k}'`).join(' | ')}` : 'never'};
-    settingsCategory: ${settingsCategory ? `'${settingsCategory}'` : 'string'};
+    tenantOptionKey: ${settingKeys.length > 0 ? `${settingKeys.map(quote).join(' | ')}` : 'never'};
+    settingsCategory: ${settingsCategory ? quote(settingsCategory) : 'string'};
   }
 }
 `
@@ -43,7 +54,7 @@ ${roles.map((role) => `    '${role}': '${role}';`).join('\n')}
 declare module 'c8y-nitro/runtime' {
   import type { C8YRoles, C8YManifest } from 'c8y-nitro/types';
   export const c8yRoles: C8YRoles;
-  export const c8yTenantOptionKeys: readonly [${settingKeys.map((key) => `'${key}'`).join(', ')}];
+  export const c8yTenantOptionKeys: readonly [${settingKeys.map(quote).join(', ')}];
   export const c8yManifest: C8YManifest;
 }
 `
@@ -51,12 +62,12 @@ declare module 'c8y-nitro/runtime' {
   // Generate virtual module with runtime exports
   nitro.options.virtual['c8y-nitro/runtime'] = `
 export const c8yRoles = {
-${roles.map((role) => `  '${role}': '${role}',`).join('\n')}
+${roles.map((role) => `  ${quote(role)}: ${quote(role)},`).join('\n')}
 }
 
 export const c8yManifest = ${JSON.stringify(manifest, null, 2)}
 
-export const c8yTenantOptionKeys = [${settingKeys.map((key) => `'${key}'`).join(', ')}]
+export const c8yTenantOptionKeys = [${settingKeys.map(quote).join(', ')}]
 `
 
   mkdirSync(completeTypesDir, { recursive: true })

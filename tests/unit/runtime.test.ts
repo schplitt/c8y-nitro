@@ -290,6 +290,35 @@ describe('setupRuntime', () => {
       expect(content).toContain('\'key_with_underscores\'')
     })
 
+    it('should escape quotes, backslashes, and line breaks in names', () => {
+      const nitro = createMockNitro()
+      const names = ['it\'s', 'back\\slash', 'double"quote', 'line\nbreak', 'a\\"b', '\\\'']
+
+      setupRuntime(nitro, {
+        name: 'test',
+        version: '1.0.0',
+        roles: names,
+        settings: names.map((key) => ({ key, defaultValue: 'value' })),
+        settingsCategory: 'cat\'egory',
+      } as C8YManifest)
+
+      const generatedFiles = vol.toJSON()
+      const content = generatedFiles['/project/node_modules/.c8y-nitro/types.d.ts'] as string
+      const runtimeContent = generatedFiles['/project/node_modules/.c8y-nitro/runtime.d.ts'] as string
+      const literals = String.raw`'it\'s' | 'back\\slash' | 'double"quote' | 'line\nbreak' | 'a\\"b' | '\\\''`
+
+      expect(content).toContain(`tenantOptionKey: ${literals}`)
+      expect(content).toContain(String.raw`'it\'s': 'it\'s';`)
+      expect(content).toContain(String.raw`settingsCategory: 'cat\'egory'`)
+      expect(runtimeContent).toContain(`readonly [${literals.replaceAll(' | ', ', ')}]`)
+
+      // The virtual module is JavaScript: evaluating it must give the names back.
+      const virtualModule = nitro.options.virtual['c8y-nitro/runtime'] as string
+      const keys = virtualModule.match(/c8yTenantOptionKeys = (\[.*\])/)![1]!
+      // eslint-disable-next-line no-new-func
+      expect(new Function(`return ${keys}`)()).toEqual(names)
+    })
+
     it('should handle single role', () => {
       const nitro = createMockNitro()
 
