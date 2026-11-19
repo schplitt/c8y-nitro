@@ -156,7 +156,7 @@ pnpm install && pnpm c8y-nitro typegen && tsc --noEmit
 #### 4. Delete stale generated types
 
 The declarations moved from `node_modules/.nitro/types/c8y-nitro.d.ts` to
-`node_modules/.c8y-nitro/types.d.ts`. Nitro still owns `node_modules/.nitro` for its dev
+`node_modules/.c8y-nitro/` (`types.d.ts` and `runtime.d.ts`). Nitro still owns `node_modules/.nitro` for its dev
 bundle and build metadata, but no longer writes types there. Old files are harmless but
 stale — remove them so a forgotten `include` fails loudly instead of silently resolving
 outdated role names:

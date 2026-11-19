@@ -16,13 +16,12 @@ import { c8yManifest, c8yRoles, c8yTenantOptionKeys } from 'c8y-nitro/runtime'
 
 ## Generated Types
 
-During Nitro setup, `c8y-nitro` writes a generated type file to Nitro's generated types directory. This augments `c8y-nitro/types` with:
+During Nitro setup, `c8y-nitro` writes two declaration files to `node_modules/.c8y-nitro/`:
 
-- `C8YRoles`
-- `C8YTenantOptionKey`
-- `C8YTenantOptionKeysCacheConfig`
+- `types.d.ts` augments `c8y-nitro/types`: it adds your manifest roles to `C8YRoles` and fills `C8YGenerated`, which narrows `C8YTenantOptionKey`, `C8YTenantOptionKeysCacheConfig`, and `C8YSettingsCategory`. All other exports of `c8y-nitro/types` stay available.
+- `runtime.d.ts` declares the `c8y-nitro/runtime` exports above.
 
-That is what makes manifest-defined roles and tenant option keys visible to TypeScript.
+That is what makes manifest-defined roles and tenant option keys visible to TypeScript. Without the generated files, `C8YRoles` is empty, and the tenant option key and settings category types fall back to `string`.
 
 ## Example
 

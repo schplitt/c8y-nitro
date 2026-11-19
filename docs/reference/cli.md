@@ -60,11 +60,11 @@ Generate the module's TypeScript declarations without running a full build.
 pnpm dlx c8y-nitro typegen
 ```
 
-The declarations are written to `node_modules/.c8y-nitro/types.d.ts` and contain the
-manifest-derived role names, tenant option keys, and settings category, plus the
-declaration for the [`c8y-nitro/runtime`](/reference/runtime-module) virtual module.
+The declarations are written to `node_modules/.c8y-nitro/`: `types.d.ts` holds the
+manifest-derived role names, tenant option keys, and settings category, and `runtime.d.ts`
+declares the [`c8y-nitro/runtime`](/reference/runtime-module) virtual module.
 
-`nitro dev` and `nitro build` write the same file, so you only need this command when
+`nitro dev` and `nitro build` write the same files, so you only need this command when
 type checking a checkout that has not been built yet — for example
 `pnpm install && pnpm dlx c8y-nitro typegen && tsc --noEmit` in CI.
 

@@ -4,7 +4,7 @@ export type { C8YKnownRole } from './roles.generated'
 
 /**
  * Roles your microservice provides. Populated at runtime from the manifest's
- * `roles` field (see the module's generated `c8y-nitro.d.ts`).
+ * `roles` field (see the module's generated `node_modules/.c8y-nitro/types.d.ts`).
  */
 export interface C8YRoles {}
 

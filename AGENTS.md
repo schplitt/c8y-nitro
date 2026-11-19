@@ -107,21 +107,21 @@ The package has these entry points:
 
 #### Importing types: module (`c8y-nitro/types`) vs relative path
 
-At runtime in a consumer, the module generates a `c8y-nitro.d.ts` containing
-`declare module 'c8y-nitro/types' { … }`. This **shadows** (does not merge with)
-the real `c8y-nitro/types` module, so a type is only visible through
-`c8y-nitro/types` if it is _regenerated_ into that ambient block (see
-`src/module/runtime.ts`). Everything else imported from `c8y-nitro/types`
-silently becomes `any` in consumers.
+In a consumer, the module generates `node_modules/.c8y-nitro/types.d.ts`, a
+module file (`export {}`) containing `declare module 'c8y-nitro/types' { … }`.
+This **augments** (merges with) the real `c8y-nitro/types` module: it adds
+members to the `C8YRoles` and `C8YGenerated` interfaces (see
+`src/module/runtime.ts`). Only interfaces can be augmented, so the narrowed
+aliases (`C8YTenantOptionKey`, `C8YSettingsCategory`) read from `C8YGenerated`.
 
 Rule for imports inside `src/`:
 
 - Import from the **`c8y-nitro/types` module** ONLY for types we generate/override
   per manifest — `C8YTenantOptionKey`, `C8YSettingsCategory`, `C8YRoles`,
-  `C8YTenantOptionKeysCacheConfig`. These must be the augmentable module type.
+  `C8YTenantOptionKeysCacheConfig`. These must be the augmentable module type,
+  or the emitted `.d.ts` inlines the un-narrowed type.
 - For **everything else, import by relative path** (e.g. `./tenantOptions`,
-  `../types/manifest`). Relative imports get inlined into the emitted `.d.ts`, so
-  they survive the shadowing.
+  `../types/manifest`). Relative imports get inlined into the emitted `.d.ts`.
 
 Public API types (e.g. `TenantOption`, `TenantOptionCategory`) are therefore
 **colocated with their API in `src/utils/*.ts`** and exported from
@@ -472,9 +472,9 @@ This section captures project-specific knowledge, tool quirks, and lessons learn
   - Carefully consider what requests make sense to be cached (e.g., credentials, not real-time data, consider security implications)
   - For per-key caching (like tenant options), use a factory pattern with a Map/Record to store fetchers
   - `maxAge` does NOT accept a function — if you need per-key TTL, create separate cached functions per key
-- Generated types are consolidated into a single `c8y-nitro.d.ts` file for performance
-  - Written to `node_modules/.nitro/types/` by `setupRuntime()`
-  - Augments `c8y-nitro/types` and `c8y-nitro/runtime` modules
+- Generated types are written to `node_modules/.c8y-nitro/` by `setupRuntime()`
+  - `types.d.ts` is a module (`export {}`) that augments `c8y-nitro/types`. Without a top-level export it would be a script and replace the module. Only interfaces merge, so generated aliases go through the `C8YGenerated` registry interface
+  - `runtime.d.ts` is a script that declares `c8y-nitro/runtime` (not resolvable, so it cannot be augmented from a module)
 - Public Nitro hook augmentations that consumers should get from `import 'c8y-nitro'` must live in the root entrypoint type graph
   - Put `declare module 'nitro/types'` hook augmentations in `src/index.ts` so they are emitted in `dist/index.d.mts`
   - Export shared hook payload types from `c8y-nitro/types` (for example `TenantCredentials`) and reference those in the augmentation instead of repeating inline records
@@ -526,5 +526,5 @@ This section captures project-specific knowledge, tool quirks, and lessons learn
   - `README.md` for user-facing changes (configuration options, utilities, env variables, API behavior)
   - `AGENTS.md` for technical/architectural changes relevant to AI agents
   - Explicitly notify the user of documentation updates at the end of your response
-- **Use package imports for augmentable types** — When a type is augmented by generated types (e.g., `C8YTenantOptionKey`, `C8YTenantOptionKeysCacheConfig`), import from `'c8y-nitro/types'` instead of relative paths. This ensures users benefit from type hints after types are generated. It may cause initial type errors before first build, but resolves after `nitro prepare`.
+- **Use package imports for augmentable types** — When a type is augmented (`C8YRoles`) or narrowed through `C8YGenerated` (e.g., `C8YTenantOptionKey`, `C8YTenantOptionKeysCacheConfig`) by generated types, import from `'c8y-nitro/types'` instead of relative paths. This ensures users benefit from type hints after types are generated. It may cause initial type errors before first build, but resolves after `nitro prepare`.
   - Explicitly notify the user of documentation updates at the end of your response
