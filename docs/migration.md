@@ -1,5 +1,13 @@
 # Migration
 
+## 0.11.3 to 0.12.0
+
+This release upgrades `c8y-realtime` to 0.4.0.
+
+### Breaking changes
+
+- **A changed realtime subscription is no longer adopted.** If you change `c8y.realtime.subscription`, that is `nonPersistent` (every topic) or `apis` (the `onAny` topic), while a subscription with the same name still exists, the client no longer reuses the old one silently. It logs an error that the subscription "does not match the requested one", with the old subscription's id. That topic gets no subscription, so its handlers do not fire, and the client does not retry it on its own. Delete the old subscription (or set the old settings back) and restart the service. See [Configuration](/guide/realtime#configuration).
+
 ## 0.11.2 to 0.11.3
 
 The fake tenant of `c8y-nitro/testing` now runs on [fake-c8y](https://github.com/schplitt/fake-c8y), which emulates much more of the platform: users and roles, applications, bulk operations, device registration, retention rules, audit records, statistics, availability, generated measurements, and cascading deletes. Every test now gets its own instance of your service by default (tests can share one with `c8y.startService()` in a `beforeAll`), and callers of `serverFetch({ as })` are users of the fake tenant whose roles the platform checks.

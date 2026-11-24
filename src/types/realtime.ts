@@ -53,6 +53,13 @@ export interface C8yRealtimeOptions {
   autoStart?: boolean
   /**
    * Subscription delivery mode applied to every tenant's client.
+   *
+   * Changing `nonPersistent` (every topic) or `apis` (the `onAny` topic) does
+   * not update a subscription that already exists with the same name
+   * (subscriptions survive a redeploy by default). The client logs an error
+   * that the subscription "does not match the requested one", with the old
+   * subscription's id, and that topic's handlers do not fire. Delete the old
+   * subscription (or set the old settings back) and restart the service.
    */
   subscription?: {
     /**
