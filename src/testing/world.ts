@@ -14,7 +14,7 @@
 import process from 'node:process'
 import { useRuntimeConfig } from 'nitro/runtime-config'
 import { c8yManifest } from 'c8y-nitro/runtime'
-import type { C8yCheckpoint, C8yLogMark, C8yLogRange, C8yMicroserviceManifest, C8yRequest, C8yUnhandledRequest, World } from 'fake-c8y'
+import type { C8yCheckpoint, C8yLogMark, C8yLogRange, C8yRequest, C8yUnhandledRequest, World } from 'fake-c8y'
 import { createWorld } from 'fake-c8y'
 import type { FakeWebSocketClass } from 'fake-c8y/realtime'
 import { createFakeWebSocket, SettleTimeoutError } from 'fake-c8y/realtime'
@@ -86,8 +86,7 @@ function useState(): WorldState {
       settingsCategory: useRuntimeConfig().c8ySettingsCategory as string,
       // manifest roles exist in the tenants, settings defaults are tenant
       // options, and service users have the manifest's requiredRoles
-      // cast: fake-c8y's manifest type has an index signature that a typed interface cannot satisfy; remove it once fake-c8y accepts it
-      manifest: c8yManifest as unknown as C8yMicroserviceManifest,
+      manifest: c8yManifest,
       // read Date at call time, so vi.useFakeTimers() controls timestamps
       now: () => Date.now(),
       roles: baseline.roles ?? 'enforce',

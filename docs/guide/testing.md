@@ -252,7 +252,7 @@ export default definePlugin(async () => {
 
 A test follows four steps:
 
-1. **The service sets itself up.** The service and its plugins start before the test (see [Service Instances](#service-instances)). When tests share a service, the subscriptions it created at startup stay in place, and connected, for all of them, also when a consumer reconnects; subscriptions created during a test are removed before the next one, and realtime clients your service created after startup are closed. Subscribe at startup (in a plugin), not lazily in a route. The start waits until the startup work that runs through the fake tenant is done (requests, realtime clients that are connecting). If that work still runs 5 seconds after your plugins have finished, the test fails. Your manifest's `requiredRoles` must list `ROLE_NOTIFICATION_2_ADMIN`: without it, the realtime client stops with a 403 in the log and no listener opens.
+1. **The service sets itself up.** The service and its plugins start before the test (see [Service Instances](#service-instances)). When tests share a service, the subscriptions it created at startup stay in place, and connected, for all of them, also when a consumer reconnects (a write while a listener reconnects is kept for it, see [When to poll first](#when-to-poll-first)); subscriptions created during a test are removed before the next one, and realtime clients your service created after startup are closed. Subscribe at startup (in a plugin), not lazily in a route. On a shared service, a topic a route adds to the startup tenant's realtime client stays open into the next tests of that service, and its handler can get their notifications. Subscribe at startup, or use a new service per test. The start waits until the startup work that runs through the fake tenant is done (requests, realtime clients that are connecting). If that work still runs 5 seconds after your plugins have finished, the test fails. Your manifest's `requiredRoles` must list `ROLE_NOTIFICATION_2_ADMIN`: without it, the realtime client stops with a 403 in the log and no listener opens.
 2. **Trigger a write**, like a device would: `c8y.seed()` or `c8y.device()` inside the test, a route of your service, or `c8y.db.operations.update()`.
 3. **Wait until it is processed:** `await c8y.notifications.settled()`. This waits until every delivered notification has been handled, including notifications caused by the handlers' own writes. Notifications of a subscription without a consumer are not waited for. Notifications are delivered on the real timers, also after `vi.useFakeTimers()`, unless a setup file installs fake timers before `c8y-nitro/testing` is loaded.
 4. **Query the fake world** with `c8y.db`.
@@ -272,7 +272,7 @@ Data arranged at file or `describe` level is rebuilt before every test, but it i
 
 ### When to poll first
 
-`settled()` waits only for work the fake tenant can see. Some listeners open later than that: a realtime client a route creates lazily, one your service opens on its own timer, or a reconnect after a dropped connection (about 1 second later). Poll until the new listener is open, then call `settled()`. Compare with the count before the call: listeners your service opened at startup are counted too.
+`settled()` waits only for work the fake tenant can see. Some listeners open later than that: a realtime client a route creates lazily, one your service opens on its own timer, or a reconnect after a dropped connection (about 1 second later). Poll until the new listener is open, then write and call `settled()`. A subscription keeps notifications for a listener only once that listener has connected: a write before it connects is lost, also when the listener connects later. Compare with the count before the call: listeners your service opened at startup are counted too.
 
 ```ts
 const before = c8y.notifications.consumers({ tenant: c8y.tenant }).length
@@ -285,7 +285,13 @@ await c8y.notifications.settled()
 
 Your service opens one listener per API (alarms, measurements, and so on) and tenant. A route that listens to two APIs adds two, and one that reuses an open listener adds none: adjust the expected count.
 
-`consumers(filter?)` lists the open listeners, one per socket. Filter by `tenant`, `subscription`, `subscriber`, or `token`.
+`consumers(filter?)` lists the open listeners, one per socket. Filter by `tenant`, `subscription`, `subscriber`, or `token`. Token values are opaque: filter by a token you read from `consumers()`.
+
+Listeners behave like on the platform:
+
+- **A listener that closes keeps its notifications.** Notifications it had not acknowledged go back to its subscriber, and the subscriber's next listener gets them first (persistent subscriptions only).
+- **One open listener per subscriber.** A second connect with the same tenant, subscription, and subscriber is refused with 409, unless all their tokens were minted with `shared: true`. c8y-nitro's realtime client never mints shared tokens.
+- **Tokens expire** after `expiresInMinutes` (one day by default). The fake reads the time from `Date.now()`, so a faked `Date` (`vi.setSystemTime()`) moves it. A connect with an expired or invalid token is refused with 401. A listener that is already open stays open. This matters only for sockets a test opens itself: your service's realtime client mints a new token for every connect.
 
 ## Scopes
 
@@ -403,13 +409,15 @@ The fake tenant is a [fake-c8y](https://github.com/schplitt/fake-c8y) world: an 
 - measurements (with series and generated history), events with attachments, alarms with deduplication, operations, bulk operations, and new device requests
 - tenant options, retention rules, audit records, tenant statistics, and availability monitoring
 - users, groups, global and inventory roles, applications, and microservice subscriptions
+- the current user: `GET /user/currentUser` answers a user the tenant stores by the accepted type, with the full user for `user.current()` and the short shape with `effectiveRoles` for `user.currentWithEffectiveRoles()` (what `useUser()` and `useUserRoles()` call). `PUT /user/currentUser` updates the caller's own user.
+- error messages and audit records with the platform's current texts, for example `Resource 12345 for this request not found.` (external IDs keep the `ID [type=..., value=...]` form)
 - Notification 2.0: subscriptions, tokens, and the consumer WebSocket of c8y-nitro's realtime client
 
 The details, and where the fake simplifies, are in fake-c8y's [Emulated API](https://github.com/schplitt/fake-c8y/blob/main/docs/emulated-api.md) guide. Every verified place where the platform differs from its API docs is in its [Platform Behavior](https://github.com/schplitt/fake-c8y/blob/main/docs/platform-behavior.md) reference. A request for an endpoint the platform does not have (`GET /inventory/nope`) answers 404, and a known path with another method answers 405, like on the platform. A request the fake does not emulate answers 501 and fails the test (see above).
 
 What c8y-nitro sets up on top:
 
-- **IDs** have the platform's format (managed objects get 8 digits, `47100001`). They are deterministic: the same arrangement gives the same IDs in every test and every run. Timestamps come from `Date`, so `vi.useFakeTimers()` controls them.
+- **IDs** have the platform's format (managed objects get 8 digits, `47100001`). They are deterministic: the same arrangement gives the same IDs in every test and every run. A seed that gives an `id` keeps it (`c8y.device({ id: '4711' })`, `c8y.managedObject({ id })`, `c8y.binary({ id })`, or an `id` in a `c8y.seed()` entry), and the fake never hands that ID out again. An `id` that is not digits without a leading zero (a measurement ID may also be 24 lowercase hex characters), or one the tenant already has, throws. So does a seeded alarm with an `id` that would merge into an open alarm of the same source and type. Timestamps come from `Date`, so `vi.useFakeTimers()` controls them.
 - **Permissions** are checked like on the platform for users the tenant stores: a request your service sends with the credentials of a seeded user (for example the `as` caller of `serverFetch()`) gets 403 where that user lacks the rights, and lists show only what it may see. Your service's service users (`useSubscribedTenantClients()` and the like) have the `requiredRoles` of your manifest plus `ROLE_SYSTEM`, like on the platform: a request that needs a role the manifest does not list answers 403 `security/Forbidden`. That 403 does not fail the test by itself (it is not an unsupported request): your route sees the error, and `c8y.calls` shows the request with `status: 403` and the service user (`service_<tenant>`). Add the role to `requiredRoles` in your manifest. The default `user` and requests without credentials keep full access. `c8yTest({ roles: 'off' })` turns the checks off.
 - **Manifest:** your manifest's `roles` exist in every subscribed tenant, and the `defaultValue`s of its `settings` are tenant options of your settings category (`c8y.tenantOptions.set()` or `c8y.tenantOptions.delete()` changes them for a test).
 - **Tenant options:** `credentials.` options read as `<<Encrypted>>`, except in your microservice's own settings category, where the service gets the clear value.

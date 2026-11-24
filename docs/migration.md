@@ -8,6 +8,17 @@ This release upgrades `c8y-realtime` to 0.4.0.
 
 - **A changed realtime subscription is no longer adopted.** If you change `c8y.realtime.subscription`, that is `nonPersistent` (every topic) or `apis` (the `onAny` topic), while a subscription with the same name still exists, the client no longer reuses the old one silently. It logs an error that the subscription "does not match the requested one", with the old subscription's id. That topic gets no subscription, so its handlers do not fire, and the client does not retry it on its own. Delete the old subscription (or set the old settings back) and restart the service. See [Configuration](/guide/realtime#configuration).
 
+### Breaking changes in `c8y-nitro/testing`
+
+The fake tenant runs on fake-c8y 0.5.1, which follows the platform more closely:
+
+- **Notifications are kept only once a listener has connected.** A write before your service's listener has connected is lost, also when the listener connects later. Before, the subscription kept it. Poll `c8y.notifications.consumers()` until the listener is open, then write. See [When to poll first](/guide/testing#when-to-poll-first).
+- **Seeds keep the IDs they give.** `c8y.device({ id })`, `c8y.managedObject({ id })`, `c8y.binary({ id })`, and an `id` in a `c8y.seed()` entry are kept, where before the `id` was dropped or `c8y.seed()` threw. A duplicate or malformed `id` throws, and so does a seeded alarm with an `id` that would merge into an open alarm of the same source and type.
+- **Message texts and audit records** follow the platform's current texts: a Global ID (the ID of a managed object, alarm, and so on) appears plainly (`Resource 12345 for this request not found.`), no longer as `ID [type=com_cumulocity_model_idtype_GId, value=12345]`. External IDs keep the `ID [type=..., value=...]` form. Update assertions that match on these texts.
+- **`user.current()` returns the full user.** `GET /user/currentUser` answers by the accepted type: `@c8y/client`'s `user.current()` gets the full user, without `effectiveRoles`. `user.currentWithEffectiveRoles()`, which `useUser()` and `useUserRoles()` use, keeps the short shape. `PUT /user/currentUser` is now answered instead of failing as unsupported.
+- **Tokens are opaque and expire.** Token values are no longer predictable: filter `c8y.notifications.consumers()` by a token you read from `consumers()`, not one you build. A token expires after `expiresInMinutes` (one day by default) on `Date.now()`, and a connect with an expired or invalid token is refused with 401. This matters only for sockets a test opens itself: your service's realtime client mints a new token for every connect.
+- **One open listener per subscriber.** A second connect with the same tenant, subscription, and subscriber is refused with 409, like on the platform, unless all their tokens were minted with `shared: true`. c8y-nitro's realtime client never mints shared tokens.
+
 ## 0.11.2 to 0.11.3
 
 The fake tenant of `c8y-nitro/testing` now runs on [fake-c8y](https://github.com/schplitt/fake-c8y), which emulates much more of the platform: users and roles, applications, bulk operations, device registration, retention rules, audit records, statistics, availability, generated measurements, and cascading deletes. Every test now gets its own instance of your service by default (tests can share one with `c8y.startService()` in a `beforeAll`), and callers of `serverFetch({ as })` are users of the fake tenant whose roles the platform checks.
