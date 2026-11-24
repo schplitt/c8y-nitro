@@ -181,7 +181,7 @@ Options for the Notification 2.0 realtime clients (backed by `c8y-realtime`), ap
 - `autoAck`: acknowledge each notification after its handlers resolve. Defaults to `true`.
 - `dedupe`: drop duplicate notifications redelivered on the same stream. Defaults to `true`.
 - `autoStart`: connect automatically as handlers are registered. Defaults to `true`.
-- `subscription`: delivery mode — `apis` for the `onAny` firehose topic, and `nonPersistent` (no server-side backlog; cheaper but a disconnect loses messages).
+- `subscription`: delivery mode — `apis` for the `onAny` firehose topic, and `nonPersistent` (no server-side backlog; cheaper but a disconnect loses messages). If you change `nonPersistent` (every topic) or `apis` (the `onAny` topic) while a subscription with the same name exists, the client does not update it. It logs an error that the subscription "does not match the requested one", with the old subscription's id, and that topic stays silent. Delete the old subscription (or set the old settings back) and restart the service.
 - `resilience`: reconnect/backoff behaviour.
 
 ## `enableTenantOptionsInvalidationRoute`

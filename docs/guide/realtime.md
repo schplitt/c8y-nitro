@@ -72,6 +72,8 @@ export default defineConfig({
 
 See [Module Options](/reference/module-options#realtime) for the full list.
 
+By default (`deleteSubscriptionsOnClose: false`), subscriptions are not deleted on shutdown, so a redeploy finds the old ones. If you change `subscription`, that is `nonPersistent` (every topic) or `apis` (the `onAny` topic), the old subscription with the same name has different settings. The client does not adopt it. It logs an error that the subscription "does not match the requested one", with the old subscription's id (c8y-realtime's `C8ySubscriptionMismatchError`). That topic gets no subscription, so its handlers do not fire, and the client does not retry it on its own. Delete the old subscription in the tenant, or set the old settings back, and restart the service.
+
 ## Requirements
 
 Nothing to install — `ws` ships with `c8y-nitro` and is used for the consumer sockets.
