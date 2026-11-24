@@ -46,8 +46,8 @@ catalogs:
       specifier: ^2.34.0
       version: 2.34.0
     fake-c8y:
-      specifier: ^0.4.0
-      version: 0.4.0
+      specifier: ^0.5.1
+      version: 0.5.1
     fflate:
       specifier: ^0.8.3
       version: 0.8.3
@@ -124,7 +124,7 @@ importers:
         version: 2.34.0(nitro@3.0.261102-rc)(ofetch@1.5.1)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.27.7)(jiti@2.6.1)(yaml@2.9.0))
       fake-c8y:
         specifier: 'catalog:'
-        version: 0.4.0
+        version: 0.5.1
       fflate:
         specifier: 'catalog:'
         version: 0.8.3
@@ -2189,8 +2189,8 @@ packages:
   extend@3.0.2:
     resolution: {integrity: sha512-fjquC59cD7CyW6urNXK0FBufkZcoiGG80wTuPujX590cB5Ttln20E2UB4S/WARVqhXffZl2LNgS+gQdPIIim/g==}
 
-  fake-c8y@0.4.0:
-    resolution: {integrity: sha512-4chRxYF9hJ+FUx8KQ91XfiEeMdj6RWXmStr3a0YM2KYstDAe1tUljXsAqGUfYck1tc+idT68qnWjH2icXN7O2w==}
+  fake-c8y@0.5.1:
+    resolution: {integrity: sha512-YqjG/DoGNIcHxyUXscf3mn5IF/oixay1LSVbG02edTxCF52+s+YZJ2Cc+h6nvxFVA8XLg8mgEKu11JFpo+lqzA==}
     engines: {node: '>=24.0.0'}
 
   fast-deep-equal@3.1.3:
@@ -5580,7 +5580,7 @@ snapshots:
 
   extend@3.0.2: {}
 
-  fake-c8y@0.4.0: {}
+  fake-c8y@0.5.1: {}
 
   fast-deep-equal@3.1.3: {}
 
