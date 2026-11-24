@@ -1,7 +1,7 @@
 // A realtime trigger (fixture plugin realtime-overheating.ts) tested against
 // the fake tenant: the service subscribes at startup, the test writes data,
 // waits for the notifications to be processed, and checks the result.
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { c8y } from 'c8y-nitro/testing'
 import { fetchJson, sleep } from './utils'
 
@@ -85,6 +85,40 @@ describe('realtime triggers', () => {
     ])
     c8y.seed({ alarms: [{ source: pump, type: 'c8y_Test', text: 'Test', severity: 'MINOR' }] })
     await c8y.notifications.settled()
+  })
+
+  it('keeps delivering past the token expiry, and a new service connects with a new token', async () => {
+    const [startup] = c8y.notifications.consumers({ tenant: c8y.tenant })
+    // tokens last one day by default: two days later the startup token has expired
+    vi.setSystemTime(Date.now() + 2 * 24 * 60 * 60 * 1000)
+    try {
+      // the platform reads the faked clock: it no longer accepts the startup token
+      const { json } = await fetchJson('/platform/request', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ tenant: c8y.tenant, method: 'POST', path: `/notification2/unsubscribe?token=${startup!.token}` }),
+      })
+      expect(json).toEqual({ status: 500 })
+
+      // the open listener stays open and keeps delivering
+      expect(c8y.notifications.consumers({ tenant: c8y.tenant })).toEqual([startup])
+      c8y.seed({ measurements: [temperature(95)] })
+      await c8y.notifications.settled()
+      expect(c8y.db.alarms.find({ source: pump })).toMatchObject([{ type: 'c8y_Overheating', text: 'Temperature 95 °C' }])
+
+      // a new service connects with a new token
+      await c8y.startService()
+      const consumers = c8y.notifications.consumers({ tenant: c8y.tenant })
+      expect(consumers).toEqual([expect.objectContaining({ token: expect.any(String) })])
+      expect(consumers[0]!.token).not.toBe(startup!.token)
+      c8y.seed({ measurements: [temperature(97)] })
+      await c8y.notifications.settled()
+
+      // a repeated active alarm is counted on the first one, not created again
+      expect(c8y.db.alarms.find({ source: pump })).toMatchObject([{ type: 'c8y_Overheating', text: 'Temperature 95 °C', count: 2 }])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   describe('a realtime client the service created after startup', () => {
