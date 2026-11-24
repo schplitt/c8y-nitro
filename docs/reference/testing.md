@@ -45,6 +45,7 @@ Arrange calls (marked _scoped_) apply to the scope they are called in: file, `de
 | `c8y.override(pattern, handler, { once? })`                                       | _Scoped._ Overrides the platform's answer, for failures and unsupported APIs.                                                                                                     |
 | `c8y.apply(state)`                                                                | _Scoped._ Applies a partial `C8yTestState`: `tenant`, `subscriptions`, `tenantOptions`, `onUnhandledRequest`.                                                                     |
 | `c8y.startService()`                                                              | In `beforeAll`: the tests of that `describe` (or file) share one service. In `beforeEach`: a new service per test. In a test (`await` it): a new service now, on the test's data. |
+| `c8y.stopService()`                                                               | In a test (`await` it): stops the service, so data written now reaches no service. `serverFetch()` throws until `c8y.startService()`. The next test gets a new service.           |
 
 `c8y.device()` and `c8y.managedObject()` take any fragments plus:
 

@@ -5,7 +5,7 @@ import { interceptFetch, matchesCall } from 'fake-c8y'
 import { installFetchClient } from 'fake-c8y/c8y-client'
 import { afterAll, afterEach, beforeAll, beforeEach, expect, inject, TestRunner } from 'vitest'
 import { PROVIDE_KEY } from './defaults'
-import { markRunning, trackSuite, trackTest } from './scope'
+import { markRunning, markTestEnded, trackSuite, trackTest } from './scope'
 import type { C8yUnhandledRequest } from 'fake-c8y'
 import type { UnhandledRequestStrategy } from './types'
 import { platformUrl, prepareTest, releaseTestLog, setBaseline, takeTestUnhandled, testCalls, unhandledMessage, useUnhandledStrategy, useWebSocket, useWorld } from './world'
@@ -33,9 +33,17 @@ setTestingHooks({
 const runnerHooks = TestRunner.prototype as unknown as {
   onBeforeRunSuite?: (suite: object) => unknown
   onAfterRunSuite?: (suite: object) => unknown
+  onTaskFinished?: (test: object) => unknown
 }
 const onBeforeRunSuite = runnerHooks.onBeforeRunSuite
 const onAfterRunSuite = runnerHooks.onAfterRunSuite
+const onTaskFinished = runnerHooks.onTaskFinished
+// Vitest calls it after the test function (also when it failed), before the
+// afterEach hooks: `c8y.stopService()` rejects from there on.
+runnerHooks.onTaskFinished = function (this: unknown, test: object) {
+  markTestEnded(test, true)
+  return onTaskFinished?.call(this, test)
+}
 runnerHooks.onBeforeRunSuite = async function (this: unknown, suite: object) {
   // Vitest reports only suites that run as finished: track only those
   const { mode, result } = suite as { mode?: string, result?: { state?: string } }
@@ -64,6 +72,7 @@ beforeAll(() => {
 // Registered before any test file hook, so it runs first: the scope-aware
 // arrange calls of the file and its describes replay after it.
 beforeEach(async ({ task }) => {
+  markTestEnded(task, false)
   trackTest(task, true)
   // requests that failed after the previous test ended (background work),
   // judged by the strategy that test had; with concurrent tests, they may

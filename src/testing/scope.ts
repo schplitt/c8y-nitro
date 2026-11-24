@@ -90,6 +90,35 @@ export function trackTest(test: { name: string, concurrent?: boolean }, running:
 }
 
 /**
+ * Tests whose function has ended (their `afterEach` hooks run now). Set by the
+ * setup file from Vitest's `onTaskFinished`, cleared when the test (or its
+ * retry) starts.
+ */
+const endedTests = new WeakSet<object>()
+
+/**
+ * Records that the function of a test has ended, or that the test starts
+ * (again).
+ * @param test - The test
+ * @param ended - Whether its function has ended
+ */
+export function markTestEnded(test: object, ended: boolean): void {
+  if (ended) {
+    endedTests.add(test)
+  } else {
+    endedTests.delete(test)
+  }
+}
+
+/**
+ * Whether the current test's function has ended (its `afterEach` hooks run).
+ */
+export function isTestEnded(): boolean {
+  const test = TestRunner.getCurrentTest()
+  return test !== undefined && endedTests.has(test)
+}
+
+/**
  * Whether concurrent tests run right now.
  */
 export function isConcurrentRunning(): boolean {

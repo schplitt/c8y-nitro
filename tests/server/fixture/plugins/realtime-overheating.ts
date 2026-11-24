@@ -1,6 +1,7 @@
 import process from 'node:process'
 import { definePlugin } from 'nitro'
 import { useDeployedTenantClient, useTenantRealtimeClient } from 'c8y-nitro/utils'
+import { handledTemperatures } from '../handled-temperatures'
 
 // A realtime trigger: raises an alarm when a device reports more than 80 °C.
 export default definePlugin(async () => {
@@ -8,7 +9,11 @@ export default definePlugin(async () => {
 
   realtime.measurements.onCreate('*', async (measurement: any) => {
     const value = measurement.c8y_Temperature?.T?.value
-    if (typeof value !== 'number' || value <= 80) {
+    if (typeof value !== 'number') {
+      return
+    }
+    handledTemperatures.push(value)
+    if (value <= 80) {
       return
     }
     const client = await useDeployedTenantClient()
