@@ -3,7 +3,7 @@
 // waits for the notifications to be processed, and checks the result.
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { c8y } from 'c8y-nitro/testing'
-import { fetchJson } from './utils'
+import { fetchJson, sleep } from './utils'
 
 const pump = c8y.device({ name: 'Pump 1' })
 
@@ -196,5 +196,33 @@ describe('realtime state between tests', () => {
 
       expect(c8y.db.alarms.find({ source: pump })).toMatchObject([{ type: 'c8y_Overheating' }])
     })
+  })
+})
+
+describe('a realtime client a route opens lazily in a shared service', () => {
+  c8y.subscriptions.add({ tenant: 't99999', user: 'service_t99999', password: 'pw' })
+
+  beforeAll(() => c8y.startService())
+
+  let opened = false
+
+  it('listens after the route opened it', async () => {
+    await fetchJson('/realtime-alarms', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ tenant: 't99999' }),
+    })
+    await expect.poll(() => c8y.notifications.consumers({ tenant: 't99999' }).length).toBe(1)
+    opened = true
+  })
+
+  // Order-dependent on purpose: checks what the previous test left behind, so
+  // it fails when that test did not run. A client left open would reconnect
+  // about 1 s after the reset, so wait longer.
+  it('is closed in the next test', async () => {
+    expect(opened).toBe(true)
+    await sleep(1_500)
+
+    expect(c8y.notifications.consumers({ tenant: 't99999' })).toEqual([])
   })
 })
