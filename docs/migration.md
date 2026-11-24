@@ -2,7 +2,17 @@
 
 ## 0.11.3 to 0.12.0
 
-This release upgrades `c8y-realtime` to 0.4.0.
+This release upgrades the Nitro peer dependency from `3.0.261102-rc` to `3.0.261103-rc`, and `c8y-realtime` to 0.4.0.
+
+### Required changes
+
+#### Update Nitro
+
+The peer dependency is pinned exactly, so Nitro must be bumped in lockstep:
+
+```sh
+pnpm add -D nitro@3.0.261103-rc
+```
 
 ### Breaking changes
 
@@ -18,6 +28,14 @@ The fake tenant runs on fake-c8y 0.5.1, which follows the platform more closely:
 - **`user.current()` returns the full user.** `GET /user/currentUser` answers by the accepted type: `@c8y/client`'s `user.current()` gets the full user, without `effectiveRoles`. `user.currentWithEffectiveRoles()`, which `useUser()` and `useUserRoles()` use, keeps the short shape. `PUT /user/currentUser` is now answered instead of failing as unsupported.
 - **Tokens are opaque and expire.** Token values are no longer predictable: filter `c8y.notifications.consumers()` by a token you read from `consumers()`, not one you build. A token expires after `expiresInMinutes` (one day by default) on `Date.now()`, and a connect with an expired or invalid token is refused with 401. This matters only for sockets a test opens itself: your service's realtime client mints a new token for every connect.
 - **One open listener per subscriber.** A second connect with the same tenant, subscription, and subscriber is refused with 409, like on the platform, unless all their tokens were minted with `shared: true`. c8y-nitro's realtime client never mints shared tokens.
+
+### Check the Nitro release notes
+
+If your service uses Nitro's Vite integration, note that server routes under the
+client `assetsDir` (`/assets/` by default) now return 404 in production builds, and
+that a Vite `base` is now used as Nitro's `baseURL` (and vice versa). See the
+[release notes](https://github.com/nitrojs/nitro/releases/tag/v3.0.261103-rc) for the
+full list, including the new experimental Bun, Rspack, and Rsbuild builders.
 
 ## 0.11.2 to 0.11.3
 
