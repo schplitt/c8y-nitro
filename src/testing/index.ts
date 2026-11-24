@@ -5,8 +5,8 @@ import type { C8yBinaryInput, C8yDb, C8yManagedObjectInput, C8yRequest, C8ySeed,
 import { basicAuth, matchesCall } from 'fake-c8y'
 import { SettleTimeoutError } from 'fake-c8y/realtime'
 import type { C8yRequestHandler, C8yTestState, C8yTestSubscription, C8yTestUser } from './types'
-import { arrange, assertActiveTest, isCollecting, isConcurrentRunning, runningSuite } from './scope'
-import { applyState, refs, restartService, shareService, testCalls, testUnhandled, useWorld } from './world'
+import { arrange, assertActiveTest, isCollecting, isConcurrentRunning, isTestEnded, runningSuite } from './scope'
+import { applyState, isServiceStopped, refs, restartService, shareService, stopServiceInTest, testCalls, testUnhandled, useWorld } from './world'
 
 export type * from './types'
 export type { C8yAlarmInput, C8yAlarmSeverity, C8yAlarmStatus, C8yApplicationInput, C8yAuditRecordInput, C8yBinaryContent, C8yBinaryInput, C8yDb, C8yDbCollection, C8yDbFilter, C8yEventInput, C8yGroupInput, C8yIdInput, C8yInventoryRoleInput, C8yManagedObjectInput, C8yMeasurementGeneratorInput, C8yMeasurementInput, C8yNewDeviceRequestInput, C8yOperationInput, C8yOperationStatus, C8yRequest, C8yRetentionRuleInput, C8ySeed, C8yTenantOptionScope, C8yUnhandledRequest, C8yUserInput } from 'fake-c8y'
@@ -385,6 +385,54 @@ export const c8y = {
   },
 
   /**
+   * Stops your service inside a test, without starting a new one: Nitro's
+   * `close` hook runs, its realtime clients close, and its jobs stop. Data the
+   * test writes now reaches no service, and `serverFetch()` from
+   * `c8y-nitro/testing` throws (Nitro's own `serverFetch()` is not guarded).
+   * `await c8y.startService()` starts a new instance, which catches up on what
+   * it missed (a persistent subscription keeps what was written while no
+   * client listened). Requests the fake cannot answer while the service
+   * stops fail the test with `onUnhandledRequest: 'error'`. A second stop
+   * does nothing, and the next test gets a new service. In a `beforeEach`,
+   * the test runs on a stopped service. After the test function ended
+   * (`afterEach`, `onTestFinished`, fixture teardown), in `beforeAll`, or in
+   * `afterAll` it throws.
+   *
+   * @example
+   * ```ts
+   * // your realtime handler pushes every temperature it processes to this array
+   * // (in a module of its own: importing a plugin file from a test fails)
+   * import { handledTemperatures as handled } from '../server/handled-temperatures'
+   *
+   * const pump = c8y.device({ name: 'Pump 1' })
+   * const temperature = (value: number) => ({ source: pump, type: 'c8y_Temperature', c8y_Temperature: { T: { value, unit: 'C' } } })
+   *
+   * it('catches up after an outage, in order', async () => {
+   *   handled.length = 0
+   *   c8y.seed({ measurements: [temperature(91)] })
+   *   await c8y.notifications.settled()
+   *
+   *   await c8y.stopService()
+   *   c8y.seed({ measurements: [temperature(92), temperature(93)] }) // nobody listens
+   *
+   *   await c8y.startService()
+   *   await c8y.notifications.settled()
+   *   expect(handled).toEqual([91, 92, 93])
+   * })
+   * ```
+   */
+  async stopService(): Promise<void> {
+    if (isCollecting()) {
+      throw new Error('c8y.stopService() cannot be called while Vitest collects tests. Call it inside a test.')
+    }
+    assertActiveTest('c8y.stopService()', 'inside a test')
+    if (isTestEnded()) {
+      throw new Error('c8y.stopService() cannot be used after the test function ended (afterEach(), onTestFinished(), fixture teardown). Call it inside a test.')
+    }
+    await stopServiceInTest()
+  },
+
+  /**
    * Applies several arrange settings at once, in the current scope. Callers
    * are not part of the state: use `serverFetch(path, { as })`.
    * @param state - Partial tenant state
@@ -527,6 +575,11 @@ export function definePersona<const T extends C8yTestUser>(user: T): T {
  */
 export async function serverFetch(path: string, init: C8yServerFetchInit = {}): Promise<Response> {
   const { as: caller, ...requestInit } = init
+  if (isServiceStopped()) {
+    throw new Error(TestRunner.getCurrentTest() && !isTestEnded()
+      ? 'c8y-nitro/testing: the service is stopped (c8y.stopService(), or a start that failed). Call c8y.startService() first.'
+      : 'c8y-nitro/testing: the service is stopped (c8y.stopService(), or a start that failed). The next test starts a new service.')
+  }
   if (caller === undefined) {
     return nitroServerFetch(path, requestInit)
   }

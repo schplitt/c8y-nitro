@@ -360,6 +360,43 @@ it('boots with the new subscription', async () => {
 - **Cost:** every new service runs your startup work. If that is slow, share one where tests don't depend on fresh caches.
 - **Concurrent tests** (which cannot arrange data) share one service on a clean tenant, and see each other's writes.
 
+### Service Outages
+
+To check that your service catches up after an outage, stop it inside a test with `await c8y.stopService()`, write data while it is down, and start a new one with `await c8y.startService()`:
+
+```ts [test/outage.test.ts]
+import { expect, it } from 'vitest'
+import { c8y } from 'c8y-nitro/testing'
+// your realtime handler pushes every temperature it processes to this array
+import { handledTemperatures as handled } from '../server/handled-temperatures'
+
+const pump = c8y.device({ name: 'Pump 1' })
+const temperature = (value: number) => ({ source: pump, type: 'c8y_Temperature', c8y_Temperature: { T: { value, unit: 'C' } } })
+
+it('catches up after an outage, in order', async () => {
+  handled.length = 0
+  c8y.seed({ measurements: [temperature(91)] }) // the service is running and handles 91
+  await c8y.notifications.settled()
+
+  await c8y.stopService() // its realtime clients close
+
+  c8y.seed({ measurements: [temperature(92)] }) // nobody is listening
+  c8y.seed({ measurements: [temperature(93)] })
+
+  await c8y.startService() // a new service, a new token, the same subscription
+  await c8y.notifications.settled()
+
+  expect(handled).toEqual([91, 92, 93])
+})
+```
+
+Keep the array in a module of its own: a test that imports a plugin file loads `c8y-nitro/utils` before the service starts, and fails.
+
+- **A persistent subscription keeps what was written while the service was down,** once its listener had connected. The new service's listener gets the unacknowledged notifications first, then the writes made meanwhile, in order. Persistent is the default.
+- **`serverFetch()` throws while the service is stopped,** also after a start that failed. Call `await c8y.startService()` first. Use `serverFetch()` from `c8y-nitro/testing`: Nitro's own `serverFetch()` from `nitro` or `nitro/app` is not guarded, and the one from `nitro/app` still reaches the stopped service.
+- **Requests the fake cannot answer while the service stops** (for example from a `close` hook) fail the test with `onUnhandledRequest: 'error'`, the default, like requests while it starts.
+- **Call it inside a test.** It rejects while Vitest collects tests, in `beforeAll()` or `afterAll()`, after the test function ended (`afterEach()`, `onTestFinished()`, fixture teardown), and in concurrent tests. In a `beforeEach()`, the test starts on a stopped service. A stop in `aroundEach()` before the test has no effect: the test's preparation starts a new service. A second stop does nothing. The next test gets a new service, also when the stop was not awaited.
+
 ## Failures and Unsupported APIs: `c8y.override()`
 
 Some situations can't be expressed as data, such as a platform error or a timeout. For those, override the platform's answer for matching requests:

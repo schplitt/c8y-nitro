@@ -136,6 +136,11 @@ let running = false
  */
 let replaceApp = false
 /**
+ * Whether the service was stopped (`c8y.stopService()`, a restart, or a start
+ * that failed) and no instance started since.
+ */
+let stopped = false
+/**
  * The preparation of the test before (tests are prepared one at a time).
  */
 let preparing: Promise<unknown> = Promise.resolve()
@@ -218,9 +223,20 @@ function instanceKey(task: TaskLike): InstanceKey {
  */
 export function prepareTest(task: TaskLike): Promise<C8yUnhandledRequest[]> {
   // one at a time: concurrent tests must not interleave a restart
-  const prepared = preparing.then(() => prepare(task))
-  preparing = prepared.catch(() => {})
-  return prepared
+  return serialized(() => prepare(task))
+}
+
+/**
+ * Runs a start or stop of the service after the ones before it have ended:
+ * a stop a test did not await may still close the old app while the next
+ * test prepares, and must not close (or reset) the new one.
+ * @param run - The start or stop
+ * @returns Its result
+ */
+function serialized<T>(run: () => Promise<T>): Promise<T> {
+  const result = preparing.then(run)
+  preparing = result.catch(() => {})
+  return result
 }
 
 async function prepare(task: TaskLike & { name?: string, concurrent?: boolean }): Promise<C8yUnhandledRequest[]> {
@@ -333,8 +349,10 @@ async function startService(): Promise<C8yUnhandledRequest[]> {
       ;(useNitroApp as { _instance?: unknown })._instance = undefined
       replaceApp = false
     }
-    const app = useNitroApp() as { ready?: Promise<void> }
+    // set first: a plugin that throws while the app is created leaves a
+    // created app behind, which the stop below must close and replace
     running = true
+    const app = useNitroApp() as { ready?: Promise<void> }
     await app.ready
     // the startup work that runs through the fake (requests, connecting
     // sockets) is done; a start still busy after 5 s fails
@@ -344,11 +362,17 @@ async function startService(): Promise<C8yUnhandledRequest[]> {
     // start error fails this test, its unhandled requests are dropped
     world.takeUnhandledSince(from)
     from.release()
-    await stopService()
+    try {
+      await stopService()
+    } catch (closeError) {
+      // the start error is the one that fails the test
+      console.error('c8y-nitro/testing: closing the service after its start failed threw too:', closeError)
+    }
     throw error
   }
   const unhandled = world.takeUnhandledSince(from)
   from.release()
+  stopped = false
   current.startup = world.checkpoint()
   startupRealtimeTenants = new Set(useTestingHooks()?.realtimePool?.keys() ?? [])
   return unhandled
@@ -376,8 +400,9 @@ async function settleStartup(world: World): Promise<void> {
  * (plugins clean up, realtime clients close), `c8yTasks()` jobs stop,
  * c8y-nitro's caches are cleared, and the next start creates a new app.
  */
-export async function stopService(): Promise<void> {
+async function stopService(): Promise<void> {
   const current = useState()
+  stopped = true
   if (!running) {
     return
   }
@@ -386,10 +411,15 @@ export async function stopService(): Promise<void> {
   currentInstance = undefined
   replaceApp = true
   const { useNitroApp } = await import('nitro/app')
-  const app = useNitroApp() as { hooks?: { callHook: (name: string) => Promise<unknown> } }
+  // the created app, if any: useNitroApp() would create one
+  const app = (useNitroApp as { _instance?: { hooks?: { callHook: (name: string) => Promise<unknown> } } })._instance
   try {
-    await app.hooks?.callHook('close')
+    await app?.hooks?.callHook('close')
   } finally {
+    // Nitro's Vitest environment closes the app it finds here when the file
+    // ends: a closed app must not be closed twice. Nitro's `serverFetch` finds
+    // no app until the next start sets it again.
+    delete (globalThis as { __nitro__?: Record<string, unknown> }).__nitro__?.default
     resetRuntimeState()
     // Imported lazily: loading c8y-nitro/utils before Nitro created the app
     // would enter Nitro's runtime through an import cycle.
@@ -419,7 +449,11 @@ function resetRuntimeState(): void {
  * Restarts the service inside a test, on the test's current platform state.
  * The next test gets a new instance too.
  */
-export async function restartService(): Promise<void> {
+export function restartService(): Promise<void> {
+  return serialized(restart)
+}
+
+async function restart(): Promise<void> {
   const current = useState()
   const { world } = current
   // the test's own requests stay in its log; the restart's do not
@@ -439,6 +473,44 @@ export async function restartService(): Promise<void> {
   if (unhandled.length > 0 && onUnhandledRequest === 'error') {
     throw new Error(unhandledMessage(unhandled, 'while the service restarted'))
   }
+}
+
+/**
+ * Stops the service inside a test (`c8y.stopService()`), without starting a
+ * new one. A second stop does nothing. The next test gets a new instance.
+ */
+export function stopServiceInTest(): Promise<void> {
+  return serialized(stopInTest)
+}
+
+async function stopInTest(): Promise<void> {
+  if (!running) {
+    stopped = true
+    return
+  }
+  const { world } = useState()
+  // the test's own requests stay in its log; the stop's do not
+  const from = world.mark()
+  let unhandled: C8yUnhandledRequest[] = []
+  try {
+    // also drops the startup checkpoint, so the next test starts a new one
+    await stopService()
+  } finally {
+    const until = world.mark()
+    restarts.push({ from, until })
+    unhandled = world.takeUnhandledSince(from, until)
+  }
+  if (unhandled.length > 0 && onUnhandledRequest === 'error') {
+    throw new Error(unhandledMessage(unhandled, 'while the service stopped'))
+  }
+}
+
+/**
+ * Whether the service was stopped (`c8y.stopService()`, a restart, or a start
+ * that failed) and no instance started since.
+ */
+export function isServiceStopped(): boolean {
+  return stopped
 }
 
 /**

@@ -76,6 +76,7 @@ export declare const c8y: {
     once?: boolean;
   }): void;
   startService(): Promise<void>;
+  stopService(): Promise<void>;
   apply(state: Partial<Omit<C8yTestState, "user">>): void;
   notifications: {
     settled(options?: {
